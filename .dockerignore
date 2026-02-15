@@ -1,0 +1,26 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Database (use NAS mount instead)
+*.db
+*.db-journal
+data/
+
+# Documentation
+README.md
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env.local

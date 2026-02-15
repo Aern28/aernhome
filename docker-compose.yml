@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  aernhome:
+    build: .
+    container_name: aernhome-dashboard
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    volumes:
+      - H:/aernhome:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - FLASK_ENV=production
+      - DATA_DIR=/data
+      - TZ=America/Chicago
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - aernhome
+
+networks:
+  aernhome:
+    driver: bridge

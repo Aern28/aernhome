@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}AernHome Dashboard{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<header class="mb-8">
+    <h1 class="text-4xl font-bold text-white">AernHome</h1>
+    <p class="text-gray-400 mt-2">Home Services Dashboard</p>
+</header>
+
+<!-- System Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Docker Stats -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-400">Docker</h3>
+            <span class="text-2xl">🐳</span>
+        </div>
+        <div id="docker-stat" class="text-2xl font-bold text-white">--/--</div>
+        <div class="text-xs text-gray-500 mt-1">running / total</div>
+    </div>
+
+    <!-- Disk Stats -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-400">H: Drive</h3>
+            <span class="text-2xl">💾</span>
+        </div>
+        <div id="disk-stat" class="text-2xl font-bold text-white">-- GB</div>
+        <div id="disk-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+    </div>
+
+    <!-- CPU Stats -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-400">CPU</h3>
+            <span class="text-2xl">⚡</span>
+        </div>
+        <div id="cpu-stat" class="text-2xl font-bold text-white">--%</div>
+        <div class="text-xs text-gray-500 mt-1">usage</div>
+    </div>
+
+    <!-- RAM Stats -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-400">RAM</h3>
+            <span class="text-2xl">🧠</span>
+        </div>
+        <div id="ram-stat" class="text-2xl font-bold text-white">-- GB</div>
+        <div id="ram-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+    </div>
+</div>
+
+<!-- Services Section -->
+<section class="mb-8">
+    <h2 class="text-2xl font-bold text-white mb-4">Services</h2>
+    <div id="services-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Service cards will be inserted here by JavaScript -->
+    </div>
+</section>
+
+<!-- Apps Section -->
+<section>
+    <h2 class="text-2xl font-bold text-white mb-4">Apps</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Meal Planner App -->
+        <a href="/meal-planner" class="bg-dark-card border border-dark-border rounded-lg p-6 hover:border-blue-500 transition-colors cursor-pointer">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-white">Meal Planner</h3>
+                <span class="text-3xl">🍽️</span>
+            </div>
+            <p class="text-sm text-gray-400">Weekly meal planning</p>
+        </a>
+
+        <!-- Placeholder for future apps -->
+        <div class="bg-dark-card border border-dark-border border-dashed rounded-lg p-6 opacity-50">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-gray-500">Future App</h3>
+                <span class="text-3xl">📦</span>
+            </div>
+            <p class="text-sm text-gray-500">Coming soon</p>
+        </div>
+    </div>
+</section>
+
+<!-- Status Indicator (bottom right corner) -->
+<div id="status-indicator" class="fixed bottom-4 right-4 text-xs text-gray-500">
+    <span id="last-update">Loading...</span>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}
