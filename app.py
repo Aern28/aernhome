@@ -325,6 +325,12 @@ def meal_planner():
     return render_template("meal-planner.html")
 
 
+@app.route("/projects")
+def projects():
+    """Projects overview page"""
+    return render_template("projects.html")
+
+
 @app.route("/api/health")
 def api_health():
     """

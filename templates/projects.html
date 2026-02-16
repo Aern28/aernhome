@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Projects - AernHome{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <!-- Back to Dashboard Link -->
+  <div class="mb-4">
+    <a href="/" class="text-blue-400 hover:text-blue-300 text-sm">&larr; Back to Dashboard</a>
+  </div>
+
+  <h1 class="text-3xl font-bold text-white mb-2">Aern Projects</h1>
+  <p class="text-gray-400 mb-8">Infrastructure overview - NenTera, Ashaman, Synology</p>
+
+  <!-- Projects Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+    <!-- TCG Business -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>🃏</span> TCG Business
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">TCG Inventory Tool</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Functional</span>
+        </div>
+        <p class="text-xs text-gray-500">Flask :5001 • TCGCSV prices • 20 meta decks</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">TCGplayer Automation</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Active</span>
+        </div>
+        <p class="text-xs text-gray-500">Orders, shipping, LetterTrackPro</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Price Monitoring</span>
+          <span class="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs rounded">Running</span>
+        </div>
+        <p class="text-xs text-gray-500">Daily 3 PM • DB on Synology</p>
+      </div>
+    </div>
+
+    <!-- Finance & Trading -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>💰</span> Finance & Trading
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Aern Finance System</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Functional</span>
+        </div>
+        <p class="text-xs text-gray-500">Tiller + TCGplayer • query.py • charts.py</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Kalshi Trading Bot</span>
+          <span class="px-2 py-1 bg-yellow-900/30 text-yellow-400 text-xs rounded">Phase 1</span>
+        </div>
+        <p class="text-xs text-gray-500">$500/day max • Discord alerts</p>
+      </div>
+    </div>
+
+    <!-- Media & Entertainment -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>🎬</span> Media
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Media Pipeline</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Ready</span>
+        </div>
+        <p class="text-xs text-gray-500">MakeMKV → HandBrake → FileBot</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Seedbox</span>
+          <span class="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded">Paused</span>
+        </div>
+        <p class="text-xs text-gray-500">Gluetun + qBittorrent</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Photo Index</span>
+          <span class="px-2 py-1 bg-yellow-900/30 text-yellow-400 text-xs rounded">TODO</span>
+        </div>
+        <p class="text-xs text-gray-500">~700GB dedup pipeline</p>
+      </div>
+    </div>
+
+    <!-- Automation & AI -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>🤖</span> Automation & AI
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Discord-Claude Relay</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Running</span>
+        </div>
+        <p class="text-xs text-gray-500">DM bot → Claude Code CLI</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">OPTCG Daily Digest</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Active</span>
+        </div>
+        <p class="text-xs text-gray-500">~$0.02/day • Wed+Sun 6 AM</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Weather to Notion</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Active</span>
+        </div>
+        <p class="text-xs text-gray-500">Daily 6:30 AM • Space City Weather</p>
+      </div>
+    </div>
+
+    <!-- Home & Smart Home -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>🏠</span> Home & Smart Home
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Home Assistant</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Running</span>
+        </div>
+        <p class="text-xs text-gray-500">WSL2 :8123 • Treatlife, Denon</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Meal Planner</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Live</span>
+        </div>
+        <p class="text-xs text-gray-500">50 recipes • Drag-and-drop</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Maintenance Log</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Active</span>
+        </div>
+        <p class="text-xs text-gray-500">Notion → n8n → Inbox reminders</p>
+      </div>
+    </div>
+
+    <!-- Work & Learning -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+      <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span>📚</span> Work & Learning
+      </h2>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Feedback Parser</span>
+          <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">Functional</span>
+        </div>
+        <p class="text-xs text-gray-500">Resident feedback consolidation</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Idle Potion Brewing</span>
+          <span class="px-2 py-1 bg-yellow-900/30 text-yellow-400 text-xs rounded">In Dev</span>
+        </div>
+        <p class="text-xs text-gray-500">Expo + React Native</p>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Roblox / Japanese</span>
+          <span class="px-2 py-1 bg-purple-900/30 text-purple-400 text-xs rounded">Learning</span>
+        </div>
+        <p class="text-xs text-gray-500">Luau scripting • Sottaku.app</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Network Info -->
+  <div class="mt-8 bg-dark-card border border-dark-border rounded-lg p-6">
+    <h2 class="text-xl font-bold text-white mb-4">Network Topology</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="text-center">
+        <div class="text-2xl mb-2">💻</div>
+        <div class="font-semibold text-white">NenTera</div>
+        <div class="text-xs text-gray-400">Laptop • Claude Code</div>
+        <div class="text-xs text-blue-400 mt-1">100.72.113.38</div>
+      </div>
+      <div class="text-center">
+        <div class="text-2xl mb-2">🖥️</div>
+        <div class="font-semibold text-white">Ashaman</div>
+        <div class="text-xs text-gray-400">Desktop • Docker Host</div>
+        <div class="text-xs text-blue-400 mt-1">100.110.245.37</div>
+      </div>
+      <div class="text-center">
+        <div class="text-2xl mb-2">💾</div>
+        <div class="font-semibold text-white">Synology</div>
+        <div class="text-xs text-gray-400">NAS • Backups • Plex</div>
+        <div class="text-xs text-blue-400 mt-1">100.73.108.55</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
