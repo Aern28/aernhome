@@ -11,7 +11,7 @@ services:
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - C:/:/host_c:ro
-      - H:/:/host_h:ro
+      # - H:/:/host_h:ro  # Commented out until H: is persistently mapped
     environment:
       - FLASK_ENV=production
       - DATA_DIR=/data
