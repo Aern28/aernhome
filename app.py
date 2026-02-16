@@ -49,6 +49,16 @@ DEFAULT_SERVICES = [
         "enabled": 1,
     },
     {
+        "name": "qbittorrent",
+        "display_name": "qBittorrent",
+        "url": "http://100.110.245.37:8080",
+        "public_url": "http://100.110.245.37:8080",
+        "check_type": "http",
+        "docker_container": "qbittorrent",
+        "icon_emoji": "🌊",
+        "enabled": 1,
+    },
+    {
         "name": "whisper",
         "display_name": "Whisper Server",
         "url": "http://100.110.245.37:8100",  # Health check via Tailscale
