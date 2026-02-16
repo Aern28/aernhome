@@ -10,7 +10,7 @@
 </header>
 
 <!-- System Stats Row -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
     <!-- Docker Stats -->
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">
         <div class="flex items-center justify-between mb-2">
@@ -21,14 +21,24 @@
         <div class="text-xs text-gray-500 mt-1">running / total</div>
     </div>
 
-    <!-- Disk Stats -->
+    <!-- C: Drive Stats (Ashaman Local) -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-400">C: Drive</h3>
+            <span class="text-2xl">💻</span>
+        </div>
+        <div id="c-drive-stat" class="text-2xl font-bold text-white">-- GB</div>
+        <div id="c-drive-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+    </div>
+
+    <!-- H: Drive Stats (Synology NAS) -->
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">
         <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-medium text-gray-400">H: Drive</h3>
             <span class="text-2xl">💾</span>
         </div>
-        <div id="disk-stat" class="text-2xl font-bold text-white">-- GB</div>
-        <div id="disk-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+        <div id="h-drive-stat" class="text-2xl font-bold text-white">-- GB</div>
+        <div id="h-drive-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
     </div>
 
     <!-- CPU Stats -->

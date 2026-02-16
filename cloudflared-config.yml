@@ -1,0 +1,6 @@
+ingress:
+  - hostname: aern.dev
+    service: http://aernhome-dashboard:5555
+  - hostname: www.aern.dev
+    service: http://aernhome-dashboard:5555
+  - service: http_status:404
