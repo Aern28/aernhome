@@ -31,7 +31,7 @@ DEFAULT_SERVICES = [
     {
         "name": "n8n",
         "display_name": "n8n Workflows",
-        "url": "http://host.docker.internal:5678",  # Health check URL
+        "url": "http://100.110.245.37:5678",  # Health check via Tailscale
         "public_url": "http://100.110.245.37:5678",  # User access URL
         "check_type": "both",
         "docker_container": "n8n",
@@ -41,17 +41,17 @@ DEFAULT_SERVICES = [
     {
         "name": "jellyfin",
         "display_name": "Jellyfin Media",
-        "url": "http://host.docker.internal:8096",
+        "url": "http://100.110.245.37:8096",
         "public_url": "http://100.110.245.37:8096",
-        "check_type": "http",
+        "check_type": "docker",  # Changed to docker-only check since Jellyfin not running
         "docker_container": "jellyfin",
         "icon_emoji": "🎬",
-        "enabled": 1,
+        "enabled": 0,  # Disabled since not running
     },
     {
         "name": "whisper",
         "display_name": "Whisper Server",
-        "url": "http://host.docker.internal:8100",
+        "url": "http://100.110.245.37:8100",  # Health check via Tailscale
         "public_url": "http://100.110.245.37:8100",
         "check_type": "both",
         "docker_container": "whisper-server",
@@ -310,20 +310,43 @@ def get_system_stats():
     except Exception as e:
         stats["h_drive"]["error"] = str(e)
 
-    # CPU stats
-    try:
-        stats["cpu"]["percent"] = round(psutil.cpu_percent(interval=1), 1)
-    except Exception as e:
-        stats["cpu"]["error"] = str(e)
+    # CPU and RAM stats - Get from Docker host info instead of container
+    if DOCKER_AVAILABLE:
+        try:
+            client = docker.from_env()
+            info = client.info()
 
-    # RAM stats
-    try:
-        mem = psutil.virtual_memory()
-        stats["ram"]["total_gb"] = round(mem.total / (1024**3), 1)
-        stats["ram"]["used_gb"] = round(mem.used / (1024**3), 1)
-        stats["ram"]["percent"] = round(mem.percent, 1)
-    except Exception as e:
-        stats["ram"]["error"] = str(e)
+            # CPU - Docker doesn't expose live CPU%, use psutil as fallback
+            # This will show container CPU but better than nothing
+            try:
+                stats["cpu"]["percent"] = round(psutil.cpu_percent(interval=0.1), 1)
+            except:
+                stats["cpu"]["percent"] = 0
+                stats["cpu"]["error"] = "CPU monitoring unavailable"
+
+            # RAM - Get host memory from Docker info
+            total_mem_bytes = info.get('MemTotal', 0)
+            stats["ram"]["total_gb"] = round(total_mem_bytes / (1024**3), 1)
+
+            # Calculate used memory from Docker stats
+            # MemTotal - MemFree (approximation since Docker doesn't expose exact used)
+            # Fallback to psutil for more accurate container view
+            try:
+                mem = psutil.virtual_memory()
+                # Use host total from Docker, but calculate used% from actual available
+                stats["ram"]["used_gb"] = round((total_mem_bytes - mem.available) / (1024**3), 1)
+                stats["ram"]["percent"] = round((1 - (mem.available / total_mem_bytes)) * 100, 1)
+            except:
+                stats["ram"]["used_gb"] = 0
+                stats["ram"]["percent"] = 0
+                stats["ram"]["error"] = "RAM monitoring unavailable"
+
+        except Exception as e:
+            stats["cpu"]["error"] = str(e)
+            stats["ram"]["error"] = str(e)
+    else:
+        stats["cpu"]["error"] = "Docker not available"
+        stats["ram"]["error"] = "Docker not available"
 
     return stats
 
