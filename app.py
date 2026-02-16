@@ -31,7 +31,8 @@ DEFAULT_SERVICES = [
     {
         "name": "n8n",
         "display_name": "n8n Workflows",
-        "url": "http://host.docker.internal:5678",
+        "url": "http://host.docker.internal:5678",  # Health check URL
+        "public_url": "http://100.110.245.37:5678",  # User access URL
         "check_type": "both",
         "docker_container": "n8n",
         "icon_emoji": "⚡",
@@ -41,6 +42,7 @@ DEFAULT_SERVICES = [
         "name": "whisper",
         "display_name": "Whisper Server",
         "url": "http://host.docker.internal:8100",
+        "public_url": "http://100.110.245.37:8100",
         "check_type": "both",
         "docker_container": "whisper-server",
         "icon_emoji": "🎤",
@@ -50,6 +52,7 @@ DEFAULT_SERVICES = [
         "name": "discord-relay",
         "display_name": "Discord Relay",
         "url": None,
+        "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "claude-relay",
         "icon_emoji": "🤖",
@@ -59,6 +62,7 @@ DEFAULT_SERVICES = [
         "name": "cloudflared",
         "display_name": "Cloudflare Tunnel",
         "url": None,
+        "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "cloudflared-tunnel",
         "icon_emoji": "☁️",
@@ -68,6 +72,7 @@ DEFAULT_SERVICES = [
         "name": "scan-runner",
         "display_name": "Scan Runner",
         "url": None,
+        "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "scan-runner",
         "icon_emoji": "📦",
@@ -355,12 +360,20 @@ def api_health():
             health["error_message"],
         )
 
+        # Find public_url from DEFAULT_SERVICES config
+        public_url = None
+        for default_svc in DEFAULT_SERVICES:
+            if default_svc["name"] == service["name"]:
+                public_url = default_svc.get("public_url")
+                break
+
         results.append(
             {
                 "id": service["id"],
                 "name": service["name"],
                 "display_name": service["display_name"],
                 "url": service["url"],
+                "public_url": public_url,  # Add public URL for user clicks
                 "icon_emoji": service["icon_emoji"],
                 "status": health["status"],
                 "response_time_ms": health["response_time_ms"],
