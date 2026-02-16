@@ -39,6 +39,16 @@ DEFAULT_SERVICES = [
         "enabled": 1,
     },
     {
+        "name": "jellyfin",
+        "display_name": "Jellyfin Media",
+        "url": "http://host.docker.internal:8096",
+        "public_url": "http://100.110.245.37:8096",
+        "check_type": "http",
+        "docker_container": "jellyfin",
+        "icon_emoji": "🎬",
+        "enabled": 1,
+    },
+    {
         "name": "whisper",
         "display_name": "Whisper Server",
         "url": "http://host.docker.internal:8100",
