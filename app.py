@@ -275,9 +275,9 @@ def get_system_stats():
     else:
         stats["docker"]["error"] = "Docker library not available"
 
-    # C: Drive stats (Ashaman local storage)
+    # C: Drive stats (Ashaman local storage) - mounted as /host_c
     try:
-        c_usage = shutil.disk_usage("C:/")
+        c_usage = shutil.disk_usage("/host_c")
         stats["c_drive"]["total_gb"] = round(c_usage.total / (1024**3), 1)
         stats["c_drive"]["used_gb"] = round(c_usage.used / (1024**3), 1)
         stats["c_drive"]["free_gb"] = round(c_usage.free / (1024**3), 1)
@@ -285,9 +285,9 @@ def get_system_stats():
     except Exception as e:
         stats["c_drive"]["error"] = str(e)
 
-    # H: Drive stats (Synology NAS)
+    # H: Drive stats (Synology NAS) - mounted as /host_h
     try:
-        h_usage = shutil.disk_usage("H:/")
+        h_usage = shutil.disk_usage("/host_h")
         stats["h_drive"]["total_gb"] = round(h_usage.total / (1024**3), 1)
         stats["h_drive"]["used_gb"] = round(h_usage.used / (1024**3), 1)
         stats["h_drive"]["free_gb"] = round(h_usage.free / (1024**3), 1)
