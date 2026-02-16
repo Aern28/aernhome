@@ -31,28 +31,28 @@ DEFAULT_SERVICES = [
     {
         "name": "n8n",
         "display_name": "n8n Workflows",
-        "url": "http://host.docker.internal:5678",
+        "url": "http://100.110.245.37:5678",
         "check_type": "http",
         "docker_container": "n8n",
         "icon_emoji": "⚡",
         "enabled": 1,
     },
     {
-        "name": "jellyfin",
-        "display_name": "Jellyfin Media",
-        "url": "http://host.docker.internal:8096",
-        "check_type": "http",
-        "docker_container": "jellyfin",
-        "icon_emoji": "🎬",
-        "enabled": 1,
-    },
-    {
         "name": "qbittorrent",
         "display_name": "qBittorrent",
-        "url": "http://host.docker.internal:8080",
+        "url": "http://100.110.245.37:8080",
         "check_type": "http",
         "docker_container": "qbittorrent",
         "icon_emoji": "📥",
+        "enabled": 1,
+    },
+    {
+        "name": "gluetun",
+        "display_name": "Gluetun VPN",
+        "url": None,
+        "check_type": "docker",
+        "docker_container": "gluetun",
+        "icon_emoji": "🔒",
         "enabled": 1,
     },
     {
@@ -65,21 +65,30 @@ DEFAULT_SERVICES = [
         "enabled": 1,
     },
     {
-        "name": "optcg-digest",
-        "display_name": "OPTCG Digest",
-        "url": None,
-        "check_type": "docker",
-        "docker_container": "optcg-digest",
-        "icon_emoji": "📰",
+        "name": "whisper",
+        "display_name": "Whisper Server",
+        "url": "http://100.110.245.37:8100",
+        "check_type": "http",
+        "docker_container": "whisper-server",
+        "icon_emoji": "🎤",
         "enabled": 1,
     },
     {
-        "name": "gluetun",
-        "display_name": "Gluetun VPN",
+        "name": "home-assistant",
+        "display_name": "Home Assistant",
+        "url": "http://100.110.245.37:8123",
+        "check_type": "http",
+        "docker_container": None,
+        "icon_emoji": "🏠",
+        "enabled": 1,
+    },
+    {
+        "name": "cloudflared",
+        "display_name": "Cloudflare Tunnel",
         "url": None,
         "check_type": "docker",
-        "docker_container": "gluetun",
-        "icon_emoji": "🔒",
+        "docker_container": "cloudflared-tunnel",
+        "icon_emoji": "☁️",
         "enabled": 1,
     },
 ]
@@ -248,11 +257,18 @@ def save_health_check(service_id, status, response_time_ms, error_message):
 def get_system_stats():
     """
     Get system statistics
-    Returns: dict with docker, disk, cpu, ram stats
+    Returns: dict with docker, c_drive, h_drive, cpu, ram stats
     """
     stats = {
         "docker": {"running": 0, "total": 0, "error": None},
-        "disk": {
+        "c_drive": {
+            "total_gb": 0,
+            "used_gb": 0,
+            "free_gb": 0,
+            "percent": 0,
+            "error": None,
+        },
+        "h_drive": {
             "total_gb": 0,
             "used_gb": 0,
             "free_gb": 0,
@@ -277,15 +293,25 @@ def get_system_stats():
     else:
         stats["docker"]["error"] = "Docker library not available"
 
-    # Disk stats (check /data mount point)
+    # C: Drive stats (Ashaman local storage)
     try:
-        disk_usage = shutil.disk_usage(DATA_DIR)
-        stats["disk"]["total_gb"] = round(disk_usage.total / (1024**3), 1)
-        stats["disk"]["used_gb"] = round(disk_usage.used / (1024**3), 1)
-        stats["disk"]["free_gb"] = round(disk_usage.free / (1024**3), 1)
-        stats["disk"]["percent"] = round((disk_usage.used / disk_usage.total) * 100, 1)
+        c_usage = shutil.disk_usage("C:/")
+        stats["c_drive"]["total_gb"] = round(c_usage.total / (1024**3), 1)
+        stats["c_drive"]["used_gb"] = round(c_usage.used / (1024**3), 1)
+        stats["c_drive"]["free_gb"] = round(c_usage.free / (1024**3), 1)
+        stats["c_drive"]["percent"] = round((c_usage.used / c_usage.total) * 100, 1)
     except Exception as e:
-        stats["disk"]["error"] = str(e)
+        stats["c_drive"]["error"] = str(e)
+
+    # H: Drive stats (Synology NAS)
+    try:
+        h_usage = shutil.disk_usage("H:/")
+        stats["h_drive"]["total_gb"] = round(h_usage.total / (1024**3), 1)
+        stats["h_drive"]["used_gb"] = round(h_usage.used / (1024**3), 1)
+        stats["h_drive"]["free_gb"] = round(h_usage.free / (1024**3), 1)
+        stats["h_drive"]["percent"] = round((h_usage.used / h_usage.total) * 100, 1)
+    except Exception as e:
+        stats["h_drive"]["error"] = str(e)
 
     # CPU stats
     try:

@@ -104,15 +104,26 @@ async function updateStats() {
             dockerStat.className = 'text-2xl font-bold text-white';
         }
 
-        // Update Disk stat
-        const diskStat = document.getElementById('disk-stat');
-        const diskPercent = document.getElementById('disk-percent');
-        if (stats.disk.error) {
-            diskStat.textContent = 'Error';
-            diskPercent.textContent = '';
+        // Update C: Drive stat
+        const cDriveStat = document.getElementById('c-drive-stat');
+        const cDrivePercent = document.getElementById('c-drive-percent');
+        if (stats.c_drive.error) {
+            cDriveStat.textContent = 'Error';
+            cDrivePercent.textContent = '';
         } else {
-            diskStat.textContent = `${stats.disk.free_gb} GB`;
-            diskPercent.textContent = `${stats.disk.percent}% used (${stats.disk.used_gb}/${stats.disk.total_gb} GB)`;
+            cDriveStat.textContent = `${stats.c_drive.free_gb} GB`;
+            cDrivePercent.textContent = `${stats.c_drive.percent}% used (${stats.c_drive.used_gb}/${stats.c_drive.total_gb} GB)`;
+        }
+
+        // Update H: Drive stat (Synology NAS)
+        const hDriveStat = document.getElementById('h-drive-stat');
+        const hDrivePercent = document.getElementById('h-drive-percent');
+        if (stats.h_drive.error) {
+            hDriveStat.textContent = 'Error';
+            hDrivePercent.textContent = '';
+        } else {
+            hDriveStat.textContent = `${stats.h_drive.free_gb} GB`;
+            hDrivePercent.textContent = `${stats.h_drive.percent}% used (${stats.h_drive.used_gb}/${stats.h_drive.total_gb} GB)`;
         }
 
         // Update CPU stat
