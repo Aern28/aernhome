@@ -31,8 +31,8 @@ DEFAULT_SERVICES = [
     {
         "name": "n8n",
         "display_name": "n8n Workflows",
-        "url": "http://100.110.245.37:5678",  # Health check via Tailscale
-        "public_url": "http://100.110.245.37:5678",  # User access URL
+        "url": "https://ashaman-1.tail125d67.ts.net:5678",
+        "public_url": "https://ashaman-1.tail125d67.ts.net:5678",
         "check_type": "both",
         "docker_container": "n8n",
         "icon_emoji": "⚡",
@@ -41,12 +41,12 @@ DEFAULT_SERVICES = [
     {
         "name": "jellyfin",
         "display_name": "Jellyfin Media",
-        "url": "http://100.110.245.37:8096",
-        "public_url": "http://100.110.245.37:8096",
-        "check_type": "docker",  # Changed to docker-only check since Jellyfin not running
+        "url": "http://ashaman-1.tail125d67.ts.net:8096",
+        "public_url": "http://ashaman-1.tail125d67.ts.net:8096",
+        "check_type": "http",
         "docker_container": "jellyfin",
         "icon_emoji": "🎬",
-        "enabled": 0,  # Disabled since not running
+        "enabled": 1,
     },
     {
         "name": "whisper",
