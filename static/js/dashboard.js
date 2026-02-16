@@ -34,10 +34,10 @@ function renderServiceCard(service) {
     const card = document.createElement('div');
     card.className = 'bg-dark-card border border-dark-border rounded-lg p-4 hover:border-blue-500 transition-colors';
 
-    // Make card clickable if URL exists
-    if (service.url) {
+    // Make card clickable if public URL exists
+    if (service.public_url) {
         card.classList.add('cursor-pointer');
-        card.onclick = () => window.open(service.url, '_blank');
+        card.onclick = () => window.open(service.public_url, '_blank');
     }
 
     card.innerHTML = `
