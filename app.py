@@ -61,8 +61,8 @@ DEFAULT_SERVICES = [
     {
         "name": "whisper",
         "display_name": "Whisper Server",
-        "url": "http://100.110.245.37:8100",  # Health check via Tailscale
-        "public_url": "http://100.110.245.37:8100",
+        "url": "http://ashaman-1.tail125d67.ts.net:8100",
+        "public_url": "http://ashaman-1.tail125d67.ts.net:8100",
         "check_type": "both",
         "docker_container": "whisper-server",
         "icon_emoji": "🎤",
