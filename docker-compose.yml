@@ -11,7 +11,6 @@ services:
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - C:/:/host_c:ro
-      # - H:/:/host_h:ro  # Commented out until H: is persistently mapped
     environment:
       - FLASK_ENV=production
       - DATA_DIR=/data
@@ -25,7 +24,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiMjhmYjQ0NmRkMDZlZmIzNzk1ZGM3YmY0ZjJmMWZkZjIiLCJ0IjoiYzFlNjM2OGUtYzc0MC00YTAwLWJkZTQtNTI4NWM1OWIwNmM3IiwicyI6IlptTXdPRGhqWTJRdE1tUTBZUzAwWlRNekxXSTRNalV0T0dFM04yVTRZelpoTXpFeCJ9
+    command: tunnel --no-autoupdate run --token eyJhIjoiMjhmYjQ0NmRkMDZlZmIzNzk1ZGM3YmY0ZjJmMWZkZjIiLCJ0IjoiYzFlNjM2OGUtYzc0MC00YTAwLWJkZTQtNTI4NWM1OWIwNmM3IiwicyI6Ik1EZGhOemc1TnpndE5UYzNZUzAwWVRNM0xXRTNNRE10WkdObE5USTVZalV4TnpWbSJ9
     networks:
       - aernhome
     depends_on:

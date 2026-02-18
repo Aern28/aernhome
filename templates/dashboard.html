@@ -10,7 +10,7 @@
 </header>
 
 <!-- System Stats Row -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     <!-- Docker Stats -->
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">
         <div class="flex items-center justify-between mb-2">
@@ -18,7 +18,7 @@
             <span class="text-2xl">🐳</span>
         </div>
         <div id="docker-stat" class="text-2xl font-bold text-white">--/--</div>
-        <div class="text-xs text-gray-500 mt-1">running / total</div>
+        <div class="text-xs text-gray-500 mt-1">running / total · <span id="cpu-stat">--%</span> CPU · <span id="ram-stat">--</span> GB RAM</div>
     </div>
 
     <!-- C: Drive Stats (Ashaman Local) -->
@@ -28,7 +28,7 @@
             <span class="text-2xl">💻</span>
         </div>
         <div id="c-drive-stat" class="text-2xl font-bold text-white">-- GB</div>
-        <div id="c-drive-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+        <div id="c-drive-percent" class="text-xs text-gray-500 mt-1">used</div>
     </div>
 
     <!-- H: Drive Stats (Synology NAS) -->
@@ -38,28 +38,19 @@
             <span class="text-2xl">💾</span>
         </div>
         <div id="h-drive-stat" class="text-2xl font-bold text-white">-- GB</div>
-        <div id="h-drive-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
+        <div id="h-drive-percent" class="text-xs text-gray-500 mt-1">free</div>
     </div>
 
-    <!-- CPU Stats -->
+    <!-- I: Drive Stats (Synology USB) -->
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">
         <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-medium text-gray-400">CPU</h3>
-            <span class="text-2xl">⚡</span>
+            <h3 class="text-sm font-medium text-gray-400">I: Drive</h3>
+            <span class="text-2xl">🔌</span>
         </div>
-        <div id="cpu-stat" class="text-2xl font-bold text-white">--%</div>
-        <div class="text-xs text-gray-500 mt-1">usage</div>
+        <div id="i-drive-stat" class="text-2xl font-bold text-white">-- GB</div>
+        <div id="i-drive-percent" class="text-xs text-gray-500 mt-1">free</div>
     </div>
 
-    <!-- RAM Stats -->
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-medium text-gray-400">RAM</h3>
-            <span class="text-2xl">🧠</span>
-        </div>
-        <div id="ram-stat" class="text-2xl font-bold text-white">-- GB</div>
-        <div id="ram-percent" class="text-xs text-gray-500 mt-1">-- % used</div>
-    </div>
 </div>
 
 <!-- Services Section -->
@@ -90,6 +81,15 @@
                 <span class="text-3xl">🍽️</span>
             </div>
             <p class="text-sm text-gray-400">Weekly meal planning</p>
+        </a>
+
+        <!-- Stretch Tracker App -->
+        <a href="/stretch-tracker" class="bg-dark-card border border-dark-border rounded-lg p-6 hover:border-blue-500 transition-colors cursor-pointer">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-white">Stretch Tracker</h3>
+                <span class="text-3xl">🤸</span>
+            </div>
+            <p class="text-sm text-gray-400">Daily stretching habit</p>
         </a>
     </div>
 </section>

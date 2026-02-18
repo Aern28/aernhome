@@ -4,6 +4,7 @@ Flask backend with service health checks and system stats
 """
 
 import os
+import json
 import time
 import sqlite3
 from flask import Flask, render_template, jsonify
@@ -264,7 +265,7 @@ def save_health_check(service_id, status, response_time_ms, error_message):
 def get_system_stats():
     """
     Get system statistics
-    Returns: dict with docker, c_drive, h_drive, cpu, ram stats
+    Returns: dict with docker, c_drive, h_drive, i_drive, cpu, ram stats
     """
     stats = {
         "docker": {"running": 0, "total": 0, "error": None},
@@ -276,6 +277,13 @@ def get_system_stats():
             "error": None,
         },
         "h_drive": {
+            "total_gb": 0,
+            "used_gb": 0,
+            "free_gb": 0,
+            "percent": 0,
+            "error": None,
+        },
+        "i_drive": {
             "total_gb": 0,
             "used_gb": 0,
             "free_gb": 0,
@@ -310,15 +318,29 @@ def get_system_stats():
     except Exception as e:
         stats["c_drive"]["error"] = str(e)
 
-    # H: Drive stats (Synology NAS) - mounted as /host_h
+    # NAS drive stats (Synology) - read from host-side JSON
     try:
-        h_usage = shutil.disk_usage("/host_h")
-        stats["h_drive"]["total_gb"] = round(h_usage.total / (1024**3), 1)
-        stats["h_drive"]["used_gb"] = round(h_usage.used / (1024**3), 1)
-        stats["h_drive"]["free_gb"] = round(h_usage.free / (1024**3), 1)
-        stats["h_drive"]["percent"] = round((h_usage.used / h_usage.total) * 100, 1)
+        nas_stats_path = os.path.join(
+            os.environ.get("DATA_DIR", "/data"), "nas_stats.json"
+        )
+        with open(nas_stats_path, "r") as f:
+            nas = json.load(f)
+        for drive_key in ("h_drive", "i_drive"):
+            if drive_key in nas:
+                drive_data = nas[drive_key]
+                if "error" in drive_data:
+                    stats[drive_key]["error"] = drive_data["error"]
+                else:
+                    stats[drive_key]["total_gb"] = drive_data["total_gb"]
+                    stats[drive_key]["used_gb"] = drive_data["used_gb"]
+                    stats[drive_key]["free_gb"] = drive_data["free_gb"]
+                    stats[drive_key]["percent"] = drive_data["percent"]
+    except FileNotFoundError:
+        stats["h_drive"]["error"] = "NAS stats not yet collected"
+        stats["i_drive"]["error"] = "NAS stats not yet collected"
     except Exception as e:
         stats["h_drive"]["error"] = str(e)
+        stats["i_drive"]["error"] = str(e)
 
     # CPU and RAM stats - Get from Docker host info instead of container
     if DOCKER_AVAILABLE:
@@ -335,7 +357,7 @@ def get_system_stats():
                 stats["cpu"]["error"] = "CPU monitoring unavailable"
 
             # RAM - Get host memory from Docker info
-            total_mem_bytes = info.get('MemTotal', 0)
+            total_mem_bytes = info.get("MemTotal", 0)
             stats["ram"]["total_gb"] = round(total_mem_bytes / (1024**3), 1)
 
             # Calculate used memory from Docker stats
@@ -344,8 +366,12 @@ def get_system_stats():
             try:
                 mem = psutil.virtual_memory()
                 # Use host total from Docker, but calculate used% from actual available
-                stats["ram"]["used_gb"] = round((total_mem_bytes - mem.available) / (1024**3), 1)
-                stats["ram"]["percent"] = round((1 - (mem.available / total_mem_bytes)) * 100, 1)
+                stats["ram"]["used_gb"] = round(
+                    (total_mem_bytes - mem.available) / (1024**3), 1
+                )
+                stats["ram"]["percent"] = round(
+                    (1 - (mem.available / total_mem_bytes)) * 100, 1
+                )
             except:
                 stats["ram"]["used_gb"] = 0
                 stats["ram"]["percent"] = 0
@@ -371,6 +397,12 @@ def dashboard():
 def meal_planner():
     """Meal planner embedded page"""
     return render_template("meal-planner.html")
+
+
+@app.route("/stretch-tracker")
+def stretch_tracker():
+    """Stretch tracker page"""
+    return render_template("stretch-tracker.html")
 
 
 @app.route("/projects")
