@@ -111,8 +111,8 @@ async function updateStats() {
             cDriveStat.textContent = 'Error';
             cDrivePercent.textContent = '';
         } else {
-            cDriveStat.textContent = `${stats.c_drive.free_gb} GB`;
-            cDrivePercent.textContent = `${stats.c_drive.percent}% used (${stats.c_drive.used_gb}/${stats.c_drive.total_gb} GB)`;
+            cDriveStat.textContent = `${stats.c_drive.used_gb} GB`;
+            cDrivePercent.textContent = `${stats.c_drive.percent}% used of ${stats.c_drive.total_gb} GB`;
         }
 
         // Update H: Drive stat (Synology NAS)
@@ -122,8 +122,19 @@ async function updateStats() {
             hDriveStat.textContent = 'Error';
             hDrivePercent.textContent = '';
         } else {
-            hDriveStat.textContent = `${stats.h_drive.free_gb} GB`;
-            hDrivePercent.textContent = `${stats.h_drive.percent}% used (${stats.h_drive.used_gb}/${stats.h_drive.total_gb} GB)`;
+            hDriveStat.textContent = `${stats.h_drive.free_gb} GB free`;
+            hDrivePercent.textContent = `of ${stats.h_drive.total_gb} GB (${stats.h_drive.percent}% used)`;
+        }
+
+        // Update I: Drive stat (Synology USB)
+        const iDriveStat = document.getElementById('i-drive-stat');
+        const iDrivePercent = document.getElementById('i-drive-percent');
+        if (stats.i_drive.error) {
+            iDriveStat.textContent = 'Error';
+            iDrivePercent.textContent = '';
+        } else {
+            iDriveStat.textContent = `${stats.i_drive.free_gb} GB free`;
+            iDrivePercent.textContent = `of ${stats.i_drive.total_gb} GB (${stats.i_drive.percent}% used)`;
         }
 
         // Update CPU stat
@@ -134,15 +145,12 @@ async function updateStats() {
             cpuStat.textContent = `${stats.cpu.percent}%`;
         }
 
-        // Update RAM stat
+        // Update RAM stat (inline in Docker card)
         const ramStat = document.getElementById('ram-stat');
-        const ramPercent = document.getElementById('ram-percent');
         if (stats.ram.error) {
-            ramStat.textContent = 'Error';
-            ramPercent.textContent = '';
+            ramStat.textContent = '--';
         } else {
-            ramStat.textContent = `${stats.ram.used_gb} GB`;
-            ramPercent.textContent = `${stats.ram.percent}% used (${stats.ram.used_gb}/${stats.ram.total_gb} GB)`;
+            ramStat.textContent = stats.ram.used_gb;
         }
 
     } catch (error) {
