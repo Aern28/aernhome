@@ -411,6 +411,56 @@ def projects():
     return render_template("projects.html")
 
 
+@app.route("/privacy")
+def privacy():
+    """Privacy policy for Twilio compliance"""
+    return """<!DOCTYPE html>
+<html><head><title>Privacy Policy - aern.dev</title>
+<style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#e0e0e0;background:#1a1a2e;line-height:1.6}h1,h2{color:#fff}</style>
+</head><body>
+<h1>Privacy Policy</h1>
+<p><strong>Last updated:</strong> February 20, 2026</p>
+<h2>What We Collect</h2>
+<p>When you interact with our SMS service, we collect your phone number for the sole purpose of sending and receiving text messages you have opted into.</p>
+<h2>How We Use Your Information</h2>
+<p>Your phone number is used only to deliver the SMS messages you requested. We do not sell, share, or distribute your personal information to third parties.</p>
+<h2>Data Retention</h2>
+<p>We retain your phone number only as long as you are subscribed to our messaging service. You may opt out at any time by replying STOP.</p>
+<h2>Third-Party Services</h2>
+<p>We use Twilio to send and receive SMS messages. Twilio's privacy policy is available at <a href="https://www.twilio.com/legal/privacy" style="color:#7ec8e3">twilio.com/legal/privacy</a>.</p>
+<h2>Contact</h2>
+<p>For privacy questions, contact us at the number provided in our messages.</p>
+</body></html>"""
+
+
+@app.route("/tc")
+def terms():
+    """Terms and conditions for Twilio compliance"""
+    return """<!DOCTYPE html>
+<html><head><title>Terms &amp; Conditions - aern.dev</title>
+<style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#e0e0e0;background:#1a1a2e;line-height:1.6}h1,h2{color:#fff}</style>
+</head><body>
+<h1>Terms &amp; Conditions</h1>
+<p><strong>Last updated:</strong> February 20, 2026</p>
+<h2>SMS Messaging Service</h2>
+<p>By opting in to receive SMS messages, you agree to the following terms:</p>
+<ul>
+<li>Message frequency may vary.</li>
+<li>Message and data rates may apply.</li>
+<li>Reply <strong>STOP</strong> at any time to unsubscribe.</li>
+<li>Reply <strong>HELP</strong> for assistance.</li>
+</ul>
+<h2>Consent</h2>
+<p>By providing your phone number, you consent to receive SMS messages from us. Consent is not a condition of any purchase.</p>
+<h2>Liability</h2>
+<p>We are not liable for any delays or failures in message delivery. Carriers are not liable for delayed or undelivered messages.</p>
+<h2>Changes</h2>
+<p>We may update these terms at any time. Continued use of the service constitutes acceptance of updated terms.</p>
+<h2>Contact</h2>
+<p>For questions about these terms, contact us at the number provided in our messages.</p>
+</body></html>"""
+
+
 @app.route("/api/health")
 def api_health():
     """
