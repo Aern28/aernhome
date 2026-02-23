@@ -24,7 +24,9 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiMjhmYjQ0NmRkMDZlZmIzNzk1ZGM3YmY0ZjJmMWZkZjIiLCJ0IjoiYzFlNjM2OGUtYzc0MC00YTAwLWJkZTQtNTI4NWM1OWIwNmM3IiwicyI6Ik1EZGhOemc1TnpndE5UYzNZUzAwWVRNM0xXRTNNRE10WkdObE5USTVZalV4TnpWbSJ9
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    env_file:
+      - .env
     networks:
       - aernhome
     depends_on:
