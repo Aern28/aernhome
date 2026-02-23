@@ -99,6 +99,16 @@ DEFAULT_SERVICES = [
         "icon_emoji": "📦",
         "enabled": 1,
     },
+    {
+        "name": "uptime-kuma",
+        "display_name": "Uptime Kuma",
+        "url": "http://host.docker.internal:3001",
+        "public_url": "http://100.110.245.37:3001",
+        "check_type": "http",
+        "docker_container": "uptime-kuma",
+        "icon_emoji": "📊",
+        "enabled": 1,
+    },
 ]
 
 
@@ -137,10 +147,10 @@ def init_db():
         )
     """)
 
-    # Seed default services if table is empty
-    cursor.execute("SELECT COUNT(*) FROM services")
-    if cursor.fetchone()[0] == 0:
-        for service in DEFAULT_SERVICES:
+    # Seed default services (insert any missing)
+    for service in DEFAULT_SERVICES:
+        cursor.execute("SELECT id FROM services WHERE name = ?", (service["name"],))
+        if cursor.fetchone() is None:
             cursor.execute(
                 """
                 INSERT INTO services (name, display_name, url, check_type, docker_container, icon_emoji, enabled)
