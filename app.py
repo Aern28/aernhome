@@ -70,16 +70,6 @@ DEFAULT_SERVICES = [
         "enabled": 1,
     },
     {
-        "name": "gluetun",
-        "display_name": "Gluetun VPN",
-        "url": None,
-        "public_url": None,
-        "check_type": "docker",
-        "docker_container": "gluetun",
-        "icon_emoji": "🔒",
-        "enabled": 1,
-    },
-    {
         "name": "discord-relay",
         "display_name": "Discord Relay",
         "url": None,
