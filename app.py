@@ -109,6 +109,16 @@ DEFAULT_SERVICES = [
         "icon_emoji": "📊",
         "enabled": 1,
     },
+    {
+        "name": "home-assistant",
+        "display_name": "Home Assistant",
+        "url": "http://192.168.1.70:8123",
+        "public_url": "http://192.168.1.70:8123",
+        "check_type": "http",
+        "docker_container": None,
+        "icon_emoji": "🏠",
+        "enabled": 1,
+    },
 ]
 
 
@@ -258,7 +268,7 @@ def check_service_health(service):
 
 
 def save_health_check(service_id, status, response_time_ms, error_message):
-    """Save health check result to database"""
+    """Save health check result to database and prune old records"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -267,6 +277,10 @@ def save_health_check(service_id, status, response_time_ms, error_message):
         VALUES (?, ?, ?, ?)
     """,
         (service_id, status, response_time_ms, error_message),
+    )
+    # Prune records older than 7 days
+    cursor.execute(
+        "DELETE FROM health_checks WHERE checked_at < datetime('now', '-7 days')"
     )
     conn.commit()
     conn.close()
@@ -481,7 +495,24 @@ def api_health():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM services WHERE enabled = 1")
     services = [dict(row) for row in cursor.fetchall()]
+
+    # Fetch last 24h of health checks for sparklines (one query for all services)
+    cursor.execute("""
+        SELECT service_id, status, checked_at
+        FROM health_checks
+        WHERE checked_at >= datetime('now', '-24 hours')
+        ORDER BY checked_at ASC
+    """)
+    sparkline_rows = cursor.fetchall()
     conn.close()
+
+    # Group sparkline data by service_id
+    sparklines = {}
+    for row in sparkline_rows:
+        sid = row["service_id"]
+        if sid not in sparklines:
+            sparklines[sid] = []
+        sparklines[sid].append(row["status"] == "up")
 
     results = []
     for service in services:
@@ -508,11 +539,12 @@ def api_health():
                 "name": service["name"],
                 "display_name": service["display_name"],
                 "url": service["url"],
-                "public_url": public_url,  # Add public URL for user clicks
+                "public_url": public_url,
                 "icon_emoji": service["icon_emoji"],
                 "status": health["status"],
                 "response_time_ms": health["response_time_ms"],
                 "error_message": health["error_message"],
+                "sparkline": sparklines.get(service["id"], []),
             }
         )
 

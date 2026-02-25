@@ -24,12 +24,32 @@ function formatResponseTime(ms) {
 }
 
 /**
+ * Render a sparkline SVG from an array of booleans (true=up, false=down)
+ */
+function renderSparkline(data) {
+    if (!data || data.length === 0) return '';
+    // Show last 48 checks max, each as a thin bar
+    const points = data.slice(-48);
+    const barW = 3;
+    const gap = 1;
+    const h = 16;
+    const w = points.length * (barW + gap) - gap;
+    const bars = points.map((up, i) => {
+        const x = i * (barW + gap);
+        const color = up ? '#22c55e' : '#ef4444'; // green-500 / red-500
+        return `<rect x="${x}" y="0" width="${barW}" height="${h}" rx="1" fill="${color}" opacity="0.85"/>`;
+    }).join('');
+    return `<svg width="${w}" height="${h}" class="inline-block align-middle">${bars}</svg>`;
+}
+
+/**
  * Render a service card
  */
 function renderServiceCard(service) {
     const statusColor = STATUS_COLORS[service.status] || STATUS_COLORS['unknown'];
     const responseTime = service.response_time_ms ? formatResponseTime(service.response_time_ms) : '';
     const errorMsg = service.error_message || '';
+    const sparkline = renderSparkline(service.sparkline);
 
     const card = document.createElement('div');
     card.className = 'bg-dark-card border border-dark-border rounded-lg p-4 hover:border-blue-500 transition-colors';
@@ -48,6 +68,7 @@ function renderServiceCard(service) {
             </div>
             <span class="text-2xl">${service.icon_emoji}</span>
         </div>
+        ${sparkline ? `<div class="mb-2" title="Last 24h uptime">${sparkline}</div>` : ''}
         <div class="flex items-center justify-between text-xs">
             <span class="text-gray-400">${service.status.toUpperCase()}</span>
             <span class="text-gray-500">${responseTime}</span>
