@@ -7,7 +7,9 @@ import os
 import json
 import time
 import sqlite3
-from flask import Flask, render_template, jsonify
+from email.utils import formatdate
+from datetime import datetime
+from flask import Flask, render_template, jsonify, Response, send_from_directory, abort
 import requests
 import psutil
 import shutil
@@ -427,6 +429,61 @@ def meal_planner():
 def stretch_tracker():
     """Stretch tracker page"""
     return render_template("stretch-tracker.html")
+
+
+PODCAST_DIR = os.path.join(os.environ.get("DATA_DIR", "C:/projects/aernhome/data"), "podcast")
+PODCAST_ALLOWED_EXT = {".mp3", ".jpg", ".jpeg", ".png"}
+
+
+def load_podcast_data():
+    """Load episode metadata from episodes.json, compute file sizes and RFC 2822 dates."""
+    json_path = os.path.join(PODCAST_DIR, "episodes.json")
+    try:
+        with open(json_path, "r") as f:
+            episodes = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+    for ep in episodes:
+        # Compute file size for enclosure length
+        filepath = os.path.join(PODCAST_DIR, ep["filename"])
+        try:
+            ep["file_size"] = os.path.getsize(filepath)
+        except OSError:
+            ep["file_size"] = 0
+
+        # Convert date to RFC 2822 for RSS
+        try:
+            dt = datetime.strptime(ep["date"], "%Y-%m-%d")
+            ep["pub_date_rfc"] = formatdate(dt.timestamp(), localtime=False, usegmt=True)
+        except (ValueError, KeyError):
+            ep["pub_date_rfc"] = ""
+
+    return episodes
+
+
+@app.route("/podcast")
+def podcast():
+    """Podcast landing page with audio players and subscribe info."""
+    episodes = load_podcast_data()
+    return render_template("podcast.html", episodes=episodes)
+
+
+@app.route("/podcast/feed.xml")
+def podcast_feed():
+    """RSS 2.0 podcast feed with iTunes namespace."""
+    episodes = load_podcast_data()
+    xml = render_template("podcast-feed.xml", episodes=episodes)
+    return Response(xml, mimetype="application/rss+xml")
+
+
+@app.route("/podcast/<path:filename>")
+def podcast_file(filename):
+    """Serve podcast media files (MP3s, cover art) with extension whitelist."""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in PODCAST_ALLOWED_EXT:
+        abort(403)
+    return send_from_directory(PODCAST_DIR, filename)
 
 
 @app.route("/projects")

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Aern Audio — Podcast{% endblock %}
+
+{% block content %}
+<header class="mb-8">
+    <a href="/" class="text-gray-400 hover:text-white text-sm mb-2 inline-block">← Dashboard</a>
+    <h1 class="text-4xl font-bold text-white">🎙️ Aern Audio</h1>
+    <p class="text-gray-400 mt-2">CS fundamentals, workflow optimization, and the intersection of medicine and technology.</p>
+</header>
+
+<!-- Subscribe Banner -->
+<div class="bg-dark-card border border-dark-border rounded-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold text-white mb-2">Subscribe</h2>
+    <p class="text-sm text-gray-400 mb-3">Add this feed to Podcast Addict or any podcast app:</p>
+    <div class="flex items-center gap-3">
+        <input id="feed-url" type="text" value="https://aern.dev/podcast/feed.xml" readonly
+               class="flex-1 bg-dark-bg border border-dark-border rounded px-3 py-2 text-sm text-gray-300 font-mono select-all focus:outline-none focus:border-blue-500">
+        <button onclick="copyFeed()" id="copy-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded transition-colors">
+            Copy
+        </button>
+    </div>
+</div>
+
+<!-- Episodes -->
+<section>
+    <h2 class="text-2xl font-bold text-white mb-4">Episodes</h2>
+    <div class="space-y-4">
+        {% for ep in episodes|reverse %}
+        <div class="bg-dark-card border border-dark-border rounded-lg p-6">
+            <div class="flex items-start justify-between mb-2">
+                <div>
+                    <span class="text-xs text-gray-500 font-mono">{{ ep.date }}</span>
+                    <span class="text-xs text-gray-600 mx-2">·</span>
+                    <span class="text-xs text-gray-500">{{ ep.duration }}</span>
+                </div>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">{{ ep.title }}</h3>
+            <p class="text-sm text-gray-400 mb-4">{{ ep.description }}</p>
+            {% if ep.file_size > 0 %}
+            <audio controls preload="none" class="w-full" style="height: 40px;">
+                <source src="/podcast/{{ ep.filename }}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+            {% else %}
+            <p class="text-xs text-yellow-500/80 italic">Episode file not yet available</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<script>
+function copyFeed() {
+    const input = document.getElementById('feed-url');
+    navigator.clipboard.writeText(input.value).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied!';
+        btn.classList.replace('bg-blue-600', 'bg-green-600');
+        btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+        setTimeout(() => {
+            btn.textContent = 'Copy';
+            btn.classList.replace('bg-green-600', 'bg-blue-600');
+            btn.classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Aern Audio</title>
+    <link>https://aern.dev/podcast</link>
+    <description>Short-form audio exploring CS fundamentals, workflow optimization, and the intersection of medicine and technology.</description>
+    <language>en-us</language>
+    <atom:link href="https://aern.dev/podcast/feed.xml" rel="self" type="application/rss+xml"/>
+    <itunes:author>Aern</itunes:author>
+    <itunes:summary>Short-form audio exploring CS fundamentals, workflow optimization, and the intersection of medicine and technology.</itunes:summary>
+    <itunes:category text="Technology"/>
+    <itunes:explicit>false</itunes:explicit>
+    {% for ep in episodes %}
+    <item>
+      <title>{{ ep.title }}</title>
+      <description>{{ ep.description }}</description>
+      <enclosure url="https://aern.dev/podcast/{{ ep.filename }}" length="{{ ep.file_size }}" type="audio/mpeg"/>
+      <guid isPermaLink="true">https://aern.dev/podcast/{{ ep.filename }}</guid>
+      <pubDate>{{ ep.pub_date_rfc }}</pubDate>
+      <itunes:duration>{{ ep.duration }}</itunes:duration>
+      <itunes:summary>{{ ep.description }}</itunes:summary>
+    </item>
+    {% endfor %}
+  </channel>
+</rss>
