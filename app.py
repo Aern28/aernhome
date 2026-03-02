@@ -9,29 +9,21 @@ import time
 import sqlite3
 from email.utils import formatdate
 from datetime import datetime
-from ipaddress import ip_address, ip_network
 from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request
 import requests
 import psutil
 import shutil
 
-# Tailscale CGNAT range — requests from this range get full service links
-TAILSCALE_NET = ip_network("100.64.0.0/10")
 
+def _is_internal_request():
+    """Check if the request is internal (Tailscale/LAN) vs public (Cloudflare Tunnel).
 
-def _is_tailscale_request():
-    """Check if the request originates from a Tailscale IP."""
-    # CF-Connecting-IP is set by Cloudflare Tunnel (real client IP)
-    # X-Forwarded-For as fallback, then direct remote_addr
-    ip_str = (
-        request.headers.get("CF-Connecting-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or request.remote_addr
-    )
-    try:
-        return ip_address(ip_str) in TAILSCALE_NET
-    except (ValueError, TypeError):
-        return False
+    Cloudflare Tunnel always sets CF-Connecting-IP. If that header is absent,
+    the request reached Flask directly — meaning Tailscale or LAN, both trusted.
+    Docker NAT rewrites source IPs so we can't rely on remote_addr for Tailscale
+    detection, but the absence of CF headers is a reliable signal.
+    """
+    return request.headers.get("CF-Connecting-IP") is None
 
 try:
     import docker
@@ -631,8 +623,8 @@ def api_health():
             sparklines[sid] = []
         sparklines[sid].append(row["status"] == "up")
 
-    # Tailscale clients get clickable service links; public internet gets none
-    show_links = _is_tailscale_request()
+    # Internal clients (Tailscale/LAN) get clickable service links; public internet gets none
+    show_links = _is_internal_request()
 
     results = []
     for service in services:
