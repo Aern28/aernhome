@@ -625,6 +625,7 @@ def api_health():
 
     # Internal clients (Tailscale/LAN) get clickable service links; public internet gets none
     show_links = _is_internal_request()
+    public_urls = {s["name"]: s["public_url"] for s in DEFAULT_SERVICES}
 
     results = []
     for service in services:
@@ -643,7 +644,7 @@ def api_health():
                 "id": service["id"],
                 "name": service["name"],
                 "display_name": service["display_name"],
-                "public_url": service["public_url"] if show_links else None,
+                "public_url": public_urls.get(service["name"]) if show_links else None,
                 "icon_emoji": service["icon_emoji"],
                 "status": health["status"],
                 "response_time_ms": health["response_time_ms"],
