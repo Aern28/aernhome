@@ -9,10 +9,29 @@ import time
 import sqlite3
 from email.utils import formatdate
 from datetime import datetime
-from flask import Flask, render_template, jsonify, Response, send_from_directory, abort
+from ipaddress import ip_address, ip_network
+from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request
 import requests
 import psutil
 import shutil
+
+# Tailscale CGNAT range — requests from this range get full service links
+TAILSCALE_NET = ip_network("100.64.0.0/10")
+
+
+def _is_tailscale_request():
+    """Check if the request originates from a Tailscale IP."""
+    # CF-Connecting-IP is set by Cloudflare Tunnel (real client IP)
+    # X-Forwarded-For as fallback, then direct remote_addr
+    ip_str = (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.remote_addr
+    )
+    try:
+        return ip_address(ip_str) in TAILSCALE_NET
+    except (ValueError, TypeError):
+        return False
 
 try:
     import docker
@@ -612,11 +631,8 @@ def api_health():
             sparklines[sid] = []
         sparklines[sid].append(row["status"] == "up")
 
-    # Safe public URLs — only tunneled or intentionally public services
-    # Internal Tailscale IPs and LAN addresses are never exposed
-    SAFE_PUBLIC_URLS = {
-        "jellyfin": "https://jellyfin.aern.dev",
-    }
+    # Tailscale clients get clickable service links; public internet gets none
+    show_links = _is_tailscale_request()
 
     results = []
     for service in services:
@@ -635,7 +651,7 @@ def api_health():
                 "id": service["id"],
                 "name": service["name"],
                 "display_name": service["display_name"],
-                "public_url": SAFE_PUBLIC_URLS.get(service["name"]),
+                "public_url": service["public_url"] if show_links else None,
                 "icon_emoji": service["icon_emoji"],
                 "status": health["status"],
                 "response_time_ms": health["response_time_ms"],
