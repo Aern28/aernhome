@@ -17,6 +17,7 @@ services:
       - FLASK_ENV=production
       - DATA_DIR=/data
       - TZ=America/Chicago
+      - AERNHOME_UNLOCK_TOKEN=${AERNHOME_UNLOCK_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

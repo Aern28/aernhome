@@ -9,21 +9,25 @@ import time
 import sqlite3
 from email.utils import formatdate
 from datetime import datetime
-from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request
+from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request, make_response, redirect
 import requests
 import psutil
 import shutil
 
+# Unlock token for showing service links through Cloudflare Tunnel
+# Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
+UNLOCK_TOKEN = os.environ.get("AERNHOME_UNLOCK_TOKEN", "")
+
 
 def _is_internal_request():
-    """Check if the request is internal (Tailscale/LAN) vs public (Cloudflare Tunnel).
+    """Check if the request is internal (Tailscale/LAN) or unlocked via cookie.
 
-    Cloudflare Tunnel always sets CF-Connecting-IP. If that header is absent,
-    the request reached Flask directly — meaning Tailscale or LAN, both trusted.
-    Docker NAT rewrites source IPs so we can't rely on remote_addr for Tailscale
-    detection, but the absence of CF headers is a reliable signal.
+    Internal: no CF-Connecting-IP header (direct Tailscale/LAN access).
+    Unlocked: 'aern_internal' cookie matches the unlock token.
     """
-    return request.headers.get("CF-Connecting-IP") is None
+    if request.headers.get("CF-Connecting-IP") is None:
+        return True
+    return bool(UNLOCK_TOKEN and request.cookies.get("aern_internal") == UNLOCK_TOKEN)
 
 try:
     import docker
@@ -467,7 +471,15 @@ def get_system_stats():
 
 @app.route("/")
 def dashboard():
-    """Main dashboard page"""
+    """Main dashboard page. ?unlock=<token> sets cookie, ?lock clears it."""
+    if UNLOCK_TOKEN and request.args.get("unlock") == UNLOCK_TOKEN:
+        resp = make_response(redirect("/"))
+        resp.set_cookie("aern_internal", UNLOCK_TOKEN, max_age=365 * 24 * 3600, httponly=True, samesite="Lax")
+        return resp
+    if "lock" in request.args:
+        resp = make_response(redirect("/"))
+        resp.delete_cookie("aern_internal")
+        return resp
     return render_template("dashboard.html")
 
 
