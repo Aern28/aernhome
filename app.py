@@ -56,7 +56,7 @@ DEFAULT_SERVICES = [
         "name": "jellyfin",
         "display_name": "Jellyfin Media",
         "url": "http://ashaman-1.tail125d67.ts.net:8096",
-        "public_url": "http://ashaman-1.tail125d67.ts.net:8096",
+        "public_url": "https://jellyfin.aern.dev",
         "check_type": "http",
         "docker_container": "jellyfin",
         "icon_emoji": "🎬",
