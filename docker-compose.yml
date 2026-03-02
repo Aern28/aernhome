@@ -11,6 +11,8 @@ services:
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - C:/:/host_c:ro
+      - G:/:/host_g:ro
+      - claude-workspace:/workspace:ro
     environment:
       - FLASK_ENV=production
       - DATA_DIR=/data
@@ -25,10 +27,17 @@ services:
     container_name: cloudflared-tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - aernhome
     depends_on:
       - aernhome
+
+volumes:
+  claude-workspace:
+    external: true
+    name: discord-claude-relay_claude-workspace
 
 networks:
   aernhome:

@@ -302,6 +302,13 @@ def get_system_stats():
             "percent": 0,
             "error": None,
         },
+        "g_drive": {
+            "total_gb": 0,
+            "used_gb": 0,
+            "free_gb": 0,
+            "percent": 0,
+            "error": None,
+        },
         "h_drive": {
             "total_gb": 0,
             "used_gb": 0,
@@ -318,6 +325,7 @@ def get_system_stats():
         },
         "cpu": {"percent": 0, "error": None},
         "ram": {"total_gb": 0, "used_gb": 0, "percent": 0, "error": None},
+        "bot": {"summary": None, "ts": None, "error": None},
     }
 
     # Docker stats
@@ -343,6 +351,16 @@ def get_system_stats():
         stats["c_drive"]["percent"] = round((c_usage.used / c_usage.total) * 100, 1)
     except Exception as e:
         stats["c_drive"]["error"] = str(e)
+
+    # G: Drive stats (Ashaman Docker disk) - mounted as /host_g
+    try:
+        g_usage = shutil.disk_usage("/host_g")
+        stats["g_drive"]["total_gb"] = round(g_usage.total / (1024**3), 1)
+        stats["g_drive"]["used_gb"] = round(g_usage.used / (1024**3), 1)
+        stats["g_drive"]["free_gb"] = round(g_usage.free / (1024**3), 1)
+        stats["g_drive"]["percent"] = round((g_usage.used / g_usage.total) * 100, 1)
+    except Exception as e:
+        stats["g_drive"]["error"] = str(e)
 
     # NAS drive stats (Synology) - read from host-side JSON
     try:
@@ -409,6 +427,29 @@ def get_system_stats():
     else:
         stats["cpu"]["error"] = "Docker not available"
         stats["ram"]["error"] = "Docker not available"
+
+    # Aernbot last task — read from memories.jsonl (claude-workspace volume)
+    try:
+        last_exchange = None
+        with open("/workspace/memories.jsonl", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    if entry.get("type") == "exchange":
+                        last_exchange = entry
+                except json.JSONDecodeError:
+                    continue
+        if last_exchange:
+            raw = last_exchange.get("summary", "")
+            stats["bot"]["summary"] = raw[:60] + ("..." if len(raw) > 60 else "")
+            stats["bot"]["ts"] = last_exchange.get("timestamp", "")[:16]
+    except FileNotFoundError:
+        stats["bot"]["error"] = "no data"
+    except Exception as e:
+        stats["bot"]["error"] = "unavailable"
 
     return stats
 
@@ -571,6 +612,12 @@ def api_health():
             sparklines[sid] = []
         sparklines[sid].append(row["status"] == "up")
 
+    # Safe public URLs — only tunneled or intentionally public services
+    # Internal Tailscale IPs and LAN addresses are never exposed
+    SAFE_PUBLIC_URLS = {
+        "jellyfin": "https://jellyfin.aern.dev",
+    }
+
     results = []
     for service in services:
         health = check_service_health(service)
@@ -583,20 +630,12 @@ def api_health():
             health["error_message"],
         )
 
-        # Find public_url from DEFAULT_SERVICES config
-        public_url = None
-        for default_svc in DEFAULT_SERVICES:
-            if default_svc["name"] == service["name"]:
-                public_url = default_svc.get("public_url")
-                break
-
         results.append(
             {
                 "id": service["id"],
                 "name": service["name"],
                 "display_name": service["display_name"],
-                "url": service["url"],
-                "public_url": public_url,
+                "public_url": SAFE_PUBLIC_URLS.get(service["name"]),
                 "icon_emoji": service["icon_emoji"],
                 "status": health["status"],
                 "response_time_ms": health["response_time_ms"],
@@ -613,8 +652,13 @@ def api_stats():
     """
     API endpoint for system stats
     Returns: JSON with docker, disk, cpu, ram stats
+    Error messages are sanitized to avoid leaking internal paths.
     """
     stats = get_system_stats()
+    # Sanitize error messages — replace detailed errors with generic ones
+    for key in stats:
+        if isinstance(stats[key], dict) and stats[key].get("error"):
+            stats[key]["error"] = "unavailable"
     return jsonify(stats)
 
 
