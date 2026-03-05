@@ -14,13 +14,13 @@
     <itunes:explicit>false</itunes:explicit>
     {% for ep in episodes %}
     <item>
-      <title>{{ ep.title }}</title>
-      <description>{{ ep.description }}</description>
-      <enclosure url="https://aern.dev/podcast/{{ ep.filename }}" length="{{ ep.file_size }}" type="audio/mpeg"/>
-      <guid isPermaLink="true">https://aern.dev/podcast/{{ ep.filename }}</guid>
+      <title>{{ ep.title | e }}</title>
+      <description>{{ ep.description | e }}</description>
+      <enclosure url="https://aern.dev/podcast/{{ ep.filename | e }}" length="{{ ep.file_size }}" type="audio/mpeg"/>
+      <guid isPermaLink="true">https://aern.dev/podcast/{{ ep.filename | e }}</guid>
       <pubDate>{{ ep.pub_date_rfc }}</pubDate>
       <itunes:duration>{{ ep.duration }}</itunes:duration>
-      <itunes:summary>{{ ep.description }}</itunes:summary>
+      <itunes:summary>{{ ep.description | e }}</itunes:summary>
     </item>
     {% endfor %}
   </channel>

@@ -39,6 +39,14 @@ except ImportError:
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
 
+
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
 # Configuration
 DATA_DIR = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
 DB_PATH = os.path.join(DATA_DIR, "dashboard.db")
@@ -469,6 +477,11 @@ def get_system_stats():
     return stats
 
 
+@app.route("/robots.txt")
+def robots_txt():
+    return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
+
+
 @app.route("/")
 def dashboard():
     """Main dashboard page. ?unlock=<token> sets cookie, ?lock clears it."""
@@ -610,8 +623,10 @@ def terms():
 def api_health():
     """
     API endpoint for service health checks
-    Returns: JSON with all service statuses
+    Returns: JSON with all service statuses (internal only)
     """
+    if not _is_internal_request():
+        return jsonify({"status": "ok"})
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM services WHERE enabled = 1")
@@ -672,9 +687,11 @@ def api_health():
 def api_stats():
     """
     API endpoint for system stats
-    Returns: JSON with docker, disk, cpu, ram stats
+    Returns: JSON with docker, disk, cpu, ram stats (internal only)
     Error messages are sanitized to avoid leaking internal paths.
     """
+    if not _is_internal_request():
+        return jsonify({"status": "ok"})
     stats = get_system_stats()
     # Sanitize error messages — replace detailed errors with generic ones
     for key in stats:

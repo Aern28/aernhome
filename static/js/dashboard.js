@@ -90,6 +90,9 @@ async function updateServices() {
         const services = await response.json();
         const grid = document.getElementById('services-grid');
 
+        // API returns {status: "ok"} for public visitors
+        if (!Array.isArray(services)) return;
+
         // Clear existing cards
         grid.innerHTML = '';
 
@@ -114,6 +117,9 @@ async function updateStats() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const stats = await response.json();
+
+        // API returns {status: "ok"} for public visitors
+        if (!stats.docker) return;
 
         // Update Docker stat
         const dockerStat = document.getElementById('docker-stat');

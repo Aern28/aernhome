@@ -10,9 +10,11 @@ services:
     volumes:
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - C:/:/host_c:ro
-      - G:/:/host_g:ro
+      - C:/projects/aernhome:/host_c:ro
+      - G:/ollama:/host_g:ro
       - claude-workspace:/workspace:ro
+    security_opt:
+      - no-new-privileges:true
     environment:
       - FLASK_ENV=production
       - DATA_DIR=/data

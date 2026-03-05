@@ -1,0 +1,22 @@
+User-agent: *
+Disallow: /api/
+Disallow: /meal-planner
+Disallow: /stretch-tracker
+Disallow: /projects
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+Sitemap: https://aern.dev/sitemap.xml
