@@ -144,6 +144,16 @@ DEFAULT_SERVICES = [
         "icon_emoji": "🏠",
         "enabled": 1,
     },
+    {
+        "name": "adguard-home",
+        "display_name": "AdGuard Home",
+        "url": "http://100.110.245.37:3002",
+        "public_url": "http://100.110.245.37:3002",
+        "check_type": "http",
+        "docker_container": None,
+        "icon_emoji": "🛡️",
+        "enabled": 1,
+    },
 ]
 
 
