@@ -57,8 +57,8 @@ DEFAULT_SERVICES = [
     {
         "name": "n8n",
         "display_name": "n8n Workflows",
-        "url": "https://ashaman-1.tail125d67.ts.net:5678",
-        "public_url": "https://ashaman-1.tail125d67.ts.net:5678",
+        "url": "https://ashaman.tail125d67.ts.net:5678",
+        "public_url": "https://ashaman.tail125d67.ts.net:5678",
         "check_type": "both",
         "docker_container": "n8n",
         "icon_emoji": "⚡",
@@ -67,7 +67,7 @@ DEFAULT_SERVICES = [
     {
         "name": "jellyfin",
         "display_name": "Jellyfin Media",
-        "url": "http://ashaman-1.tail125d67.ts.net:8096",
+        "url": "http://ashaman.tail125d67.ts.net:8096",
         "public_url": "https://jellyfin.aern.dev",
         "check_type": "http",
         "docker_container": "jellyfin",
