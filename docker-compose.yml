@@ -13,6 +13,7 @@ services:
       - C:/projects/aernhome:/host_c:ro
       - G:/ollama:/host_g:ro
       - claude-workspace:/workspace:ro
+      - C:/tcg-inventory:/tcg:ro
     security_opt:
       - no-new-privileges:true
     environment:

@@ -710,6 +710,33 @@ def api_stats():
     return jsonify(stats)
 
 
+@app.route("/api/tcg-stats")
+def api_tcg_stats():
+    """TRMNL TCG Business plugin payload.
+
+    Reads inventory.db (read-only) via the vendored fetcher in /trmnl_scripts.
+    Returns the same merge_variables shape the TRMNL Liquid template expects.
+    Internal only — no external exposure.
+    """
+    if not _is_internal_request():
+        return jsonify({"status": "ok"})
+
+    try:
+        from tcg_plugin_data import build_payload  # vendored alongside app.py
+    except ImportError as e:
+        return jsonify({"error": "fetcher unavailable", "detail": str(e)}), 500
+
+    inv_db = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
+    aer_db = os.environ.get("AERNBOT_DB_PATH", "/tcg/aernbot.db")
+    try:
+        payload = build_payload(inventory_db=inv_db, aernbot_db=aer_db)
+    except sqlite3.OperationalError:
+        return jsonify({"error": "inventory.db unavailable"}), 503
+    except Exception as e:
+        return jsonify({"error": "fetch failed", "detail": str(e)[:200]}), 500
+    return jsonify({"merge_variables": payload})
+
+
 # 72 Japanese micro-seasons (七十二候)
 # Each entry: (month, day_start, day_end, number, kanji, romaji, english,
 #              solar_term, solar_term_romaji, solar_term_english, pentad, season)
