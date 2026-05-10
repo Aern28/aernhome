@@ -302,8 +302,14 @@ def build_payload(
     now = dt.datetime.now(tz=dt.timezone.utc)
     today_local = now.astimezone(TZ).date()
 
+    # immutable=1 + nolock=1 lets SQLite read DBs on read-only mounts (no WAL
+    # access needed). Worst case under concurrent writes: a slightly stale
+    # snapshot — fine for a 30-min plugin refresh.
+    inv_uri = f"file:{inv_path}?mode=ro&immutable=1&nolock=1"
+    ab_uri = f"file:{ab_path}?mode=ro&immutable=1&nolock=1"
+
     out: dict = {}
-    inv = sqlite3.connect(f"file:{inv_path}?mode=ro", uri=True)
+    inv = sqlite3.connect(inv_uri, uri=True)
     inv.row_factory = sqlite3.Row
     try:
         out.update(query_sales(inv))
@@ -316,7 +322,7 @@ def build_payload(
         inv.close()
 
     if ab_path.exists() and ab_path.stat().st_size > 0:
-        ab = sqlite3.connect(f"file:{ab_path}?mode=ro", uri=True)
+        ab = sqlite3.connect(ab_uri, uri=True)
         try:
             out.update(query_aernbot_watchlist(ab))
         finally:
