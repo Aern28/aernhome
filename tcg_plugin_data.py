@@ -20,6 +20,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -27,6 +28,8 @@ from zoneinfo import ZoneInfo
 
 INVENTORY_DB = Path(os.environ.get("TCG_DB_PATH", r"C:/tcg-inventory/inventory.db"))
 AERNBOT_DB = Path(os.environ.get("AERNBOT_DB_PATH", r"C:/tcg-inventory/aernbot.db"))
+# Canonical sales store (build-queue #3): same dir as inventory.db, separate file.
+SALES_DB = Path(os.environ.get("TCG_SALES_DB_PATH", str(INVENTORY_DB.parent / "tcg-sales.db")))
 TZ = ZoneInfo("America/Chicago")
 
 
@@ -72,61 +75,72 @@ def friendly_age(when_iso: str | None, now: dt.datetime) -> str:
     return f"{seconds//86400}d ago"
 
 
-def query_sales(con: sqlite3.Connection) -> dict:
-    cur = con.execute(
-        """
-        SELECT COALESCE(SUM(quantity * your_price), 0),
-               COUNT(*),
-               COUNT(DISTINCT order_id)
-        FROM sales
-        WHERE date_sold >= datetime('now', '-7 days')
-        """
-    )
-    rev, _rows, orders = cur.fetchone()
+def _eff_sale_date(order_date, email_date) -> dt.date | None:
+    """Effective sale date: prefer order_date, fall back to email_date.
+    Handles both M/D/YYYY (live parser) and ISO YYYY-MM-DD (backfill) formats."""
+    for val in (order_date, email_date):
+        if not val:
+            continue
+        s = str(val)
+        m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)  # M/D/YYYY
+        if m:
+            try:
+                return dt.date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+            except ValueError:
+                continue
+        try:
+            return dt.date.fromisoformat(s[:10])  # ISO
+        except ValueError:
+            continue
+    return None
 
-    cur = con.execute(
-        """
-        SELECT COALESCE(SUM(quantity * your_price), 0)
-        FROM sales
-        WHERE date_sold >= datetime('now', '-14 days')
-          AND date_sold <  datetime('now',  '-7 days')
-        """
-    )
-    prev_rev = cur.fetchone()[0]
 
-    delta_pct = None
-    if prev_rev and prev_rev > 0:
-        delta_pct = ((rev - prev_rev) / prev_rev) * 100
+def query_sales(con: sqlite3.Connection, today: dt.date) -> dict:
+    """7-day revenue/orders from the CANONICAL tcg-sales.db (email-capture).
 
-    avg = (rev / orders) if orders else 0
+    Schema differs from the retired inventory.db.sales (System A): revenue is
+    `order_total` counted ONCE per distinct order_id (it repeats across an
+    order's line items); dates are mixed M/D/YYYY + ISO, so bucket in Python.
+    """
+    try:
+        rows = con.execute(
+            "SELECT order_id, order_date, order_total, email_date FROM sales"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {"sr": None, "sn": None, "sa": None, "sd": None}
+
+    # one (date, total) per distinct order
+    orders: dict = {}
+    for r in rows:
+        oid = r["order_id"]
+        if oid in orders:
+            continue
+        orders[oid] = (_eff_sale_date(r["order_date"], r["email_date"]), r["order_total"] or 0)
+
+    cut7 = today - dt.timedelta(days=7)
+    cut14 = today - dt.timedelta(days=14)
+    rev = sum(tot for d, tot in orders.values() if d and d >= cut7)
+    n = sum(1 for d, tot in orders.values() if d and d >= cut7)
+    prev_rev = sum(tot for d, tot in orders.values() if d and cut14 <= d < cut7)
+
+    delta_pct = ((rev - prev_rev) / prev_rev) * 100 if prev_rev and prev_rev > 0 else None
+    avg = (rev / n) if n else 0
     return {
         "sr": fmt_money(rev),
-        "sn": orders,
+        "sn": n,
         "sa": fmt_money(avg),
         "sd": fmt_pct_signed(delta_pct) if delta_pct is not None else None,
     }
 
 
-def query_inventory_value(con: sqlite3.Connection) -> dict:
-    row = con.execute(
-        """
-        WITH latest_price AS (
-          SELECT product_id, market_price,
-                 ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY date DESC) AS rn
-          FROM prices
-        )
-        SELECT COALESCE(SUM(i.quantity * COALESCE(lp.market_price, i.your_price)), 0),
-               COUNT(DISTINCT i.product_id)
-        FROM inventory i
-        LEFT JOIN latest_price lp ON lp.product_id = i.product_id AND lp.rn = 1
-        WHERE i.quantity > 0
-        """
-    ).fetchone()
-    value, skus = row
-    return {"iv": fmt_money(value), "is": skus}
-
-
 def query_top_movers(con: sqlite3.Connection) -> dict:
+    """Meta-wide 24h price movers (repurposed 2026-06-06, build-queue #2).
+
+    Was scoped to held inventory (`JOIN inventory ... quantity > 0`) — but a
+    singles trader holds ~1 SKU, so that widget was permanently empty. Now it
+    scans the WHOLE tracked price universe (opportunity radar), floored at $2 so
+    penny-commons swinging on noise don't dominate.
+    """
     cur = con.execute(
         """
         WITH latest AS (
@@ -146,8 +160,7 @@ def query_top_movers(con: sqlite3.Connection) -> dict:
         FROM latest l
         JOIN prev p ON p.product_id = l.product_id AND p.rn = 1
         JOIN products pr ON pr.id = l.product_id
-        JOIN inventory i ON i.product_id = l.product_id AND i.quantity > 0
-        WHERE l.rn = 1 AND p.market_price > 0
+        WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 2
           AND ABS(((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100) > 5
         ORDER BY dpct DESC
         """
@@ -269,24 +282,6 @@ def query_prices_freshness(con: sqlite3.Connection, now: dt.datetime) -> dict:
     return {"pf": pf, "pfa": friendly_age(last, now)}
 
 
-def query_aernbot_watchlist(con: sqlite3.Connection) -> dict:
-    try:
-        n = con.execute("SELECT COUNT(*) FROM watchlist WHERE active = 1").fetchone()[0]
-        latest = con.execute(
-            """
-            SELECT ref, target_price FROM watchlist
-            WHERE active = 1
-            ORDER BY added_at DESC LIMIT 1
-            """
-        ).fetchone()
-    except sqlite3.OperationalError:
-        return {"wln": 0, "wll": None}
-    if not n or not latest:
-        return {"wln": 0, "wll": None}
-    ref, target = latest
-    return {"wln": n, "wll": f"{ref} @ ${target:.2f}" if target else ref}
-
-
 def build_payload(
     inventory_db: Path | str | None = None,
     aernbot_db: Path | str | None = None,
@@ -306,14 +301,11 @@ def build_payload(
     # access needed). Worst case under concurrent writes: a slightly stale
     # snapshot — fine for a 30-min plugin refresh.
     inv_uri = f"file:{inv_path}?mode=ro&immutable=1&nolock=1"
-    ab_uri = f"file:{ab_path}?mode=ro&immutable=1&nolock=1"
 
     out: dict = {}
     inv = sqlite3.connect(inv_uri, uri=True)
     inv.row_factory = sqlite3.Row
     try:
-        out.update(query_sales(inv))
-        out.update(query_inventory_value(inv))
         out.update(query_top_movers(inv))
         out["pos"] = query_positions(inv, today_local)
         out.update(query_to_ship(inv))
@@ -321,14 +313,25 @@ def build_payload(
     finally:
         inv.close()
 
-    if ab_path.exists() and ab_path.stat().st_size > 0:
-        ab = sqlite3.connect(ab_uri, uri=True)
+    # Sales come from the CANONICAL tcg-sales.db (build-queue #3) — a separate
+    # file in the same dir, NOT inventory.db's retired System A `sales` table.
+    # mode=ro (no immutable: it's actively written by parse-tcg-sales.js).
+    sales_path = (
+        Path(os.environ["TCG_SALES_DB_PATH"])
+        if os.environ.get("TCG_SALES_DB_PATH")
+        else inv_path.parent / "tcg-sales.db"
+    )
+    if sales_path.exists() and sales_path.stat().st_size > 0:
+        sales = sqlite3.connect(f"file:{sales_path}?mode=ro&nolock=1", uri=True)
+        sales.row_factory = sqlite3.Row
         try:
-            out.update(query_aernbot_watchlist(ab))
+            out.update(query_sales(sales, today_local))
         finally:
-            ab.close()
+            sales.close()
     else:
-        out.update({"wln": 0, "wll": None})
+        out.update({"sr": None, "sn": None, "sa": None, "sd": None})
+    # inventory-value + watchlist widgets trimmed 2026-06-06 (build-queue #2):
+    # bulk inventory is cruft post-singles-pivot; watchlist source was unreadable.
 
     if os.name != "nt":
         out["dt"] = now.astimezone(TZ).strftime("%a %-I:%M %p · %b %-d")
