@@ -161,7 +161,11 @@ def query_top_movers(con: sqlite3.Connection) -> dict:
         JOIN prev p ON p.product_id = l.product_id AND p.rn = 1
         JOIN products pr ON pr.id = l.product_id
         JOIN inventory i ON i.product_id = l.product_id AND i.quantity > 0
-        WHERE l.rn = 1 AND p.market_price > 0 AND pr.category = 'One Piece'
+        -- category LIKE: the fetch labels OP cards 'One Piece', the MyPricing
+        -- import labels them 'One Piece Card Game'. $1 floor keeps penny commons
+        -- off the repricing list.
+        WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 1
+          AND pr.category LIKE 'One Piece%'
           AND ABS(((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100) > 5
         ORDER BY dpct DESC
         """
