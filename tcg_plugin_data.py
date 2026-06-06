@@ -134,12 +134,13 @@ def query_sales(con: sqlite3.Connection, today: dt.date) -> dict:
 
 
 def query_top_movers(con: sqlite3.Connection) -> dict:
-    """Meta-wide 24h price movers (repurposed 2026-06-06, build-queue #2).
+    """OP-in-inventory price movers — a REPRICING RADAR (build-queue #2, refined
+    2026-06-06 per Aern: 'OP that is in inventory ... what to reprice').
 
-    Was scoped to held inventory (`JOIN inventory ... quantity > 0`) — but a
-    singles trader holds ~1 SKU, so that widget was permanently empty. Now it
-    scans the WHOLE tracked price universe (opportunity radar), floored at $2 so
-    penny-commons swinging on noise don't dominate.
+    Scoped to One Piece cards currently IN INVENTORY (qty>0) that moved >5% in
+    24h — i.e. YOUR live listings whose market shifted and likely need a reprice.
+    Shows the card number for ID. Populates as inventory is scanned in
+    (TCGplayer = source of truth; the local `inventory` table fills from scans).
     """
     cur = con.execute(
         """
@@ -154,35 +155,33 @@ def query_top_movers(con: sqlite3.Connection) -> dict:
           FROM prices
           WHERE date <= datetime('now', '-1 day')
         )
-        SELECT pr.name, pr.set_name,
-               l.market_price, p.market_price,
+        SELECT pr.name, pr.number, l.market_price,
                ((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100 AS dpct
         FROM latest l
         JOIN prev p ON p.product_id = l.product_id AND p.rn = 1
         JOIN products pr ON pr.id = l.product_id
-        WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 2
+        JOIN inventory i ON i.product_id = l.product_id AND i.quantity > 0
+        WHERE l.rn = 1 AND p.market_price > 0 AND pr.category = 'One Piece'
           AND ABS(((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100) > 5
-          -- SINGLES ONLY (sealed product has no card `number`) — keeps out the
-          -- Pokemon/Lorcana booster-box/ETB/blister/code-card flood. Exception:
-          -- OP14 sealed (Aern tracks OP14 boxes; 'The Azure Sea's Seven').
-          AND ( (pr.number IS NOT NULL AND TRIM(pr.number) != '')
-                OR pr.set_name = 'The Azure Sea''s Seven'
-                OR pr.name LIKE '%OP-14%' )
         ORDER BY dpct DESC
         """
     )
     rows = cur.fetchall()
+
+    def label(name, num):
+        return truncate(f"{num} {name}".strip() if num else name)
+
     gainers = [
-        {"n": truncate(r[0]), "p": fmt_money(r[2]), "d": f"+{r[4]:.0f}%"}
+        {"n": label(r[0], r[1]), "p": fmt_money(r[2]), "d": f"+{r[3]:.0f}%"}
         for r in rows[:3]
-        if r[4] is not None and r[4] > 0
+        if r[3] is not None and r[3] > 0
     ]
-    losers = [r for r in rows if r[4] is not None and r[4] < 0]
-    losers.sort(key=lambda r: r[4])
+    losers = [r for r in rows if r[3] is not None and r[3] < 0]
+    losers.sort(key=lambda r: r[3])
     mvd = None
     if losers:
         r = losers[0]
-        mvd = {"n": truncate(r[0]), "p": fmt_money(r[2]), "d": f"{r[4]:.0f}%"}
+        mvd = {"n": label(r[0], r[1]), "p": fmt_money(r[2]), "d": f"{r[3]:.0f}%"}
     return {"mvu": gainers, "mvd": mvd}
 
 
@@ -248,6 +247,7 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
             {
                 "name": card,
                 "ref": ref,
+                "cur": fmt_money(current),
                 "plp": f"{plp:+.1f}%",
                 "plp_neg": plp < 0,
                 "pld": ("-$" if pld_total < 0 else "+$") + f"{abs(pld_total):.2f}",
