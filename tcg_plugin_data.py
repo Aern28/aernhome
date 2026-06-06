@@ -162,6 +162,12 @@ def query_top_movers(con: sqlite3.Connection) -> dict:
         JOIN products pr ON pr.id = l.product_id
         WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 2
           AND ABS(((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100) > 5
+          -- SINGLES ONLY (sealed product has no card `number`) — keeps out the
+          -- Pokemon/Lorcana booster-box/ETB/blister/code-card flood. Exception:
+          -- OP14 sealed (Aern tracks OP14 boxes; 'The Azure Sea's Seven').
+          AND ( (pr.number IS NOT NULL AND TRIM(pr.number) != '')
+                OR pr.set_name = 'The Azure Sea''s Seven'
+                OR pr.name LIKE '%OP-14%' )
         ORDER BY dpct DESC
         """
     )
