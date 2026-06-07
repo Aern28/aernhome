@@ -325,14 +325,18 @@ def build_payload(
 
     # Sales come from the CANONICAL tcg-sales.db (build-queue #3) — a separate
     # file in the same dir, NOT inventory.db's retired System A `sales` table.
-    # mode=ro (no immutable: it's actively written by parse-tcg-sales.js).
+    # immutable=1 is REQUIRED: on Docker Desktop's grpcfuse mount a plain mode=ro
+    # open fails with "unable to open database file" (no lock/-wal access), which
+    # silently nulled the whole Sales widget. immutable skips that. Worst case vs
+    # the live parse-tcg-sales.js writer: a snapshot stale by one transaction —
+    # fine for a 30-min refresh (same trade-off as inventory.db above). Fixed 2026-06-07.
     sales_path = (
         Path(os.environ["TCG_SALES_DB_PATH"])
         if os.environ.get("TCG_SALES_DB_PATH")
         else inv_path.parent / "tcg-sales.db"
     )
     if sales_path.exists() and sales_path.stat().st_size > 0:
-        sales = sqlite3.connect(f"file:{sales_path}?mode=ro&nolock=1", uri=True)
+        sales = sqlite3.connect(f"file:{sales_path}?mode=ro&immutable=1&nolock=1", uri=True)
         sales.row_factory = sqlite3.Row
         try:
             out.update(query_sales(sales, today_local))
