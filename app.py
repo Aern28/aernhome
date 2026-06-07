@@ -1,4 +1,4 @@
-﻿"""
+"""
 AernHome Dashboard - Self-hosted home services dashboard
 Flask backend with service health checks and system stats
 """
@@ -61,7 +61,7 @@ DEFAULT_SERVICES = [
         "public_url": "https://ashaman.tail125d67.ts.net:5678",
         "check_type": "both",
         "docker_container": "n8n",
-        "icon_emoji": "âš¡",
+        "icon_emoji": "⚡",
         "enabled": 1,
     },
     {
@@ -71,7 +71,7 @@ DEFAULT_SERVICES = [
         "public_url": "https://jellyfin.aern.dev",
         "check_type": "http",
         "docker_container": "jellyfin",
-        "icon_emoji": "ðŸŽ¬",
+        "icon_emoji": "🎬",
         "enabled": 1,
     },
     {
@@ -81,7 +81,7 @@ DEFAULT_SERVICES = [
         "public_url": "http://100.73.108.55:8080",
         "check_type": "http",
         "docker_container": "qbittorrent",
-        "icon_emoji": "ðŸŒŠ",
+        "icon_emoji": "🌊",
         "enabled": 1,
     },
     {
@@ -91,8 +91,8 @@ DEFAULT_SERVICES = [
         "public_url": "http://100.110.245.37:3000",
         "check_type": "http",
         "docker_container": "open-webui",
-        "icon_emoji": "ðŸ§ ",
-        "enabled": 1,
+        "icon_emoji": "🧠",
+        "enabled": 0,
     },
     {
         "name": "discord-relay",
@@ -101,7 +101,7 @@ DEFAULT_SERVICES = [
         "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "claude-relay",
-        "icon_emoji": "ðŸ¤–",
+        "icon_emoji": "🤖",
         "enabled": 1,
     },
     {
@@ -111,7 +111,7 @@ DEFAULT_SERVICES = [
         "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "cloudflared-tunnel",
-        "icon_emoji": "â˜ï¸",
+        "icon_emoji": "☁️",
         "enabled": 1,
     },
     {
@@ -121,7 +121,7 @@ DEFAULT_SERVICES = [
         "public_url": None,  # No web interface
         "check_type": "docker",
         "docker_container": "scan-runner",
-        "icon_emoji": "ðŸ“¦",
+        "icon_emoji": "📦",
         "enabled": 1,
     },
     {
@@ -131,7 +131,7 @@ DEFAULT_SERVICES = [
         "public_url": "http://100.110.245.37:3001",
         "check_type": "http",
         "docker_container": "uptime-kuma",
-        "icon_emoji": "ðŸ“Š",
+        "icon_emoji": "📊",
         "enabled": 1,
     },
     {
@@ -141,18 +141,18 @@ DEFAULT_SERVICES = [
         "public_url": "http://192.168.1.70:8123",
         "check_type": "http",
         "docker_container": None,
-        "icon_emoji": "ðŸ ",
+        "icon_emoji": "🏠",
         "enabled": 1,
     },
     {
         "name": "adguard-home",
         "display_name": "AdGuard Home",
-        "url": "http://100.110.245.37:3002",
-        "public_url": "http://100.110.245.37:3002",
+        "url": "http://192.168.1.70:3000",
+        "public_url": "http://192.168.1.70:3000",
         "check_type": "http",
         "docker_container": None,
-        "icon_emoji": "ðŸ›¡ï¸",
-        "enabled": 1,
+        "icon_emoji": "🛡️",
+        "enabled": 0,
     },
 ]
 
@@ -192,7 +192,7 @@ def init_db():
         )
     """)
 
-    # Seed default services (insert any missing)
+    # Seed default services (insert new, update existing to match config)
     for service in DEFAULT_SERVICES:
         cursor.execute("SELECT id FROM services WHERE name = ?", (service["name"],))
         if cursor.fetchone() is None:
@@ -209,6 +209,22 @@ def init_db():
                     service["docker_container"],
                     service["icon_emoji"],
                     service["enabled"],
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE services SET display_name=?, url=?, check_type=?, docker_container=?, icon_emoji=?, enabled=?
+                WHERE name=?
+            """,
+                (
+                    service["display_name"],
+                    service["url"],
+                    service["check_type"],
+                    service["docker_container"],
+                    service["icon_emoji"],
+                    service["enabled"],
+                    service["name"],
                 ),
             )
 
@@ -461,7 +477,7 @@ def get_system_stats():
         stats["cpu"]["error"] = "Docker not available"
         stats["ram"]["error"] = "Docker not available"
 
-    # Aernbot last task â€” read from memories.jsonl (claude-workspace volume)
+    # Aernbot last task — read from memories.jsonl (claude-workspace volume)
     try:
         last_exchange = None
         with open("/workspace/memories.jsonl", "r", encoding="utf-8") as f:
@@ -703,7 +719,7 @@ def api_stats():
     if not _is_internal_request():
         return jsonify({"status": "ok"})
     stats = get_system_stats()
-    # Sanitize error messages â€” replace detailed errors with generic ones
+    # Sanitize error messages — replace detailed errors with generic ones
     for key in stats:
         if isinstance(stats[key], dict) and stats[key].get("error"):
             stats[key]["error"] = "unavailable"
@@ -716,7 +732,7 @@ def api_tcg_stats():
 
     Reads inventory.db (read-only) via the vendored fetcher in /trmnl_scripts.
     Returns the same merge_variables shape the TRMNL Liquid template expects.
-    Internal only â€” no external exposure.
+    Internal only — no external exposure.
     """
     if not _is_internal_request():
         return jsonify({"status": "ok"})
@@ -737,99 +753,99 @@ def api_tcg_stats():
     return jsonify({"merge_variables": payload})
 
 
-# 72 Japanese micro-seasons (ä¸ƒåäºŒå€™)
+# 72 Japanese micro-seasons (七十二候)
 # Each entry: (month, day_start, day_end, number, kanji, romaji, english,
 #              solar_term, solar_term_romaji, solar_term_english, pentad, season)
 # day_end is inclusive. Seasons that cross month boundaries use day_end=31/32 as
-# a sentinel â€” the lookup function handles the boundary crossing logic.
+# a sentinel — the lookup function handles the boundary crossing logic.
 _MICRO_SEASONS = [
     # --- Spring ---
-    (2,  4,  8,  1, "æ±é¢¨è§£å‡", "Harukaze kÅri o toku",         "East wind melts the ice",           "ç«‹æ˜¥", "Risshun", "Beginning of Spring", 1, "Spring"),
-    (2,  9, 13,  2, "é»„é¶¯çç†", "KÅÅ kenkan su",                "Bush warblers start singing",        "ç«‹æ˜¥", "Risshun", "Beginning of Spring", 2, "Spring"),
-    (2, 14, 18,  3, "é­šä¸Šæ°·",   "Uo kÅri o izuru",              "Fish emerge from the ice",           "ç«‹æ˜¥", "Risshun", "Beginning of Spring", 3, "Spring"),
-    (2, 19, 23,  4, "åœŸè„‰æ½¤èµ·", "Tsuchi no shÅ uruoi okoru",    "Rain moistens the soil",             "é›¨æ°´", "Usui",    "Rain Water",          1, "Spring"),
-    (2, 24, 28,  5, "éœžå§‹é†",   "Kasumi hajimete tanabiku",     "Mist starts to linger",              "é›¨æ°´", "Usui",    "Rain Water",          2, "Spring"),
-    (3,  1,  5,  6, "è‰æœ¨è å‹•", "SÅmoku mebae izuru",           "Grass sprouts, trees bud",           "é›¨æ°´", "Usui",    "Rain Water",          3, "Spring"),
-    (3,  6, 10,  7, "èŸ„è™«å•“æˆ¸", "Sugomori mushi to o hiraku",   "Hibernating insects surface",        "å•“èŸ„", "Keichitsu","Awakening of Insects",1, "Spring"),
-    (3, 11, 15,  8, "æ¡ƒå§‹ç¬‘",   "Momo hajimete saku",           "First peach blossoms",               "å•“èŸ„", "Keichitsu","Awakening of Insects",2, "Spring"),
-    (3, 16, 20,  9, "èœè™«åŒ–è¶", "Namushi chÅ to naru",          "Caterpillars become butterflies",    "å•“èŸ„", "Keichitsu","Awakening of Insects",3, "Spring"),
-    (3, 21, 25, 10, "é›€å§‹å·£",   "Suzume hajimete sukÅ«",         "Sparrows start to nest",             "æ˜¥åˆ†", "Shunbun", "Spring Equinox",      1, "Spring"),
-    (3, 26, 30, 11, "æ«»å§‹é–‹",   "Sakura hajimete saku",         "First cherry blossoms",              "æ˜¥åˆ†", "Shunbun", "Spring Equinox",      2, "Spring"),
-    # Mar 31 â€“ Apr 4 (crosses month boundary; stored as month=3, day_start=31, day_end=35 sentinel)
-    (3, 31, 35, 12, "é›·ä¹ƒç™ºå£°", "Kaminari sunawachi koe o hassu","Distant thunder",                   "æ˜¥åˆ†", "Shunbun", "Spring Equinox",      3, "Spring"),
-    (4,  5,  9, 13, "çŽ„é³¥è‡³",   "Tsubame kitaru",               "Swallows return",                    "æ¸…æ˜Ž", "Seimei",  "Pure Brightness",     1, "Spring"),
-    (4, 10, 14, 14, "é´»é›åŒ—",   "KÅgan kaeru",                  "Wild geese fly north",               "æ¸…æ˜Ž", "Seimei",  "Pure Brightness",     2, "Spring"),
-    (4, 15, 19, 15, "è™¹å§‹è¦‹",   "Niji hajimete arawaru",        "First rainbows",                     "æ¸…æ˜Ž", "Seimei",  "Pure Brightness",     3, "Spring"),
-    (4, 20, 24, 16, "è‘­å§‹ç”Ÿ",   "Ashi hajimete shÅzu",          "First reeds sprout",                 "ç©€é›¨", "Kokuu",   "Grain Rain",          1, "Spring"),
-    (4, 25, 29, 17, "éœœæ­¢å‡ºè‹—", "Shimo yamite nae izuru",       "Last frost, rice seedlings grow",    "ç©€é›¨", "Kokuu",   "Grain Rain",          2, "Spring"),
-    # Apr 30 â€“ May 4 (crosses month boundary; stored as month=4, day_start=30, day_end=35 sentinel)
-    (4, 30, 35, 18, "ç‰¡ä¸¹è¯",   "Botan hana saku",              "Peonies bloom",                      "ç©€é›¨", "Kokuu",   "Grain Rain",          3, "Spring"),
+    (2,  4,  8,  1, "東風解凍", "Harukaze kōri o toku",         "East wind melts the ice",           "立春", "Risshun", "Beginning of Spring", 1, "Spring"),
+    (2,  9, 13,  2, "黄鶯睍睆", "Kōō kenkan su",                "Bush warblers start singing",        "立春", "Risshun", "Beginning of Spring", 2, "Spring"),
+    (2, 14, 18,  3, "魚上氷",   "Uo kōri o izuru",              "Fish emerge from the ice",           "立春", "Risshun", "Beginning of Spring", 3, "Spring"),
+    (2, 19, 23,  4, "土脉潤起", "Tsuchi no shō uruoi okoru",    "Rain moistens the soil",             "雨水", "Usui",    "Rain Water",          1, "Spring"),
+    (2, 24, 28,  5, "霞始靆",   "Kasumi hajimete tanabiku",     "Mist starts to linger",              "雨水", "Usui",    "Rain Water",          2, "Spring"),
+    (3,  1,  5,  6, "草木萠動", "Sōmoku mebae izuru",           "Grass sprouts, trees bud",           "雨水", "Usui",    "Rain Water",          3, "Spring"),
+    (3,  6, 10,  7, "蟄虫啓戸", "Sugomori mushi to o hiraku",   "Hibernating insects surface",        "啓蟄", "Keichitsu","Awakening of Insects",1, "Spring"),
+    (3, 11, 15,  8, "桃始笑",   "Momo hajimete saku",           "First peach blossoms",               "啓蟄", "Keichitsu","Awakening of Insects",2, "Spring"),
+    (3, 16, 20,  9, "菜虫化蝶", "Namushi chō to naru",          "Caterpillars become butterflies",    "啓蟄", "Keichitsu","Awakening of Insects",3, "Spring"),
+    (3, 21, 25, 10, "雀始巣",   "Suzume hajimete sukū",         "Sparrows start to nest",             "春分", "Shunbun", "Spring Equinox",      1, "Spring"),
+    (3, 26, 30, 11, "櫻始開",   "Sakura hajimete saku",         "First cherry blossoms",              "春分", "Shunbun", "Spring Equinox",      2, "Spring"),
+    # Mar 31 – Apr 4 (crosses month boundary; stored as month=3, day_start=31, day_end=35 sentinel)
+    (3, 31, 35, 12, "雷乃発声", "Kaminari sunawachi koe o hassu","Distant thunder",                   "春分", "Shunbun", "Spring Equinox",      3, "Spring"),
+    (4,  5,  9, 13, "玄鳥至",   "Tsubame kitaru",               "Swallows return",                    "清明", "Seimei",  "Pure Brightness",     1, "Spring"),
+    (4, 10, 14, 14, "鴻雁北",   "Kōgan kaeru",                  "Wild geese fly north",               "清明", "Seimei",  "Pure Brightness",     2, "Spring"),
+    (4, 15, 19, 15, "虹始見",   "Niji hajimete arawaru",        "First rainbows",                     "清明", "Seimei",  "Pure Brightness",     3, "Spring"),
+    (4, 20, 24, 16, "葭始生",   "Ashi hajimete shōzu",          "First reeds sprout",                 "穀雨", "Kokuu",   "Grain Rain",          1, "Spring"),
+    (4, 25, 29, 17, "霜止出苗", "Shimo yamite nae izuru",       "Last frost, rice seedlings grow",    "穀雨", "Kokuu",   "Grain Rain",          2, "Spring"),
+    # Apr 30 – May 4 (crosses month boundary; stored as month=4, day_start=30, day_end=35 sentinel)
+    (4, 30, 35, 18, "牡丹華",   "Botan hana saku",              "Peonies bloom",                      "穀雨", "Kokuu",   "Grain Rain",          3, "Spring"),
     # --- Summer ---
-    (5,  5,  9, 19, "è›™å§‹é³´",   "Kawazu hajimete naku",         "Frogs start singing",                "ç«‹å¤", "Rikka",   "Beginning of Summer", 1, "Summer"),
-    (5, 10, 14, 20, "èš¯èš“å‡º",   "Mimizu izuru",                 "Worms surface",                      "ç«‹å¤", "Rikka",   "Beginning of Summer", 2, "Summer"),
-    (5, 15, 20, 21, "ç«¹ç¬‹ç”Ÿ",   "Takenoko shÅzu",               "Bamboo shoots sprout",               "ç«‹å¤", "Rikka",   "Beginning of Summer", 3, "Summer"),
-    (5, 21, 25, 22, "èš•èµ·é£Ÿæ¡‘", "Kaiko okite kuwa o hamu",      "Silkworms feast on mulberry",        "å°æº€", "ShÅman",  "Lesser Fullness",     1, "Summer"),
-    (5, 26, 30, 23, "ç´…èŠ±æ „",   "Benibana sakau",               "Safflowers bloom",                   "å°æº€", "ShÅman",  "Lesser Fullness",     2, "Summer"),
-    # May 31 â€“ Jun 5 (crosses month boundary; stored as month=5, day_start=31, day_end=36 sentinel)
-    (5, 31, 36, 24, "éº¦ç§‹è‡³",   "Mugi no toki itaru",           "Wheat ripens",                       "å°æº€", "ShÅman",  "Lesser Fullness",     3, "Summer"),
-    (6,  6, 10, 25, "èŸ·èž‚ç”Ÿ",   "Kamakiri shÅzu",               "Praying mantises hatch",             "èŠ’ç¨®", "BÅshu",   "Grain in Ear",        1, "Summer"),
-    (6, 11, 15, 26, "è…è‰ç‚ºè›", "Kusaretaru kusa hotaru to naru","Fireflies emerge",                  "èŠ’ç¨®", "BÅshu",   "Grain in Ear",        2, "Summer"),
-    (6, 16, 20, 27, "æ¢…å­é»„",   "Ume no mi kibamu",             "Plums turn yellow",                  "èŠ’ç¨®", "BÅshu",   "Grain in Ear",        3, "Summer"),
-    (6, 21, 26, 28, "ä¹ƒæ±æž¯",   "Natsukarekusa karuru",         "Self-heal withers",                  "å¤è‡³", "Geshi",   "Summer Solstice",     1, "Summer"),
-    # Jun 27 â€“ Jul 1 (crosses month boundary; stored as month=6, day_start=27, day_end=32 sentinel)
-    (6, 27, 32, 29, "è–è’²è¯",   "Ayame hana saku",              "Irises bloom",                       "å¤è‡³", "Geshi",   "Summer Solstice",     2, "Summer"),
-    (7,  2,  6, 30, "åŠå¤ç”Ÿ",   "Hange shÅzu",                  "Crow-dipper sprouts",                "å¤è‡³", "Geshi",   "Summer Solstice",     3, "Summer"),
-    (7,  7, 11, 31, "æ¸©é¢¨è‡³",   "Atsukaze itaru",               "Warm winds blow",                    "å°æš‘", "ShÅsho",  "Lesser Heat",         1, "Summer"),
-    (7, 12, 16, 32, "è“®å§‹é–‹",   "Hasu hajimete hiraku",         "Lotus flowers bloom",                "å°æš‘", "ShÅsho",  "Lesser Heat",         2, "Summer"),
-    (7, 17, 22, 33, "é·¹ä¹ƒå­¦ç¿’", "Taka sunawachi waza o narau",  "Hawks learn to fly",                 "å°æš‘", "ShÅsho",  "Lesser Heat",         3, "Summer"),
-    (7, 23, 28, 34, "æ¡å§‹çµèŠ±", "Kiri hajimete hana o musubu",  "Paulownia trees flower",             "å¤§æš‘", "Taisho",  "Greater Heat",        1, "Summer"),
-    # Jul 29 â€“ Aug 2 (crosses month boundary; stored as month=7, day_start=29, day_end=33 sentinel)
-    (7, 29, 33, 35, "åœŸæ½¤æº½æš‘", "Tsuchi uruÅte mushi atsushi",  "Earth is damp, air humid",           "å¤§æš‘", "Taisho",  "Greater Heat",        2, "Summer"),
-    (8,  3,  6, 36, "å¤§é›¨æ™‚è¡Œ", "Taiu tokidoki furu",           "Great rains sometimes fall",          "å¤§æš‘", "Taisho",  "Greater Heat",        3, "Summer"),
+    (5,  5,  9, 19, "蛙始鳴",   "Kawazu hajimete naku",         "Frogs start singing",                "立夏", "Rikka",   "Beginning of Summer", 1, "Summer"),
+    (5, 10, 14, 20, "蚯蚓出",   "Mimizu izuru",                 "Worms surface",                      "立夏", "Rikka",   "Beginning of Summer", 2, "Summer"),
+    (5, 15, 20, 21, "竹笋生",   "Takenoko shōzu",               "Bamboo shoots sprout",               "立夏", "Rikka",   "Beginning of Summer", 3, "Summer"),
+    (5, 21, 25, 22, "蚕起食桑", "Kaiko okite kuwa o hamu",      "Silkworms feast on mulberry",        "小満", "Shōman",  "Lesser Fullness",     1, "Summer"),
+    (5, 26, 30, 23, "紅花栄",   "Benibana sakau",               "Safflowers bloom",                   "小満", "Shōman",  "Lesser Fullness",     2, "Summer"),
+    # May 31 – Jun 5 (crosses month boundary; stored as month=5, day_start=31, day_end=36 sentinel)
+    (5, 31, 36, 24, "麦秋至",   "Mugi no toki itaru",           "Wheat ripens",                       "小満", "Shōman",  "Lesser Fullness",     3, "Summer"),
+    (6,  6, 10, 25, "蟷螂生",   "Kamakiri shōzu",               "Praying mantises hatch",             "芒種", "Bōshu",   "Grain in Ear",        1, "Summer"),
+    (6, 11, 15, 26, "腐草為蛍", "Kusaretaru kusa hotaru to naru","Fireflies emerge",                  "芒種", "Bōshu",   "Grain in Ear",        2, "Summer"),
+    (6, 16, 20, 27, "梅子黄",   "Ume no mi kibamu",             "Plums turn yellow",                  "芒種", "Bōshu",   "Grain in Ear",        3, "Summer"),
+    (6, 21, 26, 28, "乃東枯",   "Natsukarekusa karuru",         "Self-heal withers",                  "夏至", "Geshi",   "Summer Solstice",     1, "Summer"),
+    # Jun 27 – Jul 1 (crosses month boundary; stored as month=6, day_start=27, day_end=32 sentinel)
+    (6, 27, 32, 29, "菖蒲華",   "Ayame hana saku",              "Irises bloom",                       "夏至", "Geshi",   "Summer Solstice",     2, "Summer"),
+    (7,  2,  6, 30, "半夏生",   "Hange shōzu",                  "Crow-dipper sprouts",                "夏至", "Geshi",   "Summer Solstice",     3, "Summer"),
+    (7,  7, 11, 31, "温風至",   "Atsukaze itaru",               "Warm winds blow",                    "小暑", "Shōsho",  "Lesser Heat",         1, "Summer"),
+    (7, 12, 16, 32, "蓮始開",   "Hasu hajimete hiraku",         "Lotus flowers bloom",                "小暑", "Shōsho",  "Lesser Heat",         2, "Summer"),
+    (7, 17, 22, 33, "鷹乃学習", "Taka sunawachi waza o narau",  "Hawks learn to fly",                 "小暑", "Shōsho",  "Lesser Heat",         3, "Summer"),
+    (7, 23, 28, 34, "桐始結花", "Kiri hajimete hana o musubu",  "Paulownia trees flower",             "大暑", "Taisho",  "Greater Heat",        1, "Summer"),
+    # Jul 29 – Aug 2 (crosses month boundary; stored as month=7, day_start=29, day_end=33 sentinel)
+    (7, 29, 33, 35, "土潤溽暑", "Tsuchi uruōte mushi atsushi",  "Earth is damp, air humid",           "大暑", "Taisho",  "Greater Heat",        2, "Summer"),
+    (8,  3,  6, 36, "大雨時行", "Taiu tokidoki furu",           "Great rains sometimes fall",          "大暑", "Taisho",  "Greater Heat",        3, "Summer"),
     # --- Autumn ---
-    (8,  7, 11, 37, "æ¶¼é¢¨è‡³",   "Suzukaze itaru",               "Cool winds arrive",                  "ç«‹ç§‹", "RisshÅ«",  "Beginning of Autumn", 1, "Autumn"),
-    (8, 12, 16, 38, "å¯’è‰é³´",   "Higurashi naku",               "Evening cicadas sing",               "ç«‹ç§‹", "RisshÅ«",  "Beginning of Autumn", 2, "Autumn"),
-    (8, 17, 22, 39, "è’™éœ§å‡é™", "Fukaki kiri matÅ",             "Dense fog descends",                 "ç«‹ç§‹", "RisshÅ«",  "Beginning of Autumn", 3, "Autumn"),
-    (8, 23, 27, 40, "ç¶¿æŸŽé–‹",   "Wata no hana shibe hiraku",    "Cotton flowers bloom",               "å‡¦æš‘", "Shosho",  "End of Heat",         1, "Autumn"),
-    # Aug 28 â€“ Sep 1 (crosses month boundary; stored as month=8, day_start=28, day_end=32 sentinel)
-    (8, 28, 32, 41, "å¤©åœ°å§‹ç²›", "Tenchi hajimete samushi",      "Heat begins to subside",             "å‡¦æš‘", "Shosho",  "End of Heat",         2, "Autumn"),
-    (9,  2,  7, 42, "ç¦¾ä¹ƒç™»",   "Kokumono sunawachi minoru",    "Rice ripens",                        "å‡¦æš‘", "Shosho",  "End of Heat",         3, "Autumn"),
-    (9,  8, 12, 43, "è‰éœ²ç™½",   "Kusa no tsuyu shiroshi",       "Dew glistens white on grass",        "ç™½éœ²", "Hakuro",  "White Dew",           1, "Autumn"),
-    (9, 13, 17, 44, "é¶ºé´’é³´",   "Sekirei naku",                 "Wagtails sing",                      "ç™½éœ²", "Hakuro",  "White Dew",           2, "Autumn"),
-    (9, 18, 22, 45, "çŽ„é³¥åŽ»",   "Tsubame saru",                 "Swallows leave",                     "ç™½éœ²", "Hakuro",  "White Dew",           3, "Autumn"),
-    (9, 23, 27, 46, "é›·ä¹ƒåŽå£°", "Kaminari sunawachi koe o osamu","Thunder ceases",                    "ç§‹åˆ†", "ShÅ«bun",  "Autumn Equinox",      1, "Autumn"),
-    # Sep 28 â€“ Oct 2 (crosses month boundary; stored as month=9, day_start=28, day_end=32 sentinel)
-    (9, 28, 32, 47, "èŸ„è™«åæˆ¸", "Mushi kakurete to o fusagu",   "Insects hide and seal doors",        "ç§‹åˆ†", "ShÅ«bun",  "Autumn Equinox",      2, "Autumn"),
-    (10, 3,  7, 48, "æ°´å§‹æ¶¸",   "Mizu hajimete karuru",         "Farmers drain fields",               "ç§‹åˆ†", "ShÅ«bun",  "Autumn Equinox",      3, "Autumn"),
-    (10, 8, 12, 49, "é´»é›æ¥",   "KÅgan kitaru",                 "Wild geese return",                  "å¯’éœ²", "Kanro",   "Cold Dew",            1, "Autumn"),
-    (10,13, 17, 50, "èŠèŠ±é–‹",   "Kiku no hana hiraku",          "Chrysanthemums bloom",               "å¯’éœ²", "Kanro",   "Cold Dew",            2, "Autumn"),
-    (10,18, 22, 51, "èŸ‹èŸ€åœ¨æˆ¸", "Kirigirisu to ni ari",         "Crickets chirp by the door",         "å¯’éœ²", "Kanro",   "Cold Dew",            3, "Autumn"),
-    (10,23, 27, 52, "éœœå§‹é™",   "Shimo hajimete furu",          "First frost",                        "éœœé™", "SÅkÅ",    "Frost Falls",         1, "Autumn"),
-    # Oct 28 â€“ Nov 1 (crosses month boundary; stored as month=10, day_start=28, day_end=32 sentinel)
-    (10,28, 32, 53, "éœŽæ™‚æ–½",   "Kosame tokidoki furu",         "Light rains sometimes fall",         "éœœé™", "SÅkÅ",    "Frost Falls",         2, "Autumn"),
-    (11, 2,  6, 54, "æ¥“è”¦é»„",   "Momiji tsuta kibamu",          "Maples and ivy turn yellow",         "éœœé™", "SÅkÅ",    "Frost Falls",         3, "Autumn"),
+    (8,  7, 11, 37, "涼風至",   "Suzukaze itaru",               "Cool winds arrive",                  "立秋", "Risshū",  "Beginning of Autumn", 1, "Autumn"),
+    (8, 12, 16, 38, "寒蝉鳴",   "Higurashi naku",               "Evening cicadas sing",               "立秋", "Risshū",  "Beginning of Autumn", 2, "Autumn"),
+    (8, 17, 22, 39, "蒙霧升降", "Fukaki kiri matō",             "Dense fog descends",                 "立秋", "Risshū",  "Beginning of Autumn", 3, "Autumn"),
+    (8, 23, 27, 40, "綿柎開",   "Wata no hana shibe hiraku",    "Cotton flowers bloom",               "処暑", "Shosho",  "End of Heat",         1, "Autumn"),
+    # Aug 28 – Sep 1 (crosses month boundary; stored as month=8, day_start=28, day_end=32 sentinel)
+    (8, 28, 32, 41, "天地始粛", "Tenchi hajimete samushi",      "Heat begins to subside",             "処暑", "Shosho",  "End of Heat",         2, "Autumn"),
+    (9,  2,  7, 42, "禾乃登",   "Kokumono sunawachi minoru",    "Rice ripens",                        "処暑", "Shosho",  "End of Heat",         3, "Autumn"),
+    (9,  8, 12, 43, "草露白",   "Kusa no tsuyu shiroshi",       "Dew glistens white on grass",        "白露", "Hakuro",  "White Dew",           1, "Autumn"),
+    (9, 13, 17, 44, "鶺鴒鳴",   "Sekirei naku",                 "Wagtails sing",                      "白露", "Hakuro",  "White Dew",           2, "Autumn"),
+    (9, 18, 22, 45, "玄鳥去",   "Tsubame saru",                 "Swallows leave",                     "白露", "Hakuro",  "White Dew",           3, "Autumn"),
+    (9, 23, 27, 46, "雷乃収声", "Kaminari sunawachi koe o osamu","Thunder ceases",                    "秋分", "Shūbun",  "Autumn Equinox",      1, "Autumn"),
+    # Sep 28 – Oct 2 (crosses month boundary; stored as month=9, day_start=28, day_end=32 sentinel)
+    (9, 28, 32, 47, "蟄虫坏戸", "Mushi kakurete to o fusagu",   "Insects hide and seal doors",        "秋分", "Shūbun",  "Autumn Equinox",      2, "Autumn"),
+    (10, 3,  7, 48, "水始涸",   "Mizu hajimete karuru",         "Farmers drain fields",               "秋分", "Shūbun",  "Autumn Equinox",      3, "Autumn"),
+    (10, 8, 12, 49, "鴻雁来",   "Kōgan kitaru",                 "Wild geese return",                  "寒露", "Kanro",   "Cold Dew",            1, "Autumn"),
+    (10,13, 17, 50, "菊花開",   "Kiku no hana hiraku",          "Chrysanthemums bloom",               "寒露", "Kanro",   "Cold Dew",            2, "Autumn"),
+    (10,18, 22, 51, "蟋蟀在戸", "Kirigirisu to ni ari",         "Crickets chirp by the door",         "寒露", "Kanro",   "Cold Dew",            3, "Autumn"),
+    (10,23, 27, 52, "霜始降",   "Shimo hajimete furu",          "First frost",                        "霜降", "Sōkō",    "Frost Falls",         1, "Autumn"),
+    # Oct 28 – Nov 1 (crosses month boundary; stored as month=10, day_start=28, day_end=32 sentinel)
+    (10,28, 32, 53, "霎時施",   "Kosame tokidoki furu",         "Light rains sometimes fall",         "霜降", "Sōkō",    "Frost Falls",         2, "Autumn"),
+    (11, 2,  6, 54, "楓蔦黄",   "Momiji tsuta kibamu",          "Maples and ivy turn yellow",         "霜降", "Sōkō",    "Frost Falls",         3, "Autumn"),
     # --- Winter ---
-    (11, 7, 11, 55, "å±±èŒ¶å§‹é–‹", "Tsubaki hajimete hiraku",      "Camellias bloom",                    "ç«‹å†¬", "RittÅ",   "Beginning of Winter", 1, "Winter"),
-    (11,12, 16, 56, "åœ°å§‹å‡",   "Chi hajimete kÅru",            "Ground starts to freeze",            "ç«‹å†¬", "RittÅ",   "Beginning of Winter", 2, "Winter"),
-    (11,17, 21, 57, "é‡‘ç›žé¦™",   "Kinsenka saku",                "Daffodils bloom",                    "ç«‹å†¬", "RittÅ",   "Beginning of Winter", 3, "Winter"),
-    (11,22, 26, 58, "è™¹è”µä¸è¦‹", "Niji kakurete miezu",          "Rainbows hide",                      "å°é›ª", "ShÅsetsu","Lesser Snow",         1, "Winter"),
-    # Nov 27 â€“ Dec 1 (crosses month boundary; stored as month=11, day_start=27, day_end=32 sentinel)
-    (11,27, 32, 59, "æœ”é¢¨æ‰•è‘‰", "Kitakaze konoha o harau",      "North wind blows leaves",            "å°é›ª", "ShÅsetsu","Lesser Snow",         2, "Winter"),
-    (12, 2,  6, 60, "æ©˜å§‹é»„",   "Tachibana hajimete kibamu",    "Mandarin oranges turn yellow",       "å°é›ª", "ShÅsetsu","Lesser Snow",         3, "Winter"),
-    (12, 7, 11, 61, "é–‰å¡žæˆå†¬", "Sora samuku fuyu to naru",     "Cold sets in, winter arrives",       "å¤§é›ª", "Taisetsu","Greater Snow",        1, "Winter"),
-    (12,12, 16, 62, "ç†ŠèŸ„ç©´",   "Kuma ana ni komoru",           "Bears retreat to dens",              "å¤§é›ª", "Taisetsu","Greater Snow",        2, "Winter"),
-    (12,17, 21, 63, "é±–é­šç¾¤",   "Sake no uo muragaru",          "Salmon gather in rivers",            "å¤§é›ª", "Taisetsu","Greater Snow",        3, "Winter"),
-    (12,22, 26, 64, "ä¹ƒæ±ç”Ÿ",   "Natsukarekusa shÅzu",          "Self-heal sprouts",                  "å†¬è‡³", "TÅji",    "Winter Solstice",     1, "Winter"),
-    (12,27, 31, 65, "éº‹è§’è§£",   "Sawashika no tsuno otsuru",    "Deer shed antlers",                  "å†¬è‡³", "TÅji",    "Winter Solstice",     2, "Winter"),
+    (11, 7, 11, 55, "山茶始開", "Tsubaki hajimete hiraku",      "Camellias bloom",                    "立冬", "Rittō",   "Beginning of Winter", 1, "Winter"),
+    (11,12, 16, 56, "地始凍",   "Chi hajimete kōru",            "Ground starts to freeze",            "立冬", "Rittō",   "Beginning of Winter", 2, "Winter"),
+    (11,17, 21, 57, "金盞香",   "Kinsenka saku",                "Daffodils bloom",                    "立冬", "Rittō",   "Beginning of Winter", 3, "Winter"),
+    (11,22, 26, 58, "虹蔵不見", "Niji kakurete miezu",          "Rainbows hide",                      "小雪", "Shōsetsu","Lesser Snow",         1, "Winter"),
+    # Nov 27 – Dec 1 (crosses month boundary; stored as month=11, day_start=27, day_end=32 sentinel)
+    (11,27, 32, 59, "朔風払葉", "Kitakaze konoha o harau",      "North wind blows leaves",            "小雪", "Shōsetsu","Lesser Snow",         2, "Winter"),
+    (12, 2,  6, 60, "橘始黄",   "Tachibana hajimete kibamu",    "Mandarin oranges turn yellow",       "小雪", "Shōsetsu","Lesser Snow",         3, "Winter"),
+    (12, 7, 11, 61, "閉塞成冬", "Sora samuku fuyu to naru",     "Cold sets in, winter arrives",       "大雪", "Taisetsu","Greater Snow",        1, "Winter"),
+    (12,12, 16, 62, "熊蟄穴",   "Kuma ana ni komoru",           "Bears retreat to dens",              "大雪", "Taisetsu","Greater Snow",        2, "Winter"),
+    (12,17, 21, 63, "鱖魚群",   "Sake no uo muragaru",          "Salmon gather in rivers",            "大雪", "Taisetsu","Greater Snow",        3, "Winter"),
+    (12,22, 26, 64, "乃東生",   "Natsukarekusa shōzu",          "Self-heal sprouts",                  "冬至", "Tōji",    "Winter Solstice",     1, "Winter"),
+    (12,27, 31, 65, "麋角解",   "Sawashika no tsuno otsuru",    "Deer shed antlers",                  "冬至", "Tōji",    "Winter Solstice",     2, "Winter"),
     # Jan 1-4 wraps to next year; stored as month=12, day_start=32, day_end=35 sentinel
-    (12,32, 35, 66, "é›ªä¸‹å‡ºéº¦", "Yuki watarite mugi nobiru",    "Wheat sprouts under snow",           "å†¬è‡³", "TÅji",    "Winter Solstice",     3, "Winter"),
-    (1,  5,  9, 67, "èŠ¹ä¹ƒæ „",   "Seri sunawachi sakau",         "Parsley flourishes",                 "å°å¯’", "ShÅkan",  "Lesser Cold",         1, "Winter"),
-    (1, 10, 14, 68, "æ°´æ³‰å‹•",   "Shimizu atataka o fukumu",     "Springs thaw",                       "å°å¯’", "ShÅkan",  "Lesser Cold",         2, "Winter"),
-    (1, 15, 19, 69, "é›‰å§‹é›Š",   "Kiji hajimete naku",           "Pheasants start to call",            "å°å¯’", "ShÅkan",  "Lesser Cold",         3, "Winter"),
-    (1, 20, 24, 70, "æ¬¾å†¬è¯",   "Fuki no hana saku",            "Butterburs bud",                     "å¤§å¯’", "Daikan",  "Greater Cold",        1, "Winter"),
-    (1, 25, 29, 71, "æ°´æ²¢è…¹å …", "Sawamizu kÅri tsumeru",        "Ice thickens on streams",            "å¤§å¯’", "Daikan",  "Greater Cold",        2, "Winter"),
-    # Jan 30 â€“ Feb 3 (crosses month boundary; stored as month=1, day_start=30, day_end=34 sentinel)
-    (1, 30, 34, 72, "é¶å§‹ä¹³",   "Niwatori hajimete toya ni tsuku","Hens begin to lay",               "å¤§å¯’", "Daikan",  "Greater Cold",        3, "Winter"),
+    (12,32, 35, 66, "雪下出麦", "Yuki watarite mugi nobiru",    "Wheat sprouts under snow",           "冬至", "Tōji",    "Winter Solstice",     3, "Winter"),
+    (1,  5,  9, 67, "芹乃栄",   "Seri sunawachi sakau",         "Parsley flourishes",                 "小寒", "Shōkan",  "Lesser Cold",         1, "Winter"),
+    (1, 10, 14, 68, "水泉動",   "Shimizu atataka o fukumu",     "Springs thaw",                       "小寒", "Shōkan",  "Lesser Cold",         2, "Winter"),
+    (1, 15, 19, 69, "雉始雊",   "Kiji hajimete naku",           "Pheasants start to call",            "小寒", "Shōkan",  "Lesser Cold",         3, "Winter"),
+    (1, 20, 24, 70, "款冬華",   "Fuki no hana saku",            "Butterburs bud",                     "大寒", "Daikan",  "Greater Cold",        1, "Winter"),
+    (1, 25, 29, 71, "水沢腹堅", "Sawamizu kōri tsumeru",        "Ice thickens on streams",            "大寒", "Daikan",  "Greater Cold",        2, "Winter"),
+    # Jan 30 – Feb 3 (crosses month boundary; stored as month=1, day_start=30, day_end=34 sentinel)
+    (1, 30, 34, 72, "鶏始乳",   "Niwatori hajimete toya ni tsuku","Hens begin to lay",               "大寒", "Daikan",  "Greater Cold",        3, "Winter"),
 ]
 
 # Lookup table: maps (month, day_of_month) to season index
@@ -904,7 +920,7 @@ def _get_current_micro_season(month: int, day: int) -> dict:
 @app.route("/api/season")
 def api_season():
     """
-    API endpoint for the current Japanese 72 micro-season (ä¸ƒåäºŒå€™).
+    API endpoint for the current Japanese 72 micro-season (七十二候).
     Returns: JSON with season number, kanji, romaji, English description,
              date range, solar term, pentad, and astronomical season.
     """
