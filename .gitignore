@@ -34,3 +34,8 @@ desktop.ini
 
 # Data directory (NAS mount)
 data/
+
+# Backups & session scratch (e.g. *.bak-mojibake-YYYYMMDD)
+*.bak
+*.bak*
+*.orig
