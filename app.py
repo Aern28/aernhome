@@ -971,10 +971,21 @@ def _feed_meta(slug):
 def nexus_feed():
     if not _is_nexus_allowed():
         abort(404)
-    by_source = ns_writes.feed_sources(per_source=8)
-    cards = [{"meta": _feed_meta(s), "entries": items} for s, items in by_source.items()]
+    by_source = ns_writes.feed_sources(per_source=6)
+    counts = ns_writes.feed_source_counts()
+    cards = [{"meta": _feed_meta(s), "entries": items, "total": counts.get(s, len(items))}
+             for s, items in by_source.items()]
     return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
                            cards=cards)
+
+
+@app.route("/nexus/feed/<source>")
+def nexus_feed_source(source):
+    if not _is_nexus_allowed():
+        abort(404)
+    items = ns_writes.list_feed_items(source=source, limit=300)
+    return render_template("nexus_feed_source.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
+                           meta=_feed_meta(source), items=items)
 
 
 # ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────

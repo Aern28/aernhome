@@ -8,7 +8,8 @@
     <section class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">{{ card.meta.icon }} {{ card.meta.label }}</h3>
-            <span class="text-xs text-gray-500">{{ card.entries|length }}</span>
+            <a href="/nexus/feed/{{ card.meta.slug }}" class="text-xs text-gray-500 hover:text-blue-400">
+                {% if card.total > card.entries|length %}all {{ card.total }} →{% else %}{{ card.total }}{% endif %}</a>
         </div>
         <ul class="space-y-3">
             {% for it in card.entries %}

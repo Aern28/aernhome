@@ -477,6 +477,16 @@ def feed_sources(per_source=5):
         return {}
 
 
+def feed_source_counts():
+    """{source: total item count} — so a card can show 'all N ->'."""
+    try:
+        with _conn() as conn:
+            return {r[0]: r[1] for r in conn.execute(
+                "SELECT source, COUNT(*) FROM feed_items GROUP BY source").fetchall()}
+    except sqlite3.Error:
+        return {}
+
+
 def latest_feed(limit=4):
     """Newest items across all sources, for the home teaser widget."""
     return list_feed_items(limit=limit)
