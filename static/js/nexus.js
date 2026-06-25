@@ -28,8 +28,13 @@ document.addEventListener("DOMContentLoaded", () => {
         input.value = "";
         if (list) {
           const li = document.createElement("li");
-          li.className = "text-sm text-gray-300 py-1 border-t border-dark-border first:border-0";
-          li.textContent = text;
+          li.className = "flex items-center gap-2 text-sm py-1 border-t border-dark-border first:border-0";
+          li.dataset.capture = res.id;
+          li.innerHTML =
+            '<span class="flex-1 text-gray-300"></span>' +
+            `<button data-nx-action="capture-to-goal" data-id="${res.id}" class="text-[11px] text-gray-500 hover:text-blue-400">→ goal</button>` +
+            `<button data-nx-action="capture-dismiss" data-id="${res.id}" class="text-[11px] text-gray-500 hover:text-red-400">✕</button>`;
+          li.querySelector("span").textContent = text; // textContent = XSS-safe
           list.prepend(li);
         }
       }
@@ -67,6 +72,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await nexusPost(`/api/nexus/book/${t.dataset.id}/status`, { status: t.dataset.status });
       if (res.ok) location.reload();
     }
+
+    else if (action === "capture-to-goal") {
+      const res = await nexusPost(`/api/nexus/capture/${t.dataset.id}/to-goal`, {});
+      if (res.ok) location.reload(); // surface the new goal in the goals widget
+    }
+
+    else if (action === "capture-dismiss") {
+      const res = await nexusPost(`/api/nexus/capture/${t.dataset.id}/process`, {});
+      if (res.ok) { const li = t.closest("[data-capture]"); if (li) li.remove(); }
+    }
+
+    else if (action === "link-delete") {
+      const res = await nexusPost(`/api/nexus/link/${t.dataset.id}/delete`, {});
+      if (res.ok) { const chip = t.closest("[data-link]"); if (chip) chip.remove(); }
+    }
   });
 
   // ── Goal progress (range input -> POST on change) ──
@@ -93,8 +113,8 @@ document.addEventListener("DOMContentLoaded", () => {
       form.querySelectorAll("[name]").forEach((el) => {
         if (el.value !== "") body[el.name] = el.value;
       });
-      const url = kind === "goal" ? "/api/nexus/goal" : "/api/nexus/maintenance";
-      const res = await nexusPost(url, body);
+      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link" };
+      const res = await nexusPost(urls[kind], body);
       if (res.ok) location.reload();
       else {
         const err = form.querySelector("[data-nx-err]");

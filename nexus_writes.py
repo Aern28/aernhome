@@ -54,6 +54,48 @@ def process_capture(capture_id):
         )
 
 
+def capture_to_goal(capture_id, area="personal"):
+    """Promote a capture item into a goal, then mark the capture processed."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT text FROM capture WHERE id = ? AND processed_at IS NULL", (capture_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("no such open capture")
+    gid = add_goal(row["text"], area)
+    process_capture(capture_id)
+    return gid
+
+
+# ── Links (curated "connections to documents") ───────────────────────────────
+def add_link(label, url, area=None):
+    label, url = (label or "").strip(), (url or "").strip()
+    if not label or not url:
+        raise ValueError("label and url required")
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO links (label, url, area) VALUES (?, ?, ?)", (label, url, area or None))
+        return cur.lastrowid
+
+
+def list_links(area=None):
+    try:
+        with _conn() as conn:
+            q = "SELECT id, label, url, area FROM links"
+            params = ()
+            if area:
+                q += " WHERE area = ?"; params = (area,)
+            q += " ORDER BY sort ASC, label COLLATE NOCASE"
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def delete_link(link_id):
+    with _conn() as conn:
+        conn.execute("DELETE FROM links WHERE id = ?", (link_id,))
+
+
 # ── Goals ─────────────────────────────────────────────────────────────────────
 def add_goal(title, area="personal", detail=None, target=None, due=None, doc_link=None):
     title = (title or "").strip()

@@ -12,15 +12,40 @@
                    class="flex-1 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
             <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm">Add</button>
         </form>
-        {% if data.captures %}
         <ul data-nx-capture-list class="mt-3">
             {% for c in data.captures %}
-            <li class="text-sm text-gray-300 py-1 border-t border-dark-border first:border-0">{{ c.text }}</li>
+            <li class="flex items-center gap-2 text-sm py-1 border-t border-dark-border first:border-0" data-capture="{{ c.id }}">
+                <span class="flex-1 text-gray-300">{{ c.text }}</span>
+                <button data-nx-action="capture-to-goal" data-id="{{ c.id }}" title="Make a goal" class="text-[11px] text-gray-500 hover:text-blue-400">→ goal</button>
+                <button data-nx-action="capture-dismiss" data-id="{{ c.id }}" title="Dismiss" class="text-[11px] text-gray-500 hover:text-red-400">✕</button>
+            </li>
             {% endfor %}
         </ul>
-        {% else %}
-        <ul data-nx-capture-list class="mt-3"></ul>
-        {% endif %}
+    </div>
+</section>
+
+<!-- Links / docs quick-launch -->
+<section class="mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+            <label class="text-xs uppercase tracking-wide text-gray-500">Links & docs</label>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-3" data-nx-links>
+            {% for l in data.links %}
+            <span class="group inline-flex items-center gap-1 bg-dark-bg border border-dark-border rounded-full px-3 py-1 text-sm" data-link="{{ l.id }}">
+                <a href="{{ l.url }}" class="text-gray-200 hover:text-blue-400">{{ l.label }}</a>
+                <button data-nx-action="link-delete" data-id="{{ l.id }}" title="Remove"
+                        class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100">✕</button>
+            </span>
+            {% endfor %}
+            {% if not data.links %}<span class="text-sm text-gray-600">No links yet — add the docs you reach for often.</span>{% endif %}
+        </div>
+        <form data-nx-form="link" class="flex flex-wrap gap-2">
+            <input name="label" placeholder="label" class="bg-dark-bg border border-dark-border rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+            <input name="url" placeholder="url (obsidian:// · http · /nexus/…)" class="flex-1 min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+            <button type="submit" class="px-3 py-1.5 rounded-md bg-dark-bg border border-dark-border text-gray-300 text-sm hover:border-blue-500">+ link</button>
+            <span data-nx-err class="text-xs text-red-400 self-center"></span>
+        </form>
     </div>
 </section>
 

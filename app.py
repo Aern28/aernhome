@@ -747,6 +747,7 @@ def nexus_home():
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
+    data["links"] = ns_writes.list_links()
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 
 
@@ -861,6 +862,33 @@ def api_nexus_capture():
 def api_nexus_capture_process(cid):
     _nexus_json()
     ns_writes.process_capture(cid)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/capture/<int:cid>/to-goal", methods=["POST"])
+def api_nexus_capture_to_goal(cid):
+    body = _nexus_json()
+    try:
+        gid = ns_writes.capture_to_goal(cid, body.get("area", "personal"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "goal_id": gid})
+
+
+@app.route("/api/nexus/link", methods=["POST"])
+def api_nexus_link_create():
+    body = _nexus_json()
+    try:
+        lid = ns_writes.add_link(body.get("label", ""), body.get("url", ""), body.get("area"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": lid})
+
+
+@app.route("/api/nexus/link/<int:lid>/delete", methods=["POST"])
+def api_nexus_link_delete(lid):
+    _nexus_json()
+    ns_writes.delete_link(lid)
     return jsonify({"ok": True})
 
 
