@@ -254,3 +254,169 @@ def book_cover_path(book_id):
             return row["cover_ref"] if row else None
     except sqlite3.Error:
         return None
+
+
+# ── Notes (pinned scratchpad — short persistent notes, NOT an Obsidian clone) ─
+# The sticky-note layer between transient capture (inbox → process → clear) and a
+# full Obsidian doc. Keep-around, editable, pinnable; link out to Obsidian when one
+# grows up. Canonical in nexus.db.
+def add_note(body, title=None, area=None):
+    body = (body or "").strip()
+    if not body:
+        raise ValueError("empty note")
+    if area not in ("personal", "work", "house", "tcg", None, ""):
+        area = None
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO notes (title, body, area) VALUES (?, ?, ?)",
+            ((title or "").strip() or None, body, area or None))
+        return cur.lastrowid
+
+
+def list_notes(area=None):
+    """All notes, pinned first then most-recently-updated. Each row is a dict."""
+    try:
+        with _conn() as conn:
+            q = ("SELECT id, title, body, area, pinned, created_at, updated_at "
+                 "FROM notes")
+            params = ()
+            if area:
+                q += " WHERE area = ?"; params = (area,)
+            q += " ORDER BY pinned DESC, updated_at DESC"
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def pinned_notes(limit=4):
+    """Pinned notes for the home widget: [{id,title,body}]."""
+    try:
+        with _conn() as conn:
+            rows = conn.execute(
+                "SELECT id, title, body FROM notes WHERE pinned = 1 "
+                "ORDER BY updated_at DESC LIMIT ?", (limit,)).fetchall()
+            return [dict(r) for r in rows]
+    except sqlite3.Error:
+        return []
+
+
+def update_note(note_id, body=None, title=None):
+    sets, params = [], []
+    if body is not None:
+        b = body.strip()
+        if not b:
+            raise ValueError("empty note")
+        sets.append("body = ?"); params.append(b)
+    if title is not None:
+        sets.append("title = ?"); params.append(title.strip() or None)
+    if not sets:
+        return
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(note_id)
+    with _conn() as conn:
+        conn.execute(f"UPDATE notes SET {', '.join(sets)} WHERE id = ?", params)
+
+
+def set_note_pinned(note_id, pinned):
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE notes SET pinned = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (1 if pinned else 0, note_id))
+
+
+def delete_note(note_id):
+    with _conn() as conn:
+        conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+
+
+# ── Media (media_status; tv/movie/game — covers via TMDB) ─────────────────────
+# Generalized watch/play tracker. Surfaced as the TV shelf now; movies/games drop
+# into the same table later. Canonical in nexus.db — the on-ramp to retiring the
+# Notion Media Tracker (Phase 4). Posters are remote TMDB CDN URLs (no local file
+# serving needed), so the shelf <img> points straight at image.tmdb.org.
+_MEDIA_ORDER = "CASE status WHEN 'watching' THEN 0 WHEN 'want' THEN 1 ELSE 2 END"
+_MEDIA_STATUSES = ("want", "watching", "watched")
+
+
+def add_media(title, kind="tv", status="want", tmdb_id=None, poster_url=None,
+              overview=None, year=None):
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("empty title")
+    if kind not in ("tv", "movie", "game"):
+        kind = "tv"
+    if status not in _MEDIA_STATUSES:
+        status = "want"
+    with _conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO media_status (kind, title, status, tmdb_id, poster_url,
+                                         overview, year)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (kind, title, status, tmdb_id or None, poster_url or None,
+             (overview or "").strip() or None, (str(year).strip() if year else None)))
+        return cur.lastrowid
+
+
+def list_media(kind="tv", status=None):
+    """Tracked media of one kind (or one status). Each row is a dict."""
+    try:
+        with _conn() as conn:
+            q = ("SELECT id, kind, title, status, rating, progress, tmdb_id, "
+                 "poster_url, overview, year FROM media_status WHERE kind = ?")
+            params = [kind]
+            if status:
+                q += " AND status = ?"; params.append(status)
+            q += f" ORDER BY {_MEDIA_ORDER}, title COLLATE NOCASE"
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def watching_media(kind="tv"):
+    """Currently-watching rows for the home widget: [{id,title,progress,poster_url}]."""
+    return [
+        {"id": m["id"], "title": m["title"], "progress": m["progress"],
+         "poster_url": m["poster_url"]}
+        for m in list_media(kind=kind, status="watching")
+    ]
+
+
+def set_media_status(media_id, status):
+    if status not in _MEDIA_STATUSES:
+        raise ValueError("bad status")
+    with _conn() as conn:
+        if status == "watched":
+            conn.execute(
+                "UPDATE media_status SET status = ?, "
+                "finished = COALESCE(finished, date('now')), "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?", (status, media_id))
+        elif status == "watching":
+            conn.execute(
+                "UPDATE media_status SET status = ?, "
+                "started = COALESCE(started, date('now')), "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?", (status, media_id))
+        else:
+            conn.execute(
+                "UPDATE media_status SET status = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = ?", (status, media_id))
+
+
+def set_media_progress(media_id, progress):
+    """Free-text progress marker, e.g. 'S3E4'."""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE media_status SET progress = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?", ((progress or "").strip() or None, media_id))
+
+
+def set_media_rating(media_id, rating):
+    r = max(0, min(10, int(rating))) if rating not in (None, "") else None
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE media_status SET rating = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?", (r, media_id))
+
+
+def delete_media(media_id):
+    with _conn() as conn:
+        conn.execute("DELETE FROM media_status WHERE id = ?", (media_id,))

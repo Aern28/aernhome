@@ -344,6 +344,42 @@ def init_nexus_db():
         )
     """)
 
+    # Notes — pinned scratchpad. Short, persistent, glanceable notes; the sticky-note
+    # layer between transient capture and a full Obsidian doc. NOT an Obsidian clone.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            body TEXT NOT NULL,
+            area TEXT,                       -- personal|work|house|tcg|null
+            pinned INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Media status — generalized watch/play tracker (tv|movie|game). Surfaced as the
+    # TV shelf now; canonical going forward (on-ramp to retiring the Notion Media
+    # Tracker). Posters are remote TMDB CDN URLs, so no local cover serving needed.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS media_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL DEFAULT 'tv',         -- tv|movie|game
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'want',     -- want|watching|watched
+            rating INTEGER,
+            progress TEXT,                           -- free text, e.g. "S3E4"
+            tmdb_id INTEGER,
+            poster_url TEXT,
+            overview TEXT,
+            year TEXT,
+            started DATE,
+            finished DATE,
+            sort INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
     cur.execute("""
         CREATE TABLE IF NOT EXISTS links (
@@ -721,6 +757,8 @@ NEXUS_SECTIONS = [
     ("/nexus",            "Home",        "🏡", "Today at a glance"),
     ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
+    ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
+    ("/nexus/notes",      "Notes",       "📝", "Pinned scratchpad"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
@@ -744,10 +782,12 @@ def nexus_home():
         "tcg": ns.tcg_alerts(),
         # prefer the canonical book_status (once seeded); fall back to live Obsidian
         "books": ns_writes.reading_books() or ns.currently_reading(),
+        "watching": ns_writes.watching_media(),
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
     data["links"] = ns_writes.list_links()
+    data["notes"] = ns_writes.pinned_notes()
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 
 
@@ -838,6 +878,29 @@ def nexus_infra():
     import nexus_sources as ns
     return render_template("nexus_infra.html", sections=NEXUS_SECTIONS, active="/nexus/infra",
                            infra=ns.infra_summary())
+
+
+@app.route("/nexus/tv")
+def nexus_tv():
+    if not _is_nexus_allowed():
+        abort(404)
+    shows = ns_writes.list_media(kind="tv")
+    shelf = {
+        "watching": [m for m in shows if m["status"] == "watching"],
+        "want": [m for m in shows if m["status"] == "want"],
+        "watched": [m for m in shows if m["status"] == "watched"],
+    }
+    import nexus_sources as ns
+    return render_template("nexus_tv.html", sections=NEXUS_SECTIONS, active="/nexus/tv",
+                           shelf=shelf, tmdb=bool(ns._get_tmdb_token()))
+
+
+@app.route("/nexus/notes")
+def nexus_notes():
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_notes.html", sections=NEXUS_SECTIONS, active="/nexus/notes",
+                           notes=ns_writes.list_notes())
 
 
 # ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────
@@ -951,6 +1014,96 @@ def api_nexus_todoist_close(task_id):
     _nexus_json()
     import nexus_sources as ns
     return jsonify({"ok": ns.todoist_close(task_id)})
+
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+@app.route("/api/nexus/note", methods=["POST"])
+def api_nexus_note_create():
+    body = _nexus_json()
+    try:
+        nid = ns_writes.add_note(body.get("body", ""), body.get("title"), body.get("area"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": nid})
+
+
+@app.route("/api/nexus/note/<int:nid>", methods=["POST"])
+def api_nexus_note_update(nid):
+    body = _nexus_json()
+    try:
+        ns_writes.update_note(nid, body.get("body"), body.get("title"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/note/<int:nid>/pin", methods=["POST"])
+def api_nexus_note_pin(nid):
+    body = _nexus_json()
+    ns_writes.set_note_pinned(nid, bool(body.get("pinned")))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/note/<int:nid>/delete", methods=["POST"])
+def api_nexus_note_delete(nid):
+    _nexus_json()
+    ns_writes.delete_note(nid)
+    return jsonify({"ok": True})
+
+
+# ── Media (TV / movie / game) ─────────────────────────────────────────────────
+@app.route("/api/nexus/media", methods=["POST"])
+def api_nexus_media_create():
+    body = _nexus_json()
+    title = (body.get("title") or "").strip()
+    kind = body.get("kind", "tv")
+    status = body.get("status", "want")
+    # Auto-enrich with a TMDB poster + overview when a key is available; degrade
+    # gracefully to a title-only entry if not (manual add always works).
+    import nexus_sources as ns
+    hit = ns.tmdb_search(title, kind) if title else {}
+    try:
+        mid = ns_writes.add_media(
+            title, kind=kind, status=status,
+            tmdb_id=hit.get("tmdb_id"), poster_url=hit.get("poster_url"),
+            overview=hit.get("overview"), year=hit.get("year"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": mid, "enriched": bool(hit)})
+
+
+@app.route("/api/nexus/media/<int:mid>/status", methods=["POST"])
+def api_nexus_media_status(mid):
+    body = _nexus_json()
+    try:
+        ns_writes.set_media_status(mid, body.get("status", ""))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/media/<int:mid>/progress", methods=["POST"])
+def api_nexus_media_progress(mid):
+    body = _nexus_json()
+    ns_writes.set_media_progress(mid, body.get("progress", ""))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/media/<int:mid>/rating", methods=["POST"])
+def api_nexus_media_rating(mid):
+    body = _nexus_json()
+    try:
+        ns_writes.set_media_rating(mid, body.get("rating"))
+    except (ValueError, TypeError) as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/media/<int:mid>/delete", methods=["POST"])
+def api_nexus_media_delete(mid):
+    _nexus_json()
+    ns_writes.delete_media(mid)
+    return jsonify({"ok": True})
 
 
 @app.route("/privacy")

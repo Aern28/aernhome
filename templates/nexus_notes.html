@@ -1,0 +1,57 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Notes{% endblock %}
+
+{% block nexus_content %}
+<!-- New note -->
+<section class="mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-2">New note</label>
+        <form data-nx-form="note" class="space-y-2">
+            <div class="flex flex-wrap gap-2">
+                <input type="text" name="title" autocomplete="off" placeholder="title (optional)"
+                       class="flex-1 min-w-[180px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+                <select name="area" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400 focus:outline-none focus:border-blue-500">
+                    <option value="">unfiled</option>
+                    <option value="personal">personal</option>
+                    <option value="work">work</option>
+                    <option value="house">house</option>
+                    <option value="tcg">tcg</option>
+                </select>
+            </div>
+            <textarea name="body" rows="3" placeholder="A keeper — something you want pinned and visible, not a full doc…"
+                      class="w-full bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"></textarea>
+            <div class="flex items-center gap-3">
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm">Save note</button>
+                <span data-nx-err class="text-xs text-red-400"></span>
+                <span class="text-xs text-gray-600 ml-auto">Deep, durable notes still live in Obsidian — this is the sticky-note layer.</span>
+            </div>
+        </form>
+    </div>
+</section>
+
+<!-- Notes grid -->
+{% if notes %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for n in notes %}
+    <div class="bg-dark-card border rounded-lg p-4 flex flex-col {% if n.pinned %}border-amber-700/50{% else %}border-dark-border{% endif %}" data-note="{{ n.id }}">
+        <div class="flex items-start justify-between gap-2 mb-1">
+            <div class="min-w-0">
+                {% if n.title %}<div class="text-sm font-semibold text-white truncate" data-note-title>{{ n.title }}</div>{% endif %}
+                {% if n.area %}<span class="text-[10px] uppercase text-gray-500">{{ n.area }}</span>{% endif %}
+            </div>
+            <div class="flex gap-1 shrink-0 text-xs">
+                <button data-nx-action="note-pin" data-id="{{ n.id }}" data-pinned="{{ 1 if n.pinned else 0 }}"
+                        title="{{ 'Unpin' if n.pinned else 'Pin' }}" class="{% if n.pinned %}text-amber-400{% else %}text-gray-600 hover:text-amber-400{% endif %}">📌</button>
+                <button data-nx-action="note-edit" data-id="{{ n.id }}" title="Edit" class="text-gray-600 hover:text-blue-400">✎</button>
+                <button data-nx-action="note-delete" data-id="{{ n.id }}" title="Delete" class="text-gray-600 hover:text-red-400">✕</button>
+            </div>
+        </div>
+        <div class="text-sm text-gray-300 whitespace-pre-wrap break-words flex-1" data-note-body>{{ n.body }}</div>
+        <div class="text-[10px] text-gray-600 mt-2">updated {{ n.updated_at[:16] }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-500">No notes yet — jot the first one above. 📝</p>
+{% endif %}
+{% endblock %}

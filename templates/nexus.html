@@ -141,6 +141,53 @@
         {% endif %}
     </div>
 
+    <!-- Currently watching -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-white">📺 Watching</h3>
+            <a href="/nexus/tv" class="text-xs text-gray-500 hover:text-blue-400">shows →</a>
+        </div>
+        {% if data.watching %}
+        <ul class="space-y-2">
+            {% for m in data.watching %}
+            <li class="flex items-center gap-3">
+                {% if m.poster_url %}
+                <img src="{{ m.poster_url }}" alt="" loading="lazy" class="w-8 h-11 shrink-0 rounded object-cover border border-dark-border">
+                {% else %}
+                <div class="w-8 h-11 shrink-0 rounded bg-dark-bg border border-dark-border flex items-center justify-center text-gray-600 text-lg">📺</div>
+                {% endif %}
+                <div class="min-w-0">
+                    <div class="text-sm text-gray-200 truncate">{{ m.title }}</div>
+                    {% if m.progress %}<div class="text-xs text-gray-500 truncate">{{ m.progress }}</div>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-500">Not watching anything right now.</p>
+        {% endif %}
+    </div>
+
+    <!-- Pinned notes -->
+    <div class="bg-dark-card border border-dark-border rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-white">📝 Pinned</h3>
+            <a href="/nexus/notes" class="text-xs text-gray-500 hover:text-blue-400">notes →</a>
+        </div>
+        {% if data.notes %}
+        <ul class="space-y-2">
+            {% for n in data.notes %}
+            <li class="text-sm border-t border-dark-border first:border-0 pt-2 first:pt-0">
+                {% if n.title %}<div class="text-gray-200 font-medium">{{ n.title }}</div>{% endif %}
+                <div class="text-gray-400 whitespace-pre-wrap break-words line-clamp-3">{{ n.body }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-500">No pinned notes. <a href="/nexus/notes" class="text-blue-400">Pin one →</a></p>
+        {% endif %}
+    </div>
+
     <!-- Maintenance due -->
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">

@@ -121,6 +121,69 @@ def todoist_today():
     return out
 
 
+def _get_tmdb_token():
+    """Resolve the TMDB API key/token without printing it. Order: TMDB_TOKEN env,
+    then Bitwarden ('TMDB API Key', notes field, needs BW_SESSION). Returns the
+    string or None. Never raises."""
+    token = os.environ.get("TMDB_TOKEN")
+    if token:
+        return token.strip()
+    session = os.environ.get("BW_SESSION")
+    if not session:
+        return None
+    try:
+        out = subprocess.run(
+            ["C:\\tools\\bw.exe", "get", "notes", "TMDB API Key", "--session", session],
+            capture_output=True, text=True, timeout=20)
+        if out.returncode == 0:
+            return (out.stdout or "").strip() or None
+    except Exception:
+        return None
+    return None
+
+
+def tmdb_search(query, kind="tv"):
+    """Look up a TV show / movie on TMDB to auto-fill poster + overview on add.
+
+    Returns {tmdb_id, poster_url, overview, year, title} for the top match, or {}
+    on any failure (no token, no match, network error). Never raises. TMDB accepts
+    either a v3 api_key (query param) or a v4 read token (Bearer); we detect a JWT
+    by its 'eyJ' prefix. Posters are public CDN URLs the browser fetches directly.
+    """
+    query = (query or "").strip()
+    if not query:
+        return {}
+    token = _get_tmdb_token()
+    if not token:
+        return {}
+    endpoint = "movie" if kind == "movie" else "tv"
+    url = "https://api.themoviedb.org/3/search/%s" % endpoint
+    params = {"query": query, "include_adult": "false"}
+    headers = {}
+    if token.startswith("eyJ"):
+        headers["Authorization"] = "Bearer %s" % token
+    else:
+        params["api_key"] = token
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        resp.raise_for_status()
+        results = (resp.json() or {}).get("results") or []
+    except Exception:
+        return {}
+    if not results:
+        return {}
+    top = results[0]
+    poster = top.get("poster_path")
+    date_field = top.get("first_air_date") if endpoint == "tv" else top.get("release_date")
+    return {
+        "tmdb_id": top.get("id"),
+        "title": top.get("name") or top.get("title") or query,
+        "poster_url": ("https://image.tmdb.org/t/p/w342%s" % poster) if poster else None,
+        "overview": (top.get("overview") or "").strip() or None,
+        "year": (str(date_field)[:4] if date_field else None),
+    }
+
+
 def todoist_close(task_id):
     """Complete a Todoist task by id. Returns True on success, False otherwise.
     Token resolved via _get_todoist_token() (never logged). Never raises."""

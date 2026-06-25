@@ -87,6 +87,63 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await nexusPost(`/api/nexus/link/${t.dataset.id}/delete`, {});
       if (res.ok) { const chip = t.closest("[data-link]"); if (chip) chip.remove(); }
     }
+
+    // ── Media (TV) ──
+    else if (action === "media-status") {
+      const res = await nexusPost(`/api/nexus/media/${t.dataset.id}/status`, { status: t.dataset.status });
+      if (res.ok) location.reload();
+    }
+
+    else if (action === "media-delete") {
+      const res = await nexusPost(`/api/nexus/media/${t.dataset.id}/delete`, {});
+      if (res.ok) { const card = t.closest("[data-media]"); if (card) card.remove(); }
+    }
+
+    // ── Notes ──
+    else if (action === "note-pin") {
+      const res = await nexusPost(`/api/nexus/note/${t.dataset.id}/pin`, { pinned: t.dataset.pinned !== "1" });
+      if (res.ok) location.reload(); // re-sort + recolor
+    }
+
+    else if (action === "note-delete") {
+      const res = await nexusPost(`/api/nexus/note/${t.dataset.id}/delete`, {});
+      if (res.ok) { const card = t.closest("[data-note]"); if (card) card.remove(); }
+    }
+
+    else if (action === "note-edit") {
+      const card = t.closest("[data-note]");
+      if (!card || card.querySelector("[data-note-editor]")) return; // already editing
+      const bodyEl = card.querySelector("[data-note-body]");
+      const ta = document.createElement("textarea");
+      ta.dataset.noteEditor = "1";
+      ta.rows = 4;
+      ta.value = bodyEl.textContent;
+      ta.className = "w-full bg-dark-bg border border-dark-border rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-blue-500 flex-1";
+      const save = document.createElement("button");
+      save.textContent = "save";
+      save.dataset.nxAction = "note-save";
+      save.dataset.id = t.dataset.id;
+      save.className = "mt-1 self-start px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs";
+      bodyEl.style.display = "none";
+      bodyEl.after(ta);
+      ta.after(save);
+      ta.focus();
+    }
+
+    else if (action === "note-save") {
+      const card = t.closest("[data-note]");
+      const ta = card && card.querySelector("[data-note-editor]");
+      if (!ta) return;
+      const res = await nexusPost(`/api/nexus/note/${t.dataset.id}`, { body: ta.value });
+      if (res.ok) location.reload();
+    }
+  });
+
+  // ── Media progress (text input -> POST on change) ──
+  document.addEventListener("change", async (e) => {
+    const t = e.target.closest("[data-nx-action='media-progress']");
+    if (!t) return;
+    await nexusPost(`/api/nexus/media/${t.dataset.id}/progress`, { progress: t.value });
   });
 
   // ── Goal progress (range input -> POST on change) ──
@@ -113,7 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       form.querySelectorAll("[name]").forEach((el) => {
         if (el.value !== "") body[el.name] = el.value;
       });
-      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link" };
+      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note" };
       const res = await nexusPost(urls[kind], body);
       if (res.ok) location.reload();
       else {
