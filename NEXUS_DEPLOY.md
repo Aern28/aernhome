@@ -5,34 +5,40 @@ existing `aernhome` Flask app, **Tailscale-only**, reached at
 `http://ashaman.tail125d67.ts.net:5555/nexus`. This file is the runbook for getting it
 live on Ashaman and the work that still needs you.
 
-## Deploy to Ashaman (when you're back at it)
-1. On Ashaman: `git pull` in `C:\projects\aernhome`.
-2. `docker compose build` then `docker compose up -d` — **locally on Ashaman**, not over
-   SSH (BuildKit/cred + DERP-drop issues; see CLAUDE.md).
-3. `nexus.db` auto-creates in the existing `/data` volume on first run — nothing to seed
-   for goals/maintenance/capture.
+## Deploy to Ashaman — the 3-step finish (the build MUST be local, not SSH)
+Everything below the build is already prepped from NenTera (code pushed, `data/` staged).
+The one thing that can't be done remotely is `docker compose build` (BuildKit/cred + DERP
+drop kills it over SSH — see CLAUDE.md). So this finishes in a short **RDP-to-Ashaman**
+session:
 
-## Required env (aernhome service)
-- **`TODOIST_TOKEN`** — the Today widget needs the token in the container; a headless
-  worker can't DPAPI-unlock Bitwarden. Put `TODOIST_TOKEN=<token>` in the aernhome
-  service env (or pass `BW_SESSION`). Everything else reads local files/DBs.
+1. **`git pull`** in `C:\projects\aernhome`.
+2. **Add the connector tokens to `C:\projects\aernhome\.env`** (gitignored; sits next to
+   the compose alongside the existing `AERNHOME_UNLOCK_TOKEN` / `CLOUDFLARE_TUNNEL_TOKEN`):
+   ```
+   TODOIST_TOKEN=<bw: "Todoist API Token" (notes)>
+   TMDB_TOKEN=<bw: "TMDB API Key" (notes)>
+   IGDB_CLIENT_ID=<bw: "Twitch IGDB" (username)>
+   IGDB_CLIENT_SECRET=<bw: "Twitch IGDB" (password)>
+   ```
+   Any left blank → that connector just degrades (Todoist widget empty / posters
+   title-only); nothing errors.
+3. **`docker compose build aernhome ; docker compose up -d`** — **locally on Ashaman**.
+   Verify on the mesh: `http://ashaman.tail125d67.ts.net:5555/nexus`.
 
-## ⚠️ Open decision — books data lives on NenTera, not Ashaman
-`tcg_alerts` already works on Ashaman (it reads the hourly inventory.db **mirror** mounted
-at `/tcg`). But the **books pipeline reads NenTera-local paths** the Ashaman container can't
-see: `C:\Users\matth\Calibre Library\metadata.db` and `C:\Users\matth\Obivault\Books`.
-Pick one (this is your call):
-- **(a)** Sync Obsidian `Books/` + Calibre `metadata.db` + cover files to a NAS path and
-  mount it read-only into the container (set `OBSIDIAN_BOOKS` / `CALIBRE_DB` /
-  `_COVER_ROOTS`). Cleanest if you want covers served from Ashaman.
-- **(b)** Run `py nexus_books_import.py` on **NenTera** (where the data lives) against a
-  NenTera-mounted copy of `nexus.db`, then let `nexus.db` sync — but the live DB is on
-  Ashaman, so this needs a sync story (avoid clobbering app status changes).
-- **(c)** Run the **nexus on NenTera** instead of Ashaman (all your personal data —
-  Calibre, Obsidian, inventory canonical — already lives here; Tailscale reaches NenTera
-  too). Splits nexus off from the Ashaman aernhome deploy.
-Until resolved, the books shelf on Ashaman shows the "not seeded yet" state and the home
-"reading" widget falls back to empty — no errors, just no books.
+`nexus.db` + `book_covers/` are shipped into the `/data` volume (staged via scp from
+NenTera), so books/TV/games/notes/goals are all there on first boot. After this, **Ashaman
+is canonical** — write to the live site, not the NenTera dev box.
+
+## Books locality — RESOLVED (covers are portable)
+Books are seeded/maintained on **NenTera** (where Calibre + Obsidian live) and the covers
+are **materialized into `data/book_covers/<id>.jpg`** by `nexus_books_import.py`, with
+`cover_ref` rewritten to a `DATA_DIR`-relative path. So the whole `data/` dir (db + covers)
+ships to any host and covers serve with no Calibre/Obsidian mount and no re-import on
+Ashaman. TV/game posters are remote TMDB/IGDB URLs — portable by nature.
+**To refresh the shelf later:** run `py nexus_books_import.py` on NenTera, then re-ship
+`nexus.db` + `book_covers/` to Ashaman (same scp as the initial deploy). A two-way sync
+(like TCG's `db_sync.py`) is the eventual upgrade if book edits on the live site need to
+survive a reseed; for now reseeds are NenTera→Ashaman one-way.
 
 ## Backups (Phase 5)
 `nexus_backup.py` does a safe online `.backup` of `nexus.db` → `NEXUS_BACKUP_DIR`

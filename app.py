@@ -839,7 +839,11 @@ def nexus_books():
 
 
 # Cover roots the cover route is allowed to serve from (defense vs path traversal).
+# book_covers/ under DATA_DIR is the portable, canonical location (materialized by
+# nexus_books_import.py) so covers travel with nexus.db to any host; the Calibre /
+# Obsidian roots stay whitelisted for legacy absolute refs on the dev box.
 _COVER_ROOTS = [
+    os.path.normpath(os.path.join(DATA_DIR, "book_covers")),
     os.path.normpath(os.path.dirname(
         os.environ.get("CALIBRE_DB", r"C:\Users\matth\Calibre Library\metadata.db"))),
     os.path.normpath(os.environ.get("OBSIDIAN_BOOKS", r"C:\Users\matth\Obivault\Books")),
@@ -849,7 +853,8 @@ _COVER_ROOTS = [
 @app.route("/nexus/cover/<int:book_id>")
 def nexus_cover(book_id):
     """Serve a book's cover. Tailscale-only; resolves the stored cover_ref and only
-    serves files under a whitelisted root (or redirects an http(s) cover)."""
+    serves files under a whitelisted root (or redirects an http(s) cover). Relative
+    refs (book_covers/<id>.jpg) resolve under DATA_DIR — portable across hosts."""
     if not _is_nexus_allowed():
         abort(404)
     ref = ns_writes.book_cover_path(book_id)
@@ -857,7 +862,8 @@ def nexus_cover(book_id):
         abort(404)
     if str(ref).lower().startswith(("http://", "https://")):
         return redirect(ref)
-    path = os.path.normpath(ref)
+    path = ref if os.path.isabs(ref) else os.path.join(DATA_DIR, ref)
+    path = os.path.normpath(path)
     if not any(path.startswith(root + os.sep) for root in _COVER_ROOTS) or not os.path.isfile(path):
         abort(404)
     return send_from_directory(os.path.dirname(path), os.path.basename(path))

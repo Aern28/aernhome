@@ -14,6 +14,7 @@ Usage:
 import os
 import re
 import sys
+import shutil
 import sqlite3
 
 BOOKS_DIR = os.environ.get("OBSIDIAN_BOOKS", r"C:\Users\matth\Obivault\Books")
@@ -162,5 +163,43 @@ def run_import(force_status=False, dry_run=False):
     return {"inserted": inserted, "updated": updated, "total": total}
 
 
+def materialize_covers(dry_run=False):
+    """Copy each book's local cover file into DATA_DIR/book_covers/<id>.<ext> and
+    rewrite cover_ref to that relative path, so covers travel with nexus.db to any
+    host (Ashaman can't see NenTera's Calibre/Obsidian). http(s) covers and refs
+    already under book_covers/ are left alone. Idempotent."""
+    data_dir = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
+    dest_dir = os.path.join(data_dir, "book_covers")
+    if not dry_run:
+        os.makedirs(dest_dir, exist_ok=True)
+    conn = sqlite3.connect(_nexus_db())
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, cover_ref FROM book_status WHERE cover_ref IS NOT NULL"
+    ).fetchall()
+    moved = 0
+    for r in rows:
+        ref = r["cover_ref"]
+        low = ref.lower()
+        if low.startswith(("http://", "https://")) or ref.startswith("book_covers/"):
+            continue  # remote or already portable
+        if not os.path.isfile(ref):
+            continue
+        ext = os.path.splitext(ref)[1].lower() or ".jpg"
+        rel = "book_covers/%d%s" % (r["id"], ext)
+        if not dry_run:
+            shutil.copyfile(ref, os.path.join(data_dir, rel.replace("/", os.sep)))
+            conn.execute("UPDATE book_status SET cover_ref = ? WHERE id = ?", (rel, r["id"]))
+        moved += 1
+    if not dry_run:
+        conn.commit()
+    conn.close()
+    print("[covers] materialized %d local covers -> %s%s"
+          % (moved, dest_dir, " (dry-run)" if dry_run else ""))
+    return moved
+
+
 if __name__ == "__main__":
-    run_import(force_status="--force" in sys.argv, dry_run="--dry-run" in sys.argv)
+    dry = "--dry-run" in sys.argv
+    run_import(force_status="--force" in sys.argv, dry_run=dry)
+    materialize_covers(dry_run=dry)

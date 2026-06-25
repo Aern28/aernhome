@@ -21,6 +21,13 @@ services:
       - DATA_DIR=/data
       - TZ=America/Chicago
       - AERNHOME_UNLOCK_TOKEN=${AERNHOME_UNLOCK_TOKEN}
+      # Nexus connectors — headless container can't DPAPI-unlock Bitwarden, so the
+      # tokens come from .env (gitignored). Empty = that connector degrades to
+      # zeroed/title-only and never errors.
+      - TODOIST_TOKEN=${TODOIST_TOKEN:-}
+      - TMDB_TOKEN=${TMDB_TOKEN:-}
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
