@@ -62,6 +62,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await nexusPost(`/api/nexus/goal/${t.dataset.id}/status`, { status: t.dataset.status });
       if (res.ok) location.reload();
     }
+
+    else if (action === "book-status") {
+      const res = await nexusPost(`/api/nexus/book/${t.dataset.id}/status`, { status: t.dataset.status });
+      if (res.ok) location.reload();
+    }
   });
 
   // ── Goal progress (range input -> POST on change) ──

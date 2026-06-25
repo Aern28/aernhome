@@ -160,3 +160,55 @@ def complete_maintenance(maint_id):
                 "UPDATE maintenance SET last_done = ?, completed = 1 WHERE id = ?",
                 (today, maint_id),
             )
+
+
+# ── Books (book_status; seeded by nexus_books_import.py) ──────────────────────
+_BOOK_ORDER = "CASE status WHEN 'reading' THEN 0 WHEN 'to-read' THEN 1 ELSE 2 END"
+
+
+def list_books(status=None):
+    """All tracked books (or one status). Each: {id,title,author,status,rating,cover_ref}."""
+    try:
+        with _conn() as conn:
+            q = "SELECT id, title, author, status, rating, cover_ref FROM book_status"
+            params = ()
+            if status:
+                q += " WHERE status = ?"; params = (status,)
+            q += f" ORDER BY {_BOOK_ORDER}, title COLLATE NOCASE"
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def reading_books():
+    """Currently-reading rows for the home widget: [{id,title,author,cover}]."""
+    return [
+        {"id": b["id"], "title": b["title"], "author": b["author"], "cover": b["cover_ref"]}
+        for b in list_books(status="reading")
+    ]
+
+
+def set_book_status(book_id, status):
+    if status not in ("to-read", "reading", "read"):
+        raise ValueError("bad status")
+    with _conn() as conn:
+        # stamp finished when moving to read; clear it otherwise
+        if status == "read":
+            conn.execute(
+                "UPDATE book_status SET status = ?, finished = COALESCE(finished, date('now')), "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?", (status, book_id))
+        else:
+            conn.execute(
+                "UPDATE book_status SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, book_id))
+
+
+def book_cover_path(book_id):
+    """Return the stored cover_ref for a book (used by the gated cover route)."""
+    try:
+        with _conn() as conn:
+            row = conn.execute(
+                "SELECT cover_ref FROM book_status WHERE id = ?", (book_id,)).fetchone()
+            return row["cover_ref"] if row else None
+    except sqlite3.Error:
+        return None

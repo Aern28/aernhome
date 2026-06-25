@@ -1,22 +1,53 @@
 {% extends "nexus_base.html" %}
 {% block nexus_title %}Books{% endblock %}
 
-{% block nexus_content %}
-<h3 class="text-sm font-semibold text-white mb-3">📖 Currently reading</h3>
-{% if reading %}
-<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-    {% for b in reading %}
-    <div class="bg-dark-card border border-dark-border rounded-lg p-3">
-        <div class="aspect-[2/3] rounded bg-dark-bg border border-dark-border flex items-center justify-center text-gray-600 text-3xl mb-2">📕</div>
-        <div class="text-sm text-gray-200 leading-tight">{{ b.title }}</div>
-        {% if b.author %}<div class="text-xs text-gray-500 mt-0.5">{{ b.author }}</div>{% endif %}
+{% macro book_card(b) %}
+<div class="bg-dark-card border border-dark-border rounded-lg p-3" data-book="{{ b.id }}">
+    <div class="aspect-[2/3] rounded bg-dark-bg border border-dark-border overflow-hidden mb-2 flex items-center justify-center">
+        <img src="/nexus/cover/{{ b.id }}" alt="" loading="lazy"
+             class="w-full h-full object-cover"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="w-full h-full items-center justify-center text-gray-600 text-3xl" style="display:none">📕</div>
     </div>
-    {% endfor %}
+    <div class="text-sm text-gray-200 leading-tight">{{ b.title }}</div>
+    {% if b.author %}<div class="text-xs text-gray-500 mt-0.5">{{ b.author }}</div>{% endif %}
+    <div class="flex gap-1 mt-2 text-[10px]">
+        {% for s in ['to-read', 'reading', 'read'] %}
+        <button data-nx-action="book-status" data-id="{{ b.id }}" data-status="{{ s }}"
+                class="px-1.5 py-0.5 rounded border {% if b.status == s %}bg-blue-600 border-blue-500 text-white{% else %}bg-dark-bg border-dark-border text-gray-400 hover:border-blue-500{% endif %}">{{ s }}</button>
+        {% endfor %}
+    </div>
 </div>
-{% else %}
-<p class="text-gray-500">Nothing in progress. Mark a book "Reading" in your Obsidian Book Tracker.</p>
-{% endif %}
+{% endmacro %}
 
-<p class="text-xs text-gray-600 mt-6">Read + to-read shelf with cover art and in-page status changes
-    lands in Phase 3 (Calibre + Obsidian import into <code class="text-gray-500">nexus.db</code>).</p>
+{% block nexus_content %}
+{% if seeded %}
+    {% for label, key in [('📖 Reading', 'reading'), ('📚 To read', 'to-read'), ('✅ Read', 'read')] %}
+    {% if shelf[key] %}
+    <section class="mb-8">
+        <h3 class="text-sm font-semibold text-white mb-3">{{ label }} <span class="text-gray-500">({{ shelf[key]|length }})</span></h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+            {% for b in shelf[key] %}{{ book_card(b) }}{% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% endfor %}
+{% else %}
+    <h3 class="text-sm font-semibold text-white mb-3">📖 Currently reading</h3>
+    {% if reading %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {% for b in reading %}
+        <div class="bg-dark-card border border-dark-border rounded-lg p-3">
+            <div class="aspect-[2/3] rounded bg-dark-bg border border-dark-border flex items-center justify-center text-gray-600 text-3xl mb-2">📕</div>
+            <div class="text-sm text-gray-200 leading-tight">{{ b.title }}</div>
+            {% if b.author %}<div class="text-xs text-gray-500 mt-0.5">{{ b.author }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500">Nothing in progress.</p>
+    {% endif %}
+    <p class="text-xs text-gray-600 mt-6">Full shelf (read / to-read with covers + in-page status) appears once you seed it:
+        run <code class="text-gray-500">py nexus_books_import.py</code> on the host.</p>
+{% endif %}
 {% endblock %}

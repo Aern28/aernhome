@@ -742,7 +742,8 @@ def nexus_home():
         "tasks": ns.todoist_today(),
         "maintenance": ns.maintenance_due(),
         "tcg": ns.tcg_alerts(),
-        "books": ns.currently_reading(),
+        # prefer the canonical book_status (once seeded); fall back to live Obsidian
+        "books": ns_writes.reading_books() or ns.currently_reading(),
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
@@ -779,9 +780,54 @@ def nexus_tcg():
 def nexus_books():
     if not _is_nexus_allowed():
         abort(404)
+    books = ns_writes.list_books()
+    if books:
+        shelf = {
+            "reading": [b for b in books if b["status"] == "reading"],
+            "to-read": [b for b in books if b["status"] == "to-read"],
+            "read": [b for b in books if b["status"] == "read"],
+        }
+        return render_template("nexus_books.html", sections=NEXUS_SECTIONS,
+                               active="/nexus/books", shelf=shelf, seeded=True)
+    # not seeded yet — show live currently-reading from Obsidian
     import nexus_sources as ns
-    return render_template("nexus_books.html", sections=NEXUS_SECTIONS, active="/nexus/books",
-                           reading=ns.currently_reading())
+    return render_template("nexus_books.html", sections=NEXUS_SECTIONS,
+                           active="/nexus/books", reading=ns.currently_reading(), seeded=False)
+
+
+# Cover roots the cover route is allowed to serve from (defense vs path traversal).
+_COVER_ROOTS = [
+    os.path.normpath(os.path.dirname(
+        os.environ.get("CALIBRE_DB", r"C:\Users\matth\Calibre Library\metadata.db"))),
+    os.path.normpath(os.environ.get("OBSIDIAN_BOOKS", r"C:\Users\matth\Obivault\Books")),
+]
+
+
+@app.route("/nexus/cover/<int:book_id>")
+def nexus_cover(book_id):
+    """Serve a book's cover. Tailscale-only; resolves the stored cover_ref and only
+    serves files under a whitelisted root (or redirects an http(s) cover)."""
+    if not _is_nexus_allowed():
+        abort(404)
+    ref = ns_writes.book_cover_path(book_id)
+    if not ref:
+        abort(404)
+    if str(ref).lower().startswith(("http://", "https://")):
+        return redirect(ref)
+    path = os.path.normpath(ref)
+    if not any(path.startswith(root + os.sep) for root in _COVER_ROOTS) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
+
+
+@app.route("/api/nexus/book/<int:book_id>/status", methods=["POST"])
+def api_nexus_book_status(book_id):
+    body = _nexus_json()
+    try:
+        ns_writes.set_book_status(book_id, body.get("status", ""))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
 
 
 @app.route("/nexus/infra")
