@@ -103,6 +103,14 @@ def run_import(force_status=False, dry_run=False):
     conn.row_factory = sqlite3.Row
     inserted = updated = total = 0
 
+    # Index existing rows by NORMALIZED title (folds curly quotes/whitespace) so the
+    # dedup match is consistent. SQL `lower(title)` alone left curly-apostrophe titles
+    # (e.g. "Assassin's Quest") unmatched on re-run -> silent duplicate inserts.
+    existing_index = {}
+    for row in conn.execute(
+        "SELECT id, title, cover_ref, author FROM book_status").fetchall():
+        existing_index.setdefault(_norm_title(row["title"]), row)
+
     for name in sorted(os.listdir(BOOKS_DIR)):
         if not name.lower().endswith(".md"):
             continue
@@ -125,10 +133,7 @@ def run_import(force_status=False, dry_run=False):
         finished = (fm.get("finished") or "").strip() or None
         cover = _obsidian_cover(fm.get("cover")) or cal.get(_norm_title(title))
 
-        existing = conn.execute(
-            "SELECT id, cover_ref, author FROM book_status WHERE lower(title) = ?",
-            (_norm_title(title),),
-        ).fetchone()
+        existing = existing_index.get(_norm_title(title))
 
         if existing:
             sets, params = [], []
@@ -153,6 +158,9 @@ def run_import(force_status=False, dry_run=False):
                        VALUES (?, ?, ?, ?, ?, ?)""",
                     (title, author, status, rating, finished, cover),
                 )
+            # register so a second same-titled note this run can't dupe it
+            existing_index[_norm_title(title)] = {
+                "id": None, "cover_ref": cover, "author": author}
             inserted += 1
 
     if not dry_run:

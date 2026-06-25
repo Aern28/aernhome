@@ -245,6 +245,11 @@ def set_book_status(book_id, status):
                 (status, book_id))
 
 
+def delete_book(book_id):
+    with _conn() as conn:
+        conn.execute("DELETE FROM book_status WHERE id = ?", (book_id,))
+
+
 def book_cover_path(book_id):
     """Return the stored cover_ref for a book (used by the gated cover route)."""
     try:

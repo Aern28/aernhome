@@ -879,6 +879,13 @@ def api_nexus_book_status(book_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/nexus/book/<int:book_id>/delete", methods=["POST"])
+def api_nexus_book_delete(book_id):
+    _nexus_json()
+    ns_writes.delete_book(book_id)
+    return jsonify({"ok": True})
+
+
 @app.route("/nexus/infra")
 def nexus_infra():
     if not _is_nexus_allowed():

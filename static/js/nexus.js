@@ -73,6 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (res.ok) location.reload();
     }
 
+    else if (action === "book-delete") {
+      const res = await nexusPost(`/api/nexus/book/${t.dataset.id}/delete`, {});
+      if (res.ok) { const card = t.closest("[data-book]"); if (card) card.remove(); }
+    }
+
     else if (action === "capture-to-goal") {
       const res = await nexusPost(`/api/nexus/capture/${t.dataset.id}/to-goal`, {});
       if (res.ok) location.reload(); // surface the new goal in the goals widget

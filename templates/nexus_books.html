@@ -3,11 +3,13 @@
 
 {% macro book_card(b) %}
 <div class="bg-dark-card border border-dark-border rounded-lg p-3" data-book="{{ b.id }}">
-    <div class="aspect-[2/3] rounded bg-dark-bg border border-dark-border overflow-hidden mb-2 flex items-center justify-center">
+    <div class="aspect-[2/3] rounded bg-dark-bg border border-dark-border overflow-hidden mb-2 flex items-center justify-center relative">
         <img src="/nexus/cover/{{ b.id }}" alt="" loading="lazy"
              class="w-full h-full object-cover"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <div class="w-full h-full items-center justify-center text-gray-600 text-3xl" style="display:none">📕</div>
+        <button data-nx-action="book-delete" data-id="{{ b.id }}" title="Remove"
+                class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-gray-300 hover:text-red-400 text-xs leading-none">✕</button>
     </div>
     <div class="text-sm text-gray-200 leading-tight">{{ b.title }}</div>
     {% if b.author %}<div class="text-xs text-gray-500 mt-0.5">{{ b.author }}</div>{% endif %}
