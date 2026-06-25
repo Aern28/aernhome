@@ -428,7 +428,7 @@ def delete_media(media_id):
 
 
 # ── Feed (incoming generated briefs: n8n digests + Aernbot Notebook + …) ──────
-def add_feed_item(source, title=None, body=None, url=None):
+def add_feed_item(source, title=None, body=None, url=None, tag=None):
     source = (source or "").strip().lower()
     if not source:
         raise ValueError("source required")
@@ -436,9 +436,9 @@ def add_feed_item(source, title=None, body=None, url=None):
         raise ValueError("title or body required")
     with _conn() as conn:
         cur = conn.execute(
-            "INSERT INTO feed_items (source, title, body, url) VALUES (?, ?, ?, ?)",
+            "INSERT INTO feed_items (source, title, body, url, tag) VALUES (?, ?, ?, ?, ?)",
             (source, (title or "").strip() or None, (body or "").strip() or None,
-             (url or "").strip() or None))
+             (url or "").strip() or None, (tag or "").strip() or None))
         return cur.lastrowid
 
 
@@ -446,7 +446,7 @@ def list_feed_items(source=None, limit=100):
     """Reverse-chron feed items, optionally filtered to one source."""
     try:
         with _conn() as conn:
-            q = "SELECT id, source, title, body, url, created_at FROM feed_items"
+            q = "SELECT id, source, title, body, url, tag, created_at FROM feed_items"
             params = []
             if source:
                 q += " WHERE source = ?"; params.append(source.lower())
@@ -468,7 +468,7 @@ def feed_sources(per_source=5):
             out = {}
             for s in srcs:
                 rows = conn.execute(
-                    "SELECT id, source, title, body, url, created_at FROM feed_items "
+                    "SELECT id, source, title, body, url, tag, created_at FROM feed_items "
                     "WHERE source = ? ORDER BY created_at DESC, id DESC LIMIT ?",
                     (s, per_source)).fetchall()
                 out[s] = [dict(r) for r in rows]

@@ -390,10 +390,16 @@ def init_nexus_db():
             title TEXT,
             body TEXT,
             url TEXT,                        -- optional link out
+            tag TEXT,                        -- optional sub-grouping (e.g. Aernbot topic)
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_feed_source_time ON feed_items (source, created_at DESC)")
+    # idempotent add for DBs created before the tag column existed
+    try:
+        cur.execute("ALTER TABLE feed_items ADD COLUMN tag TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already present
 
     # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
     cur.execute("""
@@ -984,8 +990,18 @@ def nexus_feed_source(source):
     if not _is_nexus_allowed():
         abort(404)
     items = ns_writes.list_feed_items(source=source, limit=300)
+    # Group by tag (topic) when items carry tags; tag groups keep first-seen
+    # (recency) order, each with its newest-first items.
+    groups, idx = [], {}
+    for it in items:
+        tag = (it.get("tag") or "Other")
+        if tag not in idx:
+            idx[tag] = len(groups)
+            groups.append({"tag": tag, "entries": []})
+        groups[idx[tag]]["entries"].append(it)
+    has_tags = any(it.get("tag") for it in items)
     return render_template("nexus_feed_source.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
-                           meta=_feed_meta(source), items=items)
+                           meta=_feed_meta(source), items=items, groups=groups, has_tags=has_tags)
 
 
 # ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────
@@ -1203,7 +1219,8 @@ def api_nexus_feed():
     body = _nexus_json()
     try:
         fid = ns_writes.add_feed_item(
-            body.get("source", ""), body.get("title"), body.get("body"), body.get("url"))
+            body.get("source", ""), body.get("title"), body.get("body"),
+            body.get("url"), body.get("tag"))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({"ok": True, "id": fid})
