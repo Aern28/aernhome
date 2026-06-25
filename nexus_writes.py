@@ -425,3 +425,58 @@ def set_media_rating(media_id, rating):
 def delete_media(media_id):
     with _conn() as conn:
         conn.execute("DELETE FROM media_status WHERE id = ?", (media_id,))
+
+
+# ── Feed (incoming generated briefs: n8n digests + Aernbot Notebook + …) ──────
+def add_feed_item(source, title=None, body=None, url=None):
+    source = (source or "").strip().lower()
+    if not source:
+        raise ValueError("source required")
+    if not (title or body):
+        raise ValueError("title or body required")
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO feed_items (source, title, body, url) VALUES (?, ?, ?, ?)",
+            (source, (title or "").strip() or None, (body or "").strip() or None,
+             (url or "").strip() or None))
+        return cur.lastrowid
+
+
+def list_feed_items(source=None, limit=100):
+    """Reverse-chron feed items, optionally filtered to one source."""
+    try:
+        with _conn() as conn:
+            q = "SELECT id, source, title, body, url, created_at FROM feed_items"
+            params = []
+            if source:
+                q += " WHERE source = ?"; params.append(source.lower())
+            q += " ORDER BY created_at DESC, id DESC LIMIT ?"
+            params.append(limit)
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def feed_sources(per_source=5):
+    """For the per-source widget grid: {source: [latest N items]} in recency order
+    of each source's newest item."""
+    try:
+        with _conn() as conn:
+            srcs = [r[0] for r in conn.execute(
+                "SELECT source FROM feed_items GROUP BY source "
+                "ORDER BY MAX(created_at) DESC").fetchall()]
+            out = {}
+            for s in srcs:
+                rows = conn.execute(
+                    "SELECT id, source, title, body, url, created_at FROM feed_items "
+                    "WHERE source = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+                    (s, per_source)).fetchall()
+                out[s] = [dict(r) for r in rows]
+            return out
+    except sqlite3.Error:
+        return {}
+
+
+def latest_feed(limit=4):
+    """Newest items across all sources, for the home teaser widget."""
+    return list_feed_items(limit=limit)

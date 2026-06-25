@@ -380,6 +380,21 @@ def init_nexus_db():
         )
     """)
 
+    # Feed — unified stream of incoming generated briefs (n8n digests + Aernbot
+    # Notebook + any future source), tagged by source. Read-only/pull; producers
+    # POST to /api/nexus/feed. Surfaced as a per-source widget grid on /nexus/feed.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS feed_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,            -- slug: weather|optcg|resp|aernbot|...
+            title TEXT,
+            body TEXT,
+            url TEXT,                        -- optional link out
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_feed_source_time ON feed_items (source, created_at DESC)")
+
     # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
     cur.execute("""
         CREATE TABLE IF NOT EXISTS links (
@@ -755,6 +770,7 @@ def projects():
 # ── Personal Nexus (Tailscale-only) ───────────────────────────────────────────
 NEXUS_SECTIONS = [
     ("/nexus",            "Home",        "🏡", "Today at a glance"),
+    ("/nexus/feed",       "Feed",        "📡", "Digests & Aernbot notebook"),
     ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
     ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
@@ -790,6 +806,7 @@ def nexus_home():
     data["captures"] = ns_writes.list_capture(limit=8)
     data["links"] = ns_writes.list_links()
     data["notes"] = ns_writes.pinned_notes()
+    data["feed"] = [{"meta": _feed_meta(f["source"]), **f} for f in ns_writes.latest_feed(4)]
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 
 
@@ -932,6 +949,31 @@ def nexus_notes():
         abort(404)
     return render_template("nexus_notes.html", sections=NEXUS_SECTIONS, active="/nexus/notes",
                            notes=ns_writes.list_notes())
+
+
+# Display metadata for feed sources (icon + label). Producers send only a slug;
+# unknown slugs fall back to a generic icon + title-cased name.
+FEED_SOURCE_META = {
+    "weather": ("🌤️", "Weather"),
+    "optcg":   ("🏴‍☠️", "OPTCG Digest"),
+    "resp":    ("🤧", "Resp Illness"),
+    "aernbot": ("🤖", "Aernbot Notebook"),
+}
+
+
+def _feed_meta(slug):
+    icon, label = FEED_SOURCE_META.get(slug, ("📡", slug.replace("-", " ").title()))
+    return {"slug": slug, "icon": icon, "label": label}
+
+
+@app.route("/nexus/feed")
+def nexus_feed():
+    if not _is_nexus_allowed():
+        abort(404)
+    by_source = ns_writes.feed_sources(per_source=8)
+    cards = [{"meta": _feed_meta(s), "entries": items} for s, items in by_source.items()]
+    return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
+                           cards=cards)
 
 
 # ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────
@@ -1141,6 +1183,18 @@ def api_nexus_media_delete(mid):
     _nexus_json()
     ns_writes.delete_media(mid)
     return jsonify({"ok": True})
+
+
+# ── Feed ingest (n8n digests + Aernbot Notebook push to here) ─────────────────
+@app.route("/api/nexus/feed", methods=["POST"])
+def api_nexus_feed():
+    body = _nexus_json()
+    try:
+        fid = ns_writes.add_feed_item(
+            body.get("source", ""), body.get("title"), body.get("body"), body.get("url"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": fid})
 
 
 @app.route("/privacy")
