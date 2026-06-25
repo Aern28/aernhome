@@ -728,10 +728,23 @@ NEXUS_SECTIONS = [
 
 @app.route("/nexus")
 def nexus_home():
-    """Personal nexus landing. Tailscale-only — 404 to anything via Cloudflare."""
+    """Personal nexus landing. Tailscale-only — 404 to anything via Cloudflare.
+
+    Surfaces the read-only "one glance" widgets. Every connector degrades to a safe
+    empty value and never raises, so a dead source just renders an empty card.
+    """
     if not _is_nexus_allowed():
         abort(404)
-    return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus")
+    import nexus_sources as ns
+    data = {
+        "goals": ns.goals_summary(),
+        "tasks": ns.todoist_today(),
+        "maintenance": ns.maintenance_due(),
+        "tcg": ns.tcg_alerts(),
+        "books": ns.currently_reading(),
+        "infra": ns.infra_summary(),
+    }
+    return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 
 
 @app.route("/privacy")
