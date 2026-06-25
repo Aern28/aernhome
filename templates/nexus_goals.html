@@ -1,0 +1,58 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Goals{% endblock %}
+
+{% block nexus_content %}
+<!-- Add goal -->
+<section class="mb-6">
+    <form data-nx-form="goal" class="bg-dark-card border border-dark-border rounded-lg p-4 grid grid-cols-1 sm:grid-cols-6 gap-2">
+        <input name="title" required placeholder="New goal…"
+               class="sm:col-span-3 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+        <select name="area" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200">
+            <option value="personal">personal</option>
+            <option value="work">work</option>
+            <option value="house">house</option>
+            <option value="tcg">tcg</option>
+        </select>
+        <input name="due" type="date" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400">
+        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-md px-4 py-2">Add</button>
+        <input name="doc_link" placeholder="doc link (Obsidian / spec / url) — optional"
+               class="sm:col-span-5 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600">
+        <span data-nx-err class="text-xs text-red-400 self-center"></span>
+    </form>
+</section>
+
+{% if goals %}
+<div class="space-y-3">
+    {% for g in goals %}
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4 {% if g.status != 'active' %}opacity-60{% endif %}">
+        <div class="flex items-center justify-between gap-3 mb-2">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    {% if g.doc_link %}<a href="{{ g.doc_link }}" class="text-gray-100 font-semibold hover:text-blue-400 truncate">{{ g.title }}</a>
+                    {% else %}<span class="text-gray-100 font-semibold truncate">{{ g.title }}</span>{% endif %}
+                    <span class="text-[10px] uppercase text-gray-500 shrink-0">{{ g.area }}</span>
+                    {% if g.status != 'active' %}<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{{ g.status }}</span>{% endif %}
+                </div>
+                {% if g.target %}<div class="text-xs text-gray-500">{{ g.target }}</div>{% endif %}
+            </div>
+            <div class="flex items-center gap-1 shrink-0 text-[11px]">
+                {% if g.status != 'active' %}<button data-nx-action="goal-status" data-id="{{ g.id }}" data-status="active" class="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-gray-300 hover:border-blue-500">reactivate</button>{% endif %}
+                {% if g.status != 'parked' %}<button data-nx-action="goal-status" data-id="{{ g.id }}" data-status="parked" class="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-gray-300 hover:border-amber-500">park</button>{% endif %}
+                {% if g.status != 'done' %}<button data-nx-action="goal-status" data-id="{{ g.id }}" data-status="done" class="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-gray-300 hover:border-emerald-500">done</button>{% endif %}
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="flex-1 h-2 bg-dark-bg rounded-full overflow-hidden">
+                <div data-nx-goal-bar="{{ g.id }}" class="h-full bg-blue-500" style="width: {{ g.progress_pct }}%"></div>
+            </div>
+            <span data-nx-goal-pct="{{ g.id }}" class="text-xs text-gray-400 w-9 text-right">{{ g.progress_pct }}%</span>
+            <input type="range" min="0" max="100" step="5" value="{{ g.progress_pct }}"
+                   data-nx-goal-progress="{{ g.id }}" class="w-28 accent-blue-500">
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-500">No goals yet. Add your first above — personal, work, house, or TCG.</p>
+{% endif %}
+{% endblock %}

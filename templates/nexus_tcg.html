@@ -1,0 +1,42 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}TCG{% endblock %}
+
+{% block nexus_content %}
+<div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-emerald-400">${{ '%.2f'|format(tcg.inventory_value) }}</div>
+        <div class="text-[11px] uppercase text-gray-500">inventory value</div>
+    </div>
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold text-white">{{ tcg.sales_today }}</div>
+        <div class="text-[11px] uppercase text-gray-500">sales today</div>
+    </div>
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+        <div class="text-2xl font-bold {% if tcg.reprice_due %}text-amber-400{% else %}text-white{% endif %}">{{ tcg.reprice_due }}</div>
+        <div class="text-[11px] uppercase text-gray-500">reprice due</div>
+    </div>
+</div>
+
+<div class="bg-dark-card border border-dark-border rounded-lg p-4 mb-4">
+    <h3 class="text-sm font-semibold text-white mb-2">🏆 Grail watch</h3>
+    {% if tcg.grail_hits %}
+    <ul class="space-y-1">
+        {% for h in tcg.grail_hits %}
+        <li class="text-sm text-amber-300">{{ h.name }} — target ${{ '%.0f'|format(h.target) }}, now ${{ '%.0f'|format(h.last_price) }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-500">No grail targets hit right now.</p>
+    {% endif %}
+</div>
+
+{% if tcg.events %}
+<div class="bg-dark-card border border-dark-border rounded-lg p-4 mb-4">
+    {% for e in tcg.events %}<div class="text-sm text-gray-300">{{ e }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<p class="text-xs text-gray-600">Full operations — reprice, orders, scanning — live in the
+    <span class="text-gray-400">TCG Command Center</span> (<code class="text-gray-500">Desktop\TCG.bat</code>).
+    This view is read-only at-a-glance.</p>
+{% endblock %}

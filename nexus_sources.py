@@ -121,6 +121,23 @@ def todoist_today():
     return out
 
 
+def todoist_close(task_id):
+    """Complete a Todoist task by id. Returns True on success, False otherwise.
+    Token resolved via _get_todoist_token() (never logged). Never raises."""
+    token = _get_todoist_token()
+    if not token or not task_id:
+        return False
+    try:
+        resp = requests.post(
+            "https://api.todoist.com/api/v1/tasks/%s/close" % task_id,
+            headers={"Authorization": "Bearer %s" % token},
+            timeout=15,
+        )
+        return resp.status_code in (200, 204)
+    except Exception:
+        return False
+
+
 
 def tcg_alerts() -> dict:
     """TCG business at-a-glance for the AernHome dashboard.

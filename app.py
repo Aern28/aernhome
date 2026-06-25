@@ -13,6 +13,7 @@ from flask import Flask, render_template, jsonify, Response, send_from_directory
 import requests
 import psutil
 import shutil
+import nexus_writes as ns_writes
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -744,7 +745,138 @@ def nexus_home():
         "books": ns.currently_reading(),
         "infra": ns.infra_summary(),
     }
+    data["captures"] = ns_writes.list_capture(limit=8)
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
+
+
+# ── Nexus section pages (all Tailscale-only) ──────────────────────────────────
+@app.route("/nexus/goals")
+def nexus_goals():
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_goals.html", sections=NEXUS_SECTIONS, active="/nexus/goals",
+                           goals=ns_writes.list_goals())
+
+
+@app.route("/nexus/house")
+def nexus_house():
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_house.html", sections=NEXUS_SECTIONS, active="/nexus/house",
+                           items=ns_writes.list_maintenance())
+
+
+@app.route("/nexus/tcg")
+def nexus_tcg():
+    if not _is_nexus_allowed():
+        abort(404)
+    import nexus_sources as ns
+    return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
+                           tcg=ns.tcg_alerts())
+
+
+@app.route("/nexus/books")
+def nexus_books():
+    if not _is_nexus_allowed():
+        abort(404)
+    import nexus_sources as ns
+    return render_template("nexus_books.html", sections=NEXUS_SECTIONS, active="/nexus/books",
+                           reading=ns.currently_reading())
+
+
+@app.route("/nexus/infra")
+def nexus_infra():
+    if not _is_nexus_allowed():
+        abort(404)
+    import nexus_sources as ns
+    return render_template("nexus_infra.html", sections=NEXUS_SECTIONS, active="/nexus/infra",
+                           infra=ns.infra_summary())
+
+
+# ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────
+def _nexus_json():
+    """Require the nexus gate and return the parsed JSON body (or {})."""
+    if not _is_nexus_allowed():
+        abort(404)
+    return request.get_json(silent=True) or {}
+
+
+@app.route("/api/nexus/capture", methods=["POST"])
+def api_nexus_capture():
+    body = _nexus_json()
+    try:
+        cid = ns_writes.add_capture(body.get("text", ""), body.get("area"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": cid})
+
+
+@app.route("/api/nexus/capture/<int:cid>/process", methods=["POST"])
+def api_nexus_capture_process(cid):
+    _nexus_json()
+    ns_writes.process_capture(cid)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/goal", methods=["POST"])
+def api_nexus_goal_create():
+    body = _nexus_json()
+    try:
+        gid = ns_writes.add_goal(
+            body.get("title", ""), body.get("area", "personal"), body.get("detail"),
+            body.get("target"), body.get("due"), body.get("doc_link"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": gid})
+
+
+@app.route("/api/nexus/goal/<int:gid>/progress", methods=["POST"])
+def api_nexus_goal_progress(gid):
+    body = _nexus_json()
+    try:
+        ns_writes.update_goal_progress(gid, body.get("progress_pct", 0), body.get("note"))
+    except (ValueError, TypeError) as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/goal/<int:gid>/status", methods=["POST"])
+def api_nexus_goal_status(gid):
+    body = _nexus_json()
+    try:
+        ns_writes.set_goal_status(gid, body.get("status", ""))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/maintenance", methods=["POST"])
+def api_nexus_maint_create():
+    body = _nexus_json()
+    try:
+        mid = ns_writes.add_maintenance(
+            body.get("task", ""), body.get("category"), body.get("due_date"),
+            body.get("interval_days"), body.get("notes"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": mid})
+
+
+@app.route("/api/nexus/maintenance/<int:mid>/done", methods=["POST"])
+def api_nexus_maint_done(mid):
+    _nexus_json()
+    try:
+        ns_writes.complete_maintenance(mid)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/todoist/<task_id>/close", methods=["POST"])
+def api_nexus_todoist_close(task_id):
+    _nexus_json()
+    import nexus_sources as ns
+    return jsonify({"ok": ns.todoist_close(task_id)})
 
 
 @app.route("/privacy")

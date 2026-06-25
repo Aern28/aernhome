@@ -1,0 +1,100 @@
+// nexus.js — write-back interactions for the personal nexus (Tailscale-only).
+// Plain vanilla JS + event delegation; endpoints are /api/nexus/* (POST, JSON).
+
+async function nexusPost(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    return await r.json();
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  // ── Quick capture ──
+  const capForm = document.querySelector("[data-nx-capture]");
+  if (capForm) {
+    const input = capForm.querySelector("input[type=text]");
+    const list = document.querySelector("[data-nx-capture-list]");
+    const submit = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      const res = await nexusPost("/api/nexus/capture", { text });
+      if (res.ok) {
+        input.value = "";
+        if (list) {
+          const li = document.createElement("li");
+          li.className = "text-sm text-gray-300 py-1 border-t border-dark-border first:border-0";
+          li.textContent = text;
+          list.prepend(li);
+        }
+      }
+    };
+    capForm.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+  }
+
+  // ── Delegated click handlers ──
+  document.addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-nx-action]");
+    if (!t) return;
+    const action = t.dataset.nxAction;
+
+    if (action === "todoist-close") {
+      t.disabled = true;
+      const res = await nexusPost(`/api/nexus/todoist/${t.dataset.id}/close`, {});
+      const row = t.closest("li");
+      if (res.ok && row) { row.style.opacity = "0.4"; row.style.textDecoration = "line-through"; t.remove(); }
+      else t.disabled = false;
+    }
+
+    else if (action === "maint-done") {
+      t.disabled = true;
+      const res = await nexusPost(`/api/nexus/maintenance/${t.dataset.id}/done`, {});
+      if (res.ok) { const row = t.closest("[data-row]"); if (row) row.remove(); }
+      else t.disabled = false;
+    }
+
+    else if (action === "goal-status") {
+      const res = await nexusPost(`/api/nexus/goal/${t.dataset.id}/status`, { status: t.dataset.status });
+      if (res.ok) location.reload();
+    }
+  });
+
+  // ── Goal progress (range input -> POST on change) ──
+  document.querySelectorAll("[data-nx-goal-progress]").forEach((rng) => {
+    const id = rng.dataset.nxGoalProgress;
+    const bar = document.querySelector(`[data-nx-goal-bar="${id}"]`);
+    const lbl = document.querySelector(`[data-nx-goal-pct="${id}"]`);
+    rng.addEventListener("input", () => {
+      if (bar) bar.style.width = rng.value + "%";
+      if (lbl) lbl.textContent = rng.value + "%";
+    });
+    rng.addEventListener("change", async () => {
+      const res = await nexusPost(`/api/nexus/goal/${id}/progress`, { progress_pct: parseInt(rng.value, 10) });
+      if (res.ok && parseInt(rng.value, 10) >= 100) location.reload(); // auto-marked done
+    });
+  });
+
+  // ── Create forms (goal / maintenance) -> POST then reload ──
+  document.querySelectorAll("[data-nx-form]").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const kind = form.dataset.nxForm; // "goal" | "maintenance"
+      const body = {};
+      form.querySelectorAll("[name]").forEach((el) => {
+        if (el.value !== "") body[el.name] = el.value;
+      });
+      const url = kind === "goal" ? "/api/nexus/goal" : "/api/nexus/maintenance";
+      const res = await nexusPost(url, body);
+      if (res.ok) location.reload();
+      else {
+        const err = form.querySelector("[data-nx-err]");
+        if (err) err.textContent = res.error || "failed";
+      }
+    });
+  });
+});
