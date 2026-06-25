@@ -956,6 +956,7 @@ def nexus_notes():
 FEED_SOURCE_META = {
     "weather": ("🌤️", "Weather"),
     "optcg":   ("🏴‍☠️", "OPTCG Digest"),
+    "twitter": ("🐦", "OPTCG Twitter"),
     "resp":    ("🤧", "Resp Illness"),
     "aernbot": ("🤖", "Aernbot Notebook"),
 }
