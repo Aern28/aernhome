@@ -1,0 +1,45 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Home{% endblock %}
+
+{% block nexus_content %}
+<!-- Phase 0 skeleton: structure + placeholders. Phase 1 fills these with live data. -->
+
+<!-- Quick capture (wired in Phase 2) -->
+<section class="mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-2">Quick capture</label>
+        <div class="flex gap-2">
+            <input id="capture-input" type="text" disabled
+                   placeholder="Get it out of your head… (wired in Phase 2)"
+                   class="flex-1 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-300 placeholder-gray-600">
+            <button disabled class="px-4 py-2 rounded-md bg-blue-600/40 text-white text-sm cursor-not-allowed">Add</button>
+        </div>
+    </div>
+</section>
+
+<!-- The one-glance grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% set cards = [
+        ('🎯', 'Goals', 'Top active goals with progress'),
+        ('✅', 'Today', "Today + overdue tasks (Todoist)"),
+        ('🏠', 'Maintenance due', 'House / car / appliance'),
+        ('🃏', 'TCG alerts', 'Reprice · grails · sales · events'),
+        ('📖', 'Currently reading', 'From Calibre + the shelf'),
+        ('🛰️', 'Infra', 'Homelab health at a glance'),
+    ] %}
+    {% for icon, title, desc in cards %}
+    <div class="bg-dark-card border border-dark-border rounded-lg p-5">
+        <div class="flex items-center justify-between mb-1">
+            <h3 class="text-lg font-semibold text-white">{{ icon }} {{ title }}</h3>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/40">Phase 1</span>
+        </div>
+        <p class="text-sm text-gray-500">{{ desc }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+<p class="mt-8 text-xs text-gray-600">
+    Foundation online (Phase 0): <code class="text-gray-400">nexus.db</code> initialized · Tailscale-only gate active.
+    Next: wire the read-only widgets above (Phase 1).
+</p>
+{% endblock %}

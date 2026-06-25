@@ -29,6 +29,17 @@ def _is_internal_request():
         return True
     return bool(UNLOCK_TOKEN and request.cookies.get("aern_internal") == UNLOCK_TOKEN)
 
+
+def _is_nexus_allowed():
+    """Strict gate for the personal Nexus (goals, books, house, TCG, capture).
+
+    Tailscale-only by design: allow ONLY when there is no CF-Connecting-IP header,
+    i.e. the request arrived straight over Tailscale/LAN and NOT through the public
+    Cloudflare tunnel. Unlike _is_internal_request(), the unlock cookie does NOT open
+    this — there is no way to reach the nexus or its write APIs from the public internet.
+    """
+    return request.headers.get("CF-Connecting-IP") is None
+
 try:
     import docker
 
@@ -50,6 +61,7 @@ def set_security_headers(response):
 # Configuration
 DATA_DIR = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
 DB_PATH = os.path.join(DATA_DIR, "dashboard.db")
+NEXUS_DB_PATH = os.path.join(DATA_DIR, "nexus.db")  # personal nexus (Tailscale-only)
 HTTP_TIMEOUT = 5  # seconds
 
 # Default services configuration
@@ -238,6 +250,114 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def get_nexus_db():
+    """Get a connection to the personal nexus DB (writable canonical store)."""
+    conn = sqlite3.connect(NEXUS_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_nexus_db():
+    """Initialize nexus.db — the writable canonical store for the personal nexus.
+
+    Holds the data the nexus OWNS (capture, goals, maintenance, book status, links).
+    Read-only sources (inventory.db, Calibre, Todoist, Obsidian) are surfaced live,
+    never copied here. Idempotent: CREATE TABLE IF NOT EXISTS.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    conn = sqlite3.connect(NEXUS_DB_PATH)
+    cur = conn.cursor()
+
+    # Universal quick-capture / inbox — the friction-free "get it out of my head" box.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS capture (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            area TEXT,                       -- personal|work|house|tcg|null (unfiled)
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed_at TIMESTAMP           -- set when triaged into a goal/task/maintenance
+        )
+    """)
+
+    # Goals — personal/work/house/tcg, with progress + a link to the backing doc.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            area TEXT NOT NULL DEFAULT 'personal',   -- personal|work|house|tcg
+            detail TEXT,
+            target TEXT,
+            progress_pct INTEGER DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active',    -- active|done|parked
+            due DATE,
+            doc_link TEXT,                            -- Obsidian note / spec / dashboard URL
+            sort INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Goal updates — the "living" history of progress notes.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS goal_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id INTEGER NOT NULL,
+            note TEXT,
+            progress_pct INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (goal_id) REFERENCES goals (id)
+        )
+    """)
+
+    # Maintenance — replaces the Notion Maintenance Log. Recurring via interval_days.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task TEXT NOT NULL,
+            category TEXT,                   -- home|car|appliance|yard|medical|other
+            due_date DATE,
+            interval_days INTEGER,           -- null = one-off; set = recurring
+            last_done DATE,
+            completed INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Book status — writable status layer; seeded from Calibre + Obsidian (Phase 3),
+    # canonical for reading/read going forward.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS book_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            calibre_id INTEGER,              -- link back to Calibre metadata.db when known
+            title TEXT NOT NULL,
+            author TEXT,
+            status TEXT NOT NULL DEFAULT 'to-read',  -- to-read|reading|read
+            rating INTEGER,
+            started DATE,
+            finished DATE,
+            cover_ref TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            url TEXT NOT NULL,
+            area TEXT,
+            sort INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+    print(f"Nexus database initialized at {NEXUS_DB_PATH}")
 
 
 def check_http_health(url):
@@ -519,7 +639,7 @@ def dashboard():
         resp = make_response(redirect("/"))
         resp.delete_cookie("aern_internal")
         return resp
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", show_nexus=_is_nexus_allowed())
 
 
 @app.route("/meal-planner")
@@ -593,6 +713,25 @@ def podcast_file(filename):
 def projects():
     """Projects overview page"""
     return render_template("projects.html")
+
+
+# ── Personal Nexus (Tailscale-only) ───────────────────────────────────────────
+NEXUS_SECTIONS = [
+    ("/nexus",            "Home",        "🏡", "Today at a glance"),
+    ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
+    ("/nexus/books",      "Books",       "📚", "Reading & read"),
+    ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
+    ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
+    ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
+]
+
+
+@app.route("/nexus")
+def nexus_home():
+    """Personal nexus landing. Tailscale-only — 404 to anything via Cloudflare."""
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus")
 
 
 @app.route("/privacy")
@@ -931,5 +1070,6 @@ def api_season():
 
 if __name__ == "__main__":
     init_db()
+    init_nexus_db()
     # Bind to 0.0.0.0 to allow external access (Tailscale)
     app.run(host="0.0.0.0", port=5555, debug=False)
