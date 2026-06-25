@@ -184,6 +184,93 @@ def tmdb_search(query, kind="tv"):
     }
 
 
+def _get_igdb_creds():
+    """Resolve (client_id, client_secret) for IGDB without printing them. Order:
+    IGDB_CLIENT_ID/IGDB_CLIENT_SECRET env, then Bitwarden 'Twitch IGDB'
+    (username=Client ID, password=Client Secret; needs BW_SESSION). Returns
+    (None, None) on any failure. Never raises."""
+    cid = os.environ.get("IGDB_CLIENT_ID")
+    csecret = os.environ.get("IGDB_CLIENT_SECRET")
+    if cid and csecret:
+        return cid.strip(), csecret.strip()
+    session = os.environ.get("BW_SESSION")
+    if not session:
+        return None, None
+    try:
+        u = subprocess.run(
+            ["C:\\tools\\bw.exe", "get", "username", "Twitch IGDB", "--session", session],
+            capture_output=True, text=True, timeout=20)
+        p = subprocess.run(
+            ["C:\\tools\\bw.exe", "get", "password", "Twitch IGDB", "--session", session],
+            capture_output=True, text=True, timeout=20)
+        if u.returncode == 0 and p.returncode == 0:
+            cid = (u.stdout or "").strip()
+            csecret = (p.stdout or "").strip()
+            if cid and csecret:
+                return cid, csecret
+    except Exception:
+        return None, None
+    return None, None
+
+
+def igdb_search(query):
+    """Look up a game on IGDB to auto-fill cover + summary on add. Returns
+    {title, poster_url, overview, year} for the top match, or {} on any failure
+    (no creds, no match, network/auth error). Never raises.
+
+    IGDB needs a Twitch client-credentials OAuth token, then an Apicalypse query.
+    Covers are public CDN URLs the browser fetches directly. (No external id is
+    stored — media_status keeps the game title-keyed; tmdb_id stays NULL.)
+    """
+    query = (query or "").strip()
+    if not query:
+        return {}
+    cid, csecret = _get_igdb_creds()
+    if not cid or not csecret:
+        return {}
+    try:
+        tok = requests.post(
+            "https://id.twitch.tv/oauth2/token",
+            params={"client_id": cid, "client_secret": csecret,
+                    "grant_type": "client_credentials"},
+            timeout=15)
+        tok.raise_for_status()
+        access = (tok.json() or {}).get("access_token")
+        if not access:
+            return {}
+    except Exception:
+        return {}
+    try:
+        body = ('search "%s"; fields name,cover.image_id,summary,first_release_date; '
+                'limit 1;' % query.replace('"', ""))
+        resp = requests.post(
+            "https://api.igdb.com/v4/games",
+            headers={"Client-ID": cid, "Authorization": "Bearer %s" % access},
+            data=body, timeout=15)
+        resp.raise_for_status()
+        results = resp.json() or []
+    except Exception:
+        return {}
+    if not results:
+        return {}
+    top = results[0]
+    image_id = (top.get("cover") or {}).get("image_id")
+    rel = top.get("first_release_date")
+    year = None
+    if rel:
+        try:
+            year = str(dt.datetime.utcfromtimestamp(int(rel)).year)
+        except (ValueError, OSError, OverflowError):
+            year = None
+    return {
+        "title": top.get("name") or query,
+        "poster_url": ("https://images.igdb.com/igdb/image/upload/t_cover_big/%s.jpg"
+                       % image_id) if image_id else None,
+        "overview": (top.get("summary") or "").strip() or None,
+        "year": year,
+    }
+
+
 def todoist_close(task_id):
     """Complete a Todoist task by id. Returns True on success, False otherwise.
     Token resolved via _get_todoist_token() (never logged). Never raises."""

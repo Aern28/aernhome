@@ -758,6 +758,7 @@ NEXUS_SECTIONS = [
     ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
     ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
+    ("/nexus/games",      "Games",       "🎮", "Backlog & playing"),
     ("/nexus/notes",      "Notes",       "📝", "Pinned scratchpad"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
@@ -783,6 +784,7 @@ def nexus_home():
         # prefer the canonical book_status (once seeded); fall back to live Obsidian
         "books": ns_writes.reading_books() or ns.currently_reading(),
         "watching": ns_writes.watching_media(),
+        "playing": ns_writes.watching_media(kind="game"),
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
@@ -893,6 +895,22 @@ def nexus_tv():
     import nexus_sources as ns
     return render_template("nexus_tv.html", sections=NEXUS_SECTIONS, active="/nexus/tv",
                            shelf=shelf, tmdb=bool(ns._get_tmdb_token()))
+
+
+@app.route("/nexus/games")
+def nexus_games():
+    if not _is_nexus_allowed():
+        abort(404)
+    games = ns_writes.list_media(kind="game")
+    shelf = {
+        "watching": [m for m in games if m["status"] == "watching"],
+        "want": [m for m in games if m["status"] == "want"],
+        "watched": [m for m in games if m["status"] == "watched"],
+    }
+    import nexus_sources as ns
+    cid, _ = ns._get_igdb_creds()
+    return render_template("nexus_games.html", sections=NEXUS_SECTIONS, active="/nexus/games",
+                           shelf=shelf, igdb=bool(cid))
 
 
 @app.route("/nexus/notes")
@@ -1058,10 +1076,16 @@ def api_nexus_media_create():
     title = (body.get("title") or "").strip()
     kind = body.get("kind", "tv")
     status = body.get("status", "want")
-    # Auto-enrich with a TMDB poster + overview when a key is available; degrade
-    # gracefully to a title-only entry if not (manual add always works).
+    # Auto-enrich cover + overview when creds are available; degrade gracefully to a
+    # title-only entry if not (manual add always works). Games use IGDB (Twitch creds),
+    # tv/movie use TMDB.
     import nexus_sources as ns
-    hit = ns.tmdb_search(title, kind) if title else {}
+    if not title:
+        hit = {}
+    elif kind == "game":
+        hit = ns.igdb_search(title)
+    else:
+        hit = ns.tmdb_search(title, kind)
     try:
         mid = ns_writes.add_media(
             title, kind=kind, status=status,
