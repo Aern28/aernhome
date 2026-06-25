@@ -28,6 +28,9 @@ services:
       - TMDB_TOKEN=${TMDB_TOKEN:-}
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
+      # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
+      # so point the connector there (default is a Windows path that doesn't exist here).
+      - TCG_DB_PATH=/tcg/inventory.db
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
