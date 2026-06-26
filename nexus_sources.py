@@ -9,6 +9,8 @@ nexus-phase1-connectors workflow (2026-06-24).
 """
 
 import os
+import time
+import threading
 import datetime
 import subprocess
 import requests
@@ -17,6 +19,41 @@ import json
 import sqlite3
 from pathlib import Path
 import re
+
+
+# ── Tiny in-process TTL cache ────────────────────────────────────────────────
+# The /nexus home page fans out to several connectors on every load. The slow
+# ones are the external/aggregate reads (the TCG inventory rollup over an 842k-row
+# prices table, the Todoist network round-trip). They change at most every few
+# minutes, so caching their results turns a ~20s home-page load into an instant
+# one. Single-process Flask dev server => one shared dict is all we need.
+_CACHE = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def _cached(key, ttl, producer):
+    """Return a cached value for `key`, recomputing via producer() when older
+    than `ttl` seconds. Thread-safe; producer runs outside the lock (a rare
+    duplicate compute under concurrent cold hits is harmless for a 1-user app)."""
+    now = time.time()
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+    value = producer()
+    with _CACHE_LOCK:
+        _CACHE[key] = (time.time(), value)
+    return value
+
+
+def cache_clear(key=None):
+    """Drop one cache entry (or all). Call after a write that invalidates a
+    cached read (e.g. closing a Todoist task should refresh the task list)."""
+    with _CACHE_LOCK:
+        if key is None:
+            _CACHE.clear()
+        else:
+            _CACHE.pop(key, None)
 
 
 
@@ -49,8 +86,17 @@ def _get_todoist_token():
     return None
 
 
-def todoist_today():
+def todoist_today(ttl=120):
     """Return today + overdue Todoist tasks for the aernhome dashboard.
+
+    Cached for `ttl` seconds (the home page hits this on every load and it's a
+    network round-trip). Closing a task clears the cache so the list refreshes.
+    """
+    return _cached("todoist_today", ttl, _todoist_today_compute)
+
+
+def _todoist_today_compute():
+    """Fetch + filter today/overdue Todoist tasks.
 
     Returns a list of dicts: {content, due (YYYY-MM-DD str or None),
     overdue_days (int), id (str), priority (int)}, sorted most-overdue then
@@ -283,13 +329,25 @@ def todoist_close(task_id):
             headers={"Authorization": "Bearer %s" % token},
             timeout=15,
         )
-        return resp.status_code in (200, 204)
+        ok = resp.status_code in (200, 204)
+        if ok:
+            cache_clear("todoist_today")  # refresh the home list after a close
+        return ok
     except Exception:
         return False
 
 
 
-def tcg_alerts() -> dict:
+def tcg_alerts(ttl=300) -> dict:
+    """TCG business at-a-glance, cached for `ttl` seconds.
+
+    The underlying rollup scans an 842k-row prices table; the numbers move at
+    most daily (prices fetch ~3PM), so a 5-minute cache keeps the home page snappy.
+    """
+    return _cached("tcg_alerts", ttl, _tcg_alerts_compute)
+
+
+def _tcg_alerts_compute() -> dict:
     """TCG business at-a-glance for the AernHome dashboard.
 
     Reads inventory.db (schema/aggregates only, never card-row dumps) and the
@@ -326,17 +384,21 @@ def tcg_alerts() -> dict:
 
             # Inventory value: latest market price per product * on-hand qty.
             try:
+                # Scope the window to products we actually hold (~1.2k) instead of
+                # ranking the whole 842k-row prices table — turns a ~5s full scan
+                # into sub-second index seeks (idx_prices_product_date).
                 row = con.execute(
                     """
-                    WITH latest AS (
+                    WITH inv AS (
+                      SELECT product_id, quantity FROM inventory WHERE quantity > 0),
+                    latest AS (
                       SELECT product_id, market_price,
                              ROW_NUMBER() OVER (
                                PARTITION BY product_id ORDER BY date DESC) AS rn
-                      FROM prices)
-                    SELECT COALESCE(SUM(i.quantity * l.market_price), 0)
-                    FROM inventory i
-                    JOIN latest l ON l.product_id = i.product_id AND l.rn = 1
-                    WHERE i.quantity > 0
+                      FROM prices WHERE product_id IN (SELECT product_id FROM inv))
+                    SELECT COALESCE(SUM(inv.quantity * l.market_price), 0)
+                    FROM inv
+                    JOIN latest l ON l.product_id = inv.product_id AND l.rn = 1
                     """
                 ).fetchone()
                 if row and row[0] is not None:
@@ -363,25 +425,31 @@ def tcg_alerts() -> dict:
             # Reprice due: One Piece cards IN inventory whose market moved >5%
             # in the last 24h (mirrors tcg_plugin_data.query_top_movers radar).
             try:
+                # Same scoping trick: restrict both windows to the One Piece cards
+                # we hold before ranking, so the prices index drives it (~12s -> ~1s).
                 row = con.execute(
                     """
-                    WITH latest AS (
-                      SELECT product_id, market_price, date,
+                    WITH inv AS (
+                      SELECT i.product_id FROM inventory i
+                      JOIN products pr ON pr.id = i.product_id
+                      WHERE i.quantity > 0 AND pr.category LIKE 'One Piece%'),
+                    latest AS (
+                      SELECT product_id, market_price,
                              ROW_NUMBER() OVER (
                                PARTITION BY product_id ORDER BY date DESC) AS rn
-                      FROM prices),
+                      FROM prices WHERE product_id IN (SELECT product_id FROM inv)),
                     prev AS (
-                      SELECT product_id, market_price, date,
+                      SELECT product_id, market_price,
                              ROW_NUMBER() OVER (
                                PARTITION BY product_id ORDER BY date DESC) AS rn
-                      FROM prices WHERE date <= datetime('now', '-1 day'))
+                      FROM prices
+                      WHERE product_id IN (SELECT product_id FROM inv)
+                        AND date <= datetime('now', '-1 day'))
                     SELECT COUNT(*)
-                    FROM latest l
-                    JOIN prev p ON p.product_id = l.product_id AND p.rn = 1
-                    JOIN products pr ON pr.id = l.product_id
-                    JOIN inventory i ON i.product_id = l.product_id AND i.quantity > 0
-                    WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 1
-                      AND pr.category LIKE 'One Piece%'
+                    FROM inv
+                    JOIN latest l ON l.product_id = inv.product_id AND l.rn = 1
+                    JOIN prev p ON p.product_id = inv.product_id AND p.rn = 1
+                    WHERE p.market_price > 0 AND l.market_price >= 1
                       AND ABS(((l.market_price - p.market_price)
                                / NULLIF(p.market_price, 0)) * 100) > 5
                     """
