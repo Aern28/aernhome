@@ -28,6 +28,12 @@ services:
       - TMDB_TOKEN=${TMDB_TOKEN:-}
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
+      # Oura health glance (Personal Access Token from cloud.ouraring.com); empty = widget hidden.
+      - OURA_TOKEN=${OURA_TOKEN:-}
+      # Schedule widget reads this calendar via the mounted Claudendar service account.
+      # Defaults in-code to mcarroll203@gmail.com; share that calendar with
+      # claude-bot@claudendar.iam.gserviceaccount.com (read-only) to populate it.
+      - CALENDAR_ID=${CALENDAR_ID:-mcarroll203@gmail.com}
       # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
       # so point the connector there (default is a Windows path that doesn't exist here).
       - TCG_DB_PATH=/tcg/inventory.db
