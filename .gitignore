@@ -1,3 +1,7 @@
+# Node (Tailwind build only; the compiled static/css/app.css IS committed)
+node_modules/
+package-lock.json
+
 # Python
 __pycache__/
 *.py[cod]

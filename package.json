@@ -1,0 +1,8 @@
+{
+  "name": "aernhome",
+  "private": true,
+  "description": "Tailwind CSS build for aernhome (the compiled static/css/app.css is committed; the Docker image has no Node).",
+  "scripts": {
+    "build:css": "npx -y tailwindcss@3 -c tailwind.config.js -i static/css/input.css -o static/css/app.css --minify"
+  }
+}

@@ -2,6 +2,13 @@
 .git/
 .gitignore
 
+# Node (Tailwind build is host-side; image only needs the compiled static/css/app.css)
+node_modules/
+package.json
+package-lock.json
+tailwind.config.js
+static/css/input.css
+
 # Python
 __pycache__/
 *.py[cod]
