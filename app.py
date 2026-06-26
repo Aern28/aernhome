@@ -697,6 +697,13 @@ def dashboard():
         resp = make_response(redirect("/"))
         resp.delete_cookie("aern_internal")
         return resp
+    # Over Tailscale the root drops you straight into the Nexus (the thing you
+    # actually want at home). ?dash shows this services dashboard instead — that's
+    # also where the Nexus "← dashboard" link points, so there's no redirect loop.
+    # Public requests arrive via Cloudflare with CF-Connecting-IP, so
+    # _is_nexus_allowed() is False and they always get the public dashboard.
+    if _is_nexus_allowed() and "dash" not in request.args:
+        return redirect("/nexus")
     return render_template("dashboard.html", show_nexus=_is_nexus_allowed())
 
 
