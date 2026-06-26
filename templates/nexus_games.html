@@ -11,16 +11,16 @@
         <img src="{{ m.poster_url }}" alt="" loading="lazy" class="w-full h-full object-cover"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         {% endif %}
-        <div class="w-full h-full items-center justify-center text-gray-600 text-3xl" style="display:{% if m.poster_url %}none{% else %}flex{% endif %}">🎮</div>
+        <div class="w-full h-full items-center justify-center text-gray-400 text-3xl" style="display:{% if m.poster_url %}none{% else %}flex{% endif %}">🎮</div>
         <button data-nx-action="media-delete" data-id="{{ m.id }}" title="Remove"
                 class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-gray-300 hover:text-red-400 text-xs leading-none">✕</button>
     </div>
-    <div class="text-sm text-gray-200 leading-tight">{{ m.title }}{% if m.year %} <span class="text-gray-500">({{ m.year }})</span>{% endif %}</div>
+    <div class="text-sm text-gray-200 leading-tight">{{ m.title }}{% if m.year %} <span class="text-gray-400">({{ m.year }})</span>{% endif %}</div>
     {% if m.status == 'watching' %}
     <input type="text" value="{{ m.progress or '' }}" placeholder="Ch 3 · 40h · Act II…" data-nx-action="media-progress" data-id="{{ m.id }}"
-           class="mt-1.5 w-full bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+           class="mt-1.5 w-full bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
     {% endif %}
-    <div class="flex gap-1 mt-2 text-[10px]">
+    <div class="flex gap-1 mt-2 text-[11px]">
         {% for s in ['want', 'watching', 'watched'] %}
         <button data-nx-action="media-status" data-id="{{ m.id }}" data-status="{{ s }}"
                 class="px-1.5 py-0.5 rounded border {% if m.status == s %}bg-blue-600 border-blue-500 text-white{% else %}bg-dark-bg border-dark-border text-gray-400 hover:border-blue-500{% endif %}">{{ labels[s] }}</button>
@@ -33,11 +33,11 @@
 <!-- Add a game -->
 <section class="mb-6">
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <label class="block text-xs uppercase tracking-wide text-gray-500 mb-2">Add a game</label>
+        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Add a game</label>
         <form data-nx-form="media" class="flex flex-wrap gap-2">
             <input type="hidden" name="kind" value="game">
             <input type="text" name="title" autocomplete="off" placeholder="Game title…"
-                   class="flex-1 min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+                   class="flex-1 min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
             <select name="status" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500">
                 <option value="want">backlog</option>
                 <option value="watching">playing</option>
@@ -46,8 +46,8 @@
             <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm">Add</button>
             <span data-nx-err class="text-xs text-red-400 self-center"></span>
         </form>
-        <p class="text-xs text-gray-600 mt-2">
-            {% if igdb %}Cover &amp; details auto-fill from IGDB.{% else %}⚠️ No IGDB creds in env — games add title-only (set <code class="text-gray-500">IGDB_CLIENT_ID</code>/<code class="text-gray-500">IGDB_CLIENT_SECRET</code> or unlock Bitwarden for covers).{% endif %}
+        <p class="text-xs text-gray-400 mt-2">
+            {% if igdb %}Cover &amp; details auto-fill from IGDB.{% else %}⚠️ No IGDB creds in env — games add title-only (set <code class="text-gray-400">IGDB_CLIENT_ID</code>/<code class="text-gray-400">IGDB_CLIENT_SECRET</code> or unlock Bitwarden for covers).{% endif %}
         </p>
     </div>
 </section>
@@ -57,7 +57,7 @@
     {% for label, key in [('🎮 Playing', 'watching'), ('🗂️ Backlog', 'want'), ('🏆 Played', 'watched')] %}
     {% if shelf[key] %}
     <section class="mb-8">
-        <h3 class="text-sm font-semibold text-white mb-3">{{ label }} <span class="text-gray-500">({{ shelf[key]|length }})</span></h3>
+        <h3 class="text-sm font-semibold text-white mb-3">{{ label }} <span class="text-gray-400">({{ shelf[key]|length }})</span></h3>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             {% for m in shelf[key] %}{{ game_card(m) }}{% endfor %}
         </div>
@@ -65,6 +65,6 @@
     {% endif %}
     {% endfor %}
 {% else %}
-    <p class="text-gray-500">No games tracked yet — add one above.</p>
+    <p class="text-gray-400">No games tracked yet — add one above.</p>
 {% endif %}
 {% endblock %}

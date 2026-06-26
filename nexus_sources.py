@@ -796,3 +796,127 @@ def maintenance_due():
         if conn is not None:
             conn.close()
 
+
+# ── TCG business (richer rollup — superset of the TRMNL plugin) ───────────────
+def tcg_business(ttl=300):
+    """Cached richer TCG rollup (named movers, open positions, to-ship queue,
+    7-day sales, price freshness) — the same payload the TRMNL e-ink plugin shows.
+    Cached because it touches the big prices table; degrades to {} on any error."""
+    return _cached("tcg_business", ttl, _tcg_business_compute)
+
+
+def _tcg_business_compute():
+    try:
+        import tcg_plugin_data
+        return tcg_plugin_data.build_payload()
+    except Exception:
+        return {}
+
+
+# ── Oura (health glance) ─────────────────────────────────────────────────────
+def oura_summary(ttl=1800):
+    """Latest Oura readiness / sleep / activity scores for the home health glance.
+    Cached 30 min (network call; scores update a few times a day). Degrades to {}
+    when no OURA_TOKEN is set or on any API error — never raises. Get a Personal
+    Access Token at cloud.ouraring.com and set OURA_TOKEN in .env."""
+    return _cached("oura_summary", ttl, _oura_summary_compute)
+
+
+def _oura_summary_compute():
+    token = (os.environ.get("OURA_TOKEN") or "").strip()
+    if not token:
+        return {}
+    headers = {"Authorization": "Bearer %s" % token}
+    today = datetime.date.today()
+    params = {
+        "start_date": (today - datetime.timedelta(days=2)).isoformat(),
+        "end_date": (today + datetime.timedelta(days=1)).isoformat(),
+    }
+
+    def _latest(kind):
+        try:
+            r = requests.get(
+                "https://api.ouraring.com/v2/usercollection/%s" % kind,
+                headers=headers, params=params, timeout=10)
+            r.raise_for_status()
+            rows = r.json().get("data") or []
+            for row in reversed(rows):  # rows ascend by day; newest scored first
+                if row.get("score") is not None:
+                    return {"score": row["score"], "day": row.get("day")}
+        except Exception:
+            return None
+        return None
+
+    out = {"readiness": _latest("daily_readiness"),
+           "sleep": _latest("daily_sleep"),
+           "activity": _latest("daily_activity")}
+    return out if any(out.values()) else {}
+
+
+# ── Schedule (today + tomorrow from Google Calendar / QGenda) ────────────────
+def schedule_today(ttl=900):
+    """Today + tomorrow agenda (clinical QGenda blocks + appointments) from Google
+    Calendar, cached 15 min. Uses the service-account JSON mounted from the Aernbot
+    workspace (/workspace/.credentials/claudendar-service-account.json) — override
+    with GOOGLE_CALENDAR_SA / CALENDAR_ID. Degrades to {} if creds/libs/calendar
+    are unavailable. Never raises."""
+    return _cached("schedule_today", ttl, _schedule_today_compute)
+
+
+def _schedule_today_compute():
+    sa_path = os.environ.get(
+        "GOOGLE_CALENDAR_SA",
+        "/workspace/.credentials/claudendar-service-account.json")
+    cal_id = os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com")
+    if not os.path.exists(sa_path):
+        return {}
+    try:
+        from zoneinfo import ZoneInfo
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+    except Exception:
+        return {}
+    try:
+        tz = ZoneInfo("America/Chicago")
+        now = datetime.datetime.now(tz)
+        start = datetime.datetime.combine(now.date(), datetime.time.min, tzinfo=tz)
+        end = start + datetime.timedelta(days=2)
+        creds = service_account.Credentials.from_service_account_file(
+            sa_path, scopes=["https://www.googleapis.com/auth/calendar.readonly"])
+        svc = build("calendar", "v3", credentials=creds, cache_discovery=False)
+        items = svc.events().list(
+            calendarId=cal_id, singleEvents=True, orderBy="startTime",
+            timeMin=start.astimezone(datetime.timezone.utc).isoformat(),
+            timeMax=end.astimezone(datetime.timezone.utc).isoformat(),
+            timeZone="America/Chicago", maxResults=25,
+        ).execute().get("items", [])
+    except Exception:
+        return {}
+
+    today_d, tom_d = now.date(), now.date() + datetime.timedelta(days=1)
+    out = {"today": [], "tomorrow": []}
+    for ev in items:
+        s = ev.get("start", {})
+        summary = (ev.get("summary") or "(busy)").strip()
+        for pre in ("GEN - ", "GEN -", "GEN-"):  # strip QGenda clinical prefix
+            if summary.startswith(pre):
+                summary = summary[len(pre):].strip()
+                break
+        try:
+            if s.get("dateTime"):
+                when_dt = datetime.datetime.fromisoformat(s["dateTime"]).astimezone(tz)
+                day = when_dt.date()
+                when = when_dt.strftime("%I:%M %p").lstrip("0")
+                allday = False
+            else:
+                day = datetime.date.fromisoformat(s.get("date"))
+                when, allday = "all day", True
+        except (ValueError, TypeError):
+            continue
+        item = {"summary": summary, "when": when, "allday": allday}
+        if day == today_d:
+            out["today"].append(item)
+        elif day == tom_d:
+            out["tomorrow"].append(item)
+    return out if (out["today"] or out["tomorrow"]) else {}
+

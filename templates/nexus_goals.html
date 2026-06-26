@@ -6,7 +6,7 @@
 <section class="mb-6">
     <form data-nx-form="goal" class="bg-dark-card border border-dark-border rounded-lg p-4 grid grid-cols-1 sm:grid-cols-6 gap-2">
         <input name="title" required placeholder="New goal…"
-               class="sm:col-span-3 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+               class="sm:col-span-3 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
         <select name="area" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200">
             <option value="personal">personal</option>
             <option value="work">work</option>
@@ -16,7 +16,7 @@
         <input name="due" type="date" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400">
         <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-md px-4 py-2">Add</button>
         <input name="doc_link" placeholder="doc link (Obsidian / spec / url) — optional"
-               class="sm:col-span-5 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600">
+               class="sm:col-span-5 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500">
         <span data-nx-err class="text-xs text-red-400 self-center"></span>
     </form>
 </section>
@@ -30,10 +30,10 @@
                 <div class="flex items-center gap-2">
                     {% if g.doc_link %}<a href="{{ g.doc_link }}" class="text-gray-100 font-semibold hover:text-blue-400 truncate">{{ g.title }}</a>
                     {% else %}<span class="text-gray-100 font-semibold truncate">{{ g.title }}</span>{% endif %}
-                    <span class="text-[10px] uppercase text-gray-500 shrink-0">{{ g.area }}</span>
-                    {% if g.status != 'active' %}<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{{ g.status }}</span>{% endif %}
+                    <span class="text-[11px] uppercase text-gray-400 shrink-0">{{ g.area }}</span>
+                    {% if g.status != 'active' %}<span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{{ g.status }}</span>{% endif %}
                 </div>
-                {% if g.target %}<div class="text-xs text-gray-500">{{ g.target }}</div>{% endif %}
+                {% if g.target %}<div class="text-xs text-gray-400">{{ g.target }}</div>{% endif %}
             </div>
             <div class="flex items-center gap-1 shrink-0 text-[11px]">
                 {% if g.status != 'active' %}<button data-nx-action="goal-status" data-id="{{ g.id }}" data-status="active" class="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-gray-300 hover:border-blue-500">reactivate</button>{% endif %}
@@ -53,6 +53,6 @@
     {% endfor %}
 </div>
 {% else %}
-<p class="text-gray-500">No goals yet. Add your first above — personal, work, house, or TCG.</p>
+<p class="text-gray-400">No goals yet. Add your first above — personal, work, house, or TCG.</p>
 {% endif %}
 {% endblock %}

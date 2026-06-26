@@ -6,7 +6,7 @@
 <section class="mb-6">
     <form data-nx-form="maintenance" class="bg-dark-card border border-dark-border rounded-lg p-4 grid grid-cols-1 sm:grid-cols-6 gap-2">
         <input name="task" required placeholder="Maintenance task…"
-               class="sm:col-span-2 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500">
+               class="sm:col-span-2 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
         <select name="category" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200">
             <option value="home">home</option>
             <option value="car">car</option>
@@ -16,11 +16,11 @@
         </select>
         <input name="due_date" type="date" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400">
         <input name="interval_days" type="number" min="1" placeholder="every N days"
-               class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 placeholder-gray-600">
+               class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 placeholder-gray-500">
         <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-md px-4 py-2">Add</button>
         <span data-nx-err class="text-xs text-red-400 self-center sm:col-span-6"></span>
     </form>
-    <p class="text-xs text-gray-600 mt-1">Set "every N days" to make it recurring — checking it off rolls the due date forward.</p>
+    <p class="text-xs text-gray-400 mt-1">Set "every N days" to make it recurring — checking it off rolls the due date forward.</p>
 </section>
 
 {% if items %}
@@ -31,16 +31,16 @@
                 class="shrink-0 w-5 h-5 rounded border border-gray-500 hover:border-emerald-400 hover:bg-emerald-500/20"></button>
         <div class="flex-1 min-w-0">
             <div class="text-sm text-gray-200">{{ m.task }}
-                {% if m.interval_days %}<span class="text-[10px] text-gray-500">· every {{ m.interval_days }}d</span>{% endif %}
+                {% if m.interval_days %}<span class="text-[11px] text-gray-400">· every {{ m.interval_days }}d</span>{% endif %}
             </div>
-            {% if m.notes %}<div class="text-xs text-gray-500 truncate">{{ m.notes }}</div>{% endif %}
+            {% if m.notes %}<div class="text-xs text-gray-400 truncate">{{ m.notes }}</div>{% endif %}
         </div>
-        {% if m.category %}<span class="text-[10px] uppercase text-gray-500">{{ m.category }}</span>{% endif %}
+        {% if m.category %}<span class="text-[11px] uppercase text-gray-400">{{ m.category }}</span>{% endif %}
         {% if m.due_date %}<span class="text-xs text-gray-400 shrink-0">{{ m.due_date }}</span>{% endif %}
     </div>
     {% endfor %}
 </div>
 {% else %}
-<p class="text-gray-500">No maintenance tracked yet. Add tasks above — one-off or recurring.</p>
+<p class="text-gray-400">No maintenance tracked yet. Add tasks above — one-off or recurring.</p>
 {% endif %}
 {% endblock %}

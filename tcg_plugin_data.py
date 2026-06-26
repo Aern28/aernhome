@@ -142,30 +142,36 @@ def query_top_movers(con: sqlite3.Connection) -> dict:
     Shows the card number for ID. Populates as inventory is scanned in
     (TCGplayer = source of truth; the local `inventory` table fills from scans).
     """
+    # Scope the price windows to the OP cards we actually hold BEFORE ranking, so
+    # idx_prices_product_date drives it (~12s full scan -> sub-second). category
+    # LIKE: the fetch labels OP cards 'One Piece', the MyPricing import labels them
+    # 'One Piece Card Game'. $1 floor keeps penny commons off the repricing list.
     cur = con.execute(
         """
-        WITH latest AS (
-          SELECT product_id, market_price, date,
+        WITH inv AS (
+          SELECT i.product_id FROM inventory i
+          JOIN products pr ON pr.id = i.product_id
+          WHERE i.quantity > 0 AND pr.category LIKE 'One Piece%'
+        ),
+        latest AS (
+          SELECT product_id, market_price,
                  ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY date DESC) AS rn
-          FROM prices
+          FROM prices WHERE product_id IN (SELECT product_id FROM inv)
         ),
         prev AS (
-          SELECT product_id, market_price, date,
+          SELECT product_id, market_price,
                  ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY date DESC) AS rn
           FROM prices
-          WHERE date <= datetime('now', '-1 day')
+          WHERE product_id IN (SELECT product_id FROM inv)
+            AND date <= datetime('now', '-1 day')
         )
         SELECT pr.name, pr.number, l.market_price,
                ((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100 AS dpct
-        FROM latest l
-        JOIN prev p ON p.product_id = l.product_id AND p.rn = 1
-        JOIN products pr ON pr.id = l.product_id
-        JOIN inventory i ON i.product_id = l.product_id AND i.quantity > 0
-        -- category LIKE: the fetch labels OP cards 'One Piece', the MyPricing
-        -- import labels them 'One Piece Card Game'. $1 floor keeps penny commons
-        -- off the repricing list.
-        WHERE l.rn = 1 AND p.market_price > 0 AND l.market_price >= 1
-          AND pr.category LIKE 'One Piece%'
+        FROM inv
+        JOIN latest l ON l.product_id = inv.product_id AND l.rn = 1
+        JOIN prev p ON p.product_id = inv.product_id AND p.rn = 1
+        JOIN products pr ON pr.id = inv.product_id
+        WHERE p.market_price > 0 AND l.market_price >= 1
           AND ABS(((l.market_price - p.market_price) / NULLIF(p.market_price, 0)) * 100) > 5
         ORDER BY dpct DESC
         """
@@ -200,6 +206,7 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
           SELECT product_id, market_price,
                  ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY date DESC) AS rn
           FROM prices
+          WHERE product_id IN (SELECT product_id FROM singles_positions WHERE status = 'open')
         ) lp ON lp.product_id = sp.product_id AND lp.rn = 1
         WHERE sp.status = 'open'
         ORDER BY sp.buy_date
@@ -236,8 +243,6 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
         # mentioning a date-like token. Falls back to None.
         catalyst = None
         if thesis:
-            import re
-
             m = re.search(
                 r"(?:catalyst|catalys)[^.]*?(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2})",
                 thesis,

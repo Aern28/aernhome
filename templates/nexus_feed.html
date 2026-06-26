@@ -2,36 +2,42 @@
 {% block nexus_title %}Feed{% endblock %}
 
 {% block nexus_content %}
-{% if cards %}
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+{# Per-source accent — literal classes so Tailwind's scanner keeps them. #}
+{% set accents = {
+    'aernbot': 'border-violet-500',
+    'optcg':   'border-amber-500',
+    'twitter': 'border-sky-500',
+    'resp':    'border-rose-500'
+} %}
+
+<div class="space-y-4 max-w-3xl">
     {% for card in cards %}
-    <section class="bg-dark-card border border-dark-border rounded-lg p-5">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold text-white">{{ card.meta.icon }} {{ card.meta.label }}</h3>
-            <a href="/nexus/feed/{{ card.meta.slug }}" class="text-xs text-gray-500 hover:text-blue-400">
-                {% if card.total > card.entries|length %}all {{ card.total }} →{% else %}{{ card.total }}{% endif %}</a>
+    <section class="bg-dark-card border border-dark-border rounded-lg overflow-hidden border-l-4 {{ accents.get(card.meta.slug, 'border-slate-500') }}">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-dark-border">
+            <h3 class="text-base font-semibold text-white">{{ card.meta.icon }} {{ card.meta.label }}</h3>
+            {% if card.total %}
+            <a href="/nexus/feed/{{ card.meta.slug }}" class="text-xs font-medium text-blue-400 hover:text-blue-300">
+                {% if card.total > card.entries|length %}all {{ card.total }} →{% else %}{{ card.total }} item{{ '' if card.total == 1 else 's' }}{% endif %}</a>
+            {% endif %}
         </div>
-        <ul class="space-y-3">
+        {% if card.entries %}
+        <ul class="divide-y divide-dark-border">
             {% for it in card.entries %}
-            <li class="border-t border-dark-border first:border-0 pt-3 first:pt-0">
+            <li class="px-4 py-3">
                 {% if it.title %}<div class="text-sm font-medium text-gray-100">{{ it.title }}</div>{% endif %}
-                {% if it.body %}<div class="text-sm text-gray-400 whitespace-pre-wrap break-words mt-0.5">{{ it.body }}</div>{% endif %}
-                <div class="flex items-center gap-2 mt-1.5 text-[11px] text-gray-600">
+                {% if it.body %}<div class="text-sm text-gray-300 whitespace-pre-wrap break-words line-clamp-3 mt-0.5">{{ it.body }}</div>{% endif %}
+                <div class="flex items-center gap-2 mt-1.5 text-xs text-gray-400">
                     <span>{{ it.created_at[:16] }}</span>
+                    {% if it.tag %}<span class="px-1.5 py-0.5 rounded bg-dark-bg text-gray-300">{{ it.tag }}</span>{% endif %}
                     {% if it.url %}<a href="{{ it.url }}" class="text-blue-400 hover:underline">link ↗</a>{% endif %}
                 </div>
             </li>
             {% endfor %}
         </ul>
+        {% else %}
+        <p class="px-4 py-3 text-sm text-gray-400">No recent items.</p>
+        {% endif %}
     </section>
     {% endfor %}
 </div>
-{% else %}
-<div class="bg-dark-card border border-dark-border rounded-lg p-6">
-    <p class="text-gray-400">No feed items yet.</p>
-    <p class="text-xs text-gray-600 mt-2">Wire producers to <code class="text-gray-500">POST /api/nexus/feed</code>
-        with <code class="text-gray-500">{source, title, body, url}</code> — Aernbot's Notebook and the
-        weather / OPTCG / resp-illness digests will land here as per-source cards.</p>
-</div>
-{% endif %}
 {% endblock %}

@@ -806,6 +806,8 @@ def nexus_home():
         abort(404)
     import nexus_sources as ns
     data = {
+        "schedule": ns.schedule_today(),
+        "oura": ns.oura_summary(),
         "goals": ns.goals_summary(),
         "tasks": ns.todoist_today(),
         "maintenance": ns.maintenance_due(),
@@ -819,7 +821,8 @@ def nexus_home():
     data["captures"] = ns_writes.list_capture(limit=8)
     data["links"] = ns_writes.list_links()
     data["notes"] = ns_writes.pinned_notes()
-    data["feed"] = [{"meta": _feed_meta(f["source"]), **f} for f in ns_writes.latest_feed(4)]
+    # source-diverse teaser so once-daily digests aren't buried under Aernbot's volume
+    data["feed"] = [{"meta": _feed_meta(f["source"]), **f} for f in ns_writes.latest_feed_diverse(5)]
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 
 
@@ -846,7 +849,7 @@ def nexus_tcg():
         abort(404)
     import nexus_sources as ns
     return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
-                           tcg=ns.tcg_alerts())
+                           tcg=ns.tcg_alerts(), biz=ns.tcg_business())
 
 
 @app.route("/nexus/books")
@@ -966,12 +969,14 @@ def nexus_notes():
 
 # Display metadata for feed sources (icon + label). Producers send only a slug;
 # unknown slugs fall back to a generic icon + title-cased name.
+# Declared in display order. Every source here renders on the Feed page even with
+# no recent items, so a digest that stopped posting is visibly absent (diagnosable)
+# rather than silently missing. (Weather digest retired — Aern doesn't use it.)
 FEED_SOURCE_META = {
-    "weather": ("🌤️", "Weather"),
+    "aernbot": ("🤖", "Aernbot Notebook"),
     "optcg":   ("🏴‍☠️", "OPTCG Digest"),
     "twitter": ("🐦", "OPTCG Twitter"),
     "resp":    ("🤧", "Resp Illness"),
-    "aernbot": ("🤖", "Aernbot Notebook"),
 }
 
 
@@ -984,10 +989,14 @@ def _feed_meta(slug):
 def nexus_feed():
     if not _is_nexus_allowed():
         abort(404)
-    by_source = ns_writes.feed_sources(per_source=6)
+    by_source = ns_writes.feed_sources(per_source=5)
     counts = ns_writes.feed_source_counts()
-    cards = [{"meta": _feed_meta(s), "entries": items, "total": counts.get(s, len(items))}
-             for s, items in by_source.items()]
+    # Every KNOWN source in declared order (even empty), then any unknown source
+    # that has posted — so a silent digest shows as "no recent items", not absent.
+    order = list(FEED_SOURCE_META.keys())
+    sources = order + [s for s in by_source if s not in set(order)]
+    cards = [{"meta": _feed_meta(s), "entries": by_source.get(s, []),
+              "total": counts.get(s, 0)} for s in sources]
     return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
                            cards=cards)
 
