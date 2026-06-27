@@ -6,7 +6,7 @@
     <title>{% block title %}AernHome{% endblock %}</title>
     <!-- Precompiled Tailwind (was the cdn.tailwindcss.com Play CDN, which recompiled
          CSS in the browser on every load). Rebuild: npm run build:css -->
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ css_ver }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">

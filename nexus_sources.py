@@ -29,6 +29,10 @@ import re
 # one. Single-process Flask dev server => one shared dict is all we need.
 _CACHE = {}
 _CACHE_LOCK = threading.Lock()
+# Empty/zeroed producer results (a transient API blip, a momentary token issue)
+# only live this long instead of the full ttl — so a 1-second hiccup self-heals on
+# the next page load rather than blanking a widget for up to 30 minutes.
+_NEG_TTL = 30
 
 
 def _cached(key, ttl, producer):
@@ -38,8 +42,12 @@ def _cached(key, ttl, producer):
     now = time.time()
     with _CACHE_LOCK:
         hit = _CACHE.get(key)
-        if hit and now - hit[0] < ttl:
-            return hit[1]
+        if hit:
+            # a falsy cached value (failed/empty fetch) ages out after _NEG_TTL,
+            # a real one after the caller's ttl
+            eff_ttl = ttl if hit[1] else min(ttl, _NEG_TTL)
+            if now - hit[0] < eff_ttl:
+                return hit[1]
     value = producer()
     with _CACHE_LOCK:
         _CACHE[key] = (time.time(), value)

@@ -52,6 +52,17 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
 
 
+@app.context_processor
+def inject_asset_version():
+    """Cache-bust /static/css/app.css by its mtime so a freshly rebuilt stylesheet
+    (npm run build:css) is fetched immediately instead of serving a stale, browser-
+    cached copy — which otherwise makes newly added Tailwind classes render unstyled."""
+    try:
+        return {"css_ver": int(os.path.getmtime(os.path.join(app.static_folder, "css", "app.css")))}
+    except OSError:
+        return {"css_ver": ""}
+
+
 @app.after_request
 def set_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
