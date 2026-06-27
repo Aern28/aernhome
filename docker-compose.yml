@@ -6,7 +6,14 @@ services:
     container_name: aernhome-dashboard
     restart: unless-stopped
     ports:
-      - "5555:5555"
+      # Bind to the Tailscale IP + localhost only — NOT 0.0.0.0, which published the
+      # write/delete APIs to the entire LAN (incl. the IoT segment). n8n and cloudflared
+      # reach the app over the shared aernhome network (container DNS), so they're
+      # unaffected. Boot-order note: needs the Tailscale interface up before the
+      # container starts; Docker Desktop is slow enough to start that this holds in
+      # practice (restart:unless-stopped recovers if the bind ever loses the race).
+      - "100.110.245.37:5555:5555"   # Tailscale — browser access via http://ashaman:5555
+      - "127.0.0.1:5555:5555"        # host-local debugging
     volumes:
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
