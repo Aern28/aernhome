@@ -973,10 +973,11 @@ def nexus_notes():
 # no recent items, so a digest that stopped posting is visibly absent (diagnosable)
 # rather than silently missing. (Weather digest retired — Aern doesn't use it.)
 FEED_SOURCE_META = {
-    "aernbot": ("🤖", "Aernbot Notebook"),
-    "optcg":   ("🏴‍☠️", "OPTCG Digest"),
-    "twitter": ("🐦", "OPTCG Twitter"),
-    "resp":    ("🤧", "Resp Illness"),
+    "aernbot":     ("🤖", "Aernbot Notebook"),
+    "optcg":       ("🏴‍☠️", "OPTCG Digest"),
+    "optcg-video": ("📺", "OPTCG Video"),
+    "twitter":     ("🐦", "OPTCG Twitter"),
+    "resp":        ("🤧", "Resp Illness"),
 }
 
 
