@@ -829,37 +829,50 @@ def direct_progress(ttl=300):
 
 
 def _direct_progress_compute():
+    # Official TCGplayer Direct criteria (help.tcgplayer.com, updated 2026-02-10):
+    # 100 sales/month, averaging $600/week; ~3000 unique Direct-ELIGIBLE products
+    # (Magic/Pokemon/Yu-Gi-Oh singles ONLY); 99.5% feedback 30d; Level 4 seller.
+    # Sales/revenue are a TRAILING-MONTHLY measure (not a calendar week).
     sku_target = int(os.environ.get("DIRECT_SKU_TARGET", "3000"))
-    rev_target = float(os.environ.get("DIRECT_REV_TARGET", "600"))
-    out = {"skus": 0, "sku_target": sku_target,
-           "week_rev": 0.0, "rev_target": rev_target, "week_orders": 0}
+    rev_target = float(os.environ.get("DIRECT_REV_TARGET", "600"))      # $/week average
+    sales_target = int(os.environ.get("DIRECT_SALES_TARGET", "100"))    # sales/month
+    out = {"elig_skus": 0, "all_skus": 0, "sku_target": sku_target,
+           "wk_avg": 0.0, "rev_target": rev_target,
+           "mo_orders": 0, "sales_target": sales_target}
     inv_path = Path(os.environ.get("TCG_DB_PATH", r"C:/tcg-inventory/inventory.db"))
     if not inv_path.exists():
         return out
     con = None
     try:
         con = sqlite3.connect(f"file:{inv_path}?mode=ro&immutable=1&nolock=1", uri=True)
-        row = con.execute(
+        # Direct-eligible inventory = Magic / Pokemon / Yu-Gi-Oh singles only.
+        out["elig_skus"] = int(con.execute(
+            "SELECT COUNT(DISTINCT i.tcgplayer_sku) FROM inventory i "
+            "JOIN products p ON p.id = i.product_id "
+            "WHERE i.quantity > 0 AND i.tcgplayer_sku IS NOT NULL AND i.tcgplayer_sku != '' "
+            "AND (p.category LIKE 'Magic%' OR p.category LIKE 'Pokemon%' "
+            "     OR p.category LIKE '%Yu-Gi%' OR p.category LIKE '%YuGi%')"
+        ).fetchone()[0] or 0)
+        out["all_skus"] = int(con.execute(
             "SELECT COUNT(DISTINCT tcgplayer_sku) FROM inventory "
-            "WHERE quantity > 0 AND tcgplayer_sku IS NOT NULL AND tcgplayer_sku != ''"
-        ).fetchone()
-        out["skus"] = int(row[0]) if row and row[0] else 0
-        # rolling 7-day revenue from the orders table (fuller than tcg-sales.db)
+            "WHERE quantity > 0 AND tcgplayer_sku != ''").fetchone()[0] or 0)
+        # Trailing-30-day sales (matches "100 sales/month, averaging $600/week").
         row = con.execute(
-            "SELECT COALESCE(SUM(CAST(order_total AS REAL)), 0), COUNT(*) FROM orders "
+            "SELECT COUNT(*), COALESCE(SUM(CAST(order_total AS REAL)), 0) FROM orders "
             "WHERE substr(COALESCE(shipped_at, packed_at, labeled_at), 1, 10) "
-            ">= date('now', '-7 days')"
+            ">= date('now', '-30 days')"
         ).fetchone()
         if row:
-            out["week_rev"] = round(float(row[0] or 0), 2)
-            out["week_orders"] = int(row[1] or 0)
+            out["mo_orders"] = int(row[0] or 0)
+            out["wk_avg"] = round(float(row[1] or 0) / 30 * 7, 2)  # avg $/week over the month
     except sqlite3.Error:
         pass
     finally:
         if con is not None:
             con.close()
-    out["sku_pct"] = min(100, round(out["skus"] / sku_target * 100)) if sku_target else 0
-    out["rev_pct"] = min(100, round(out["week_rev"] / rev_target * 100)) if rev_target else 0
+    out["sku_pct"] = min(100, round(out["elig_skus"] / sku_target * 100)) if sku_target else 0
+    out["rev_pct"] = min(100, round(out["wk_avg"] / rev_target * 100)) if rev_target else 0
+    out["sales_pct"] = min(100, round(out["mo_orders"] / sales_target * 100)) if sales_target else 0
     return out
 
 
