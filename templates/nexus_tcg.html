@@ -29,7 +29,7 @@
         {{ dbar('Avg $/week', '$' ~ '%.0f'|format(direct.wk_avg), '$' ~ '%.0f'|format(direct.rev_target), direct.rev_pct, 'monthly average') }}
     </div>
     <div class="text-[11px] text-gray-400 mt-3 pt-3 border-t border-dark-border">
-        Also required: <span class="text-gray-300">Level 4 seller</span> + <span class="text-gray-300">99.5% feedback (30d)</span> — check the Seller Portal.
+        Account gates: <span class="text-emerald-400">Level 4 ✓</span> · <span class="text-emerald-400">99.5% feedback ✓</span> — met.
         {% if direct.all_skus > direct.elig_skus %}<span class="text-gray-500">({{ '{:,}'.format(direct.all_skus - direct.elig_skus) }} non-eligible SKUs not counted.)</span>{% endif %}
     </div>
 </div>
