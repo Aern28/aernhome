@@ -697,6 +697,25 @@ def robots_txt():
     return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
 
 
+@app.route("/sw.js")
+def service_worker():
+    """Serve the PWA service worker from root so its scope covers the whole app."""
+    resp = make_response(
+        send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    )
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"  # always re-check for SW updates
+    return resp
+
+
+@app.route("/manifest.webmanifest")
+def web_manifest():
+    """Explicit route guarantees the right content-type regardless of host mimetype config."""
+    return send_from_directory(
+        app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json"
+    )
+
+
 @app.route("/")
 def dashboard():
     """Main dashboard page. ?unlock=<token> sets cookie, ?lock clears it."""

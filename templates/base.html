@@ -7,6 +7,15 @@
     <!-- Precompiled Tailwind (was the cdn.tailwindcss.com Play CDN, which recompiled
          CSS in the browser on every load). Rebuild: npm run build:css -->
     <link rel="stylesheet" href="/static/css/app.css?v={{ css_ver }}">
+    <!-- PWA: installable, cached shell for instant loads (esp. remote over Tailscale) -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Nexus">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-dark-bg text-gray-100 min-h-screen">
@@ -14,5 +23,12 @@
         {% block content %}{% endblock %}
     </div>
     {% block extra_scripts %}{% endblock %}
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
 </body>
 </html>
