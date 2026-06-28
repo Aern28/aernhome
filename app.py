@@ -860,7 +860,8 @@ def nexus_tcg():
         abort(404)
     import nexus_sources as ns
     return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
-                           tcg=ns.tcg_alerts(), biz=ns.tcg_business())
+                           tcg=ns.tcg_alerts(), biz=ns.tcg_business(),
+                           direct=ns.direct_progress())
 
 
 @app.route("/nexus/books")

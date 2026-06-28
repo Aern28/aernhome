@@ -821,6 +821,48 @@ def _tcg_business_compute():
         return {}
 
 
+def direct_progress(ttl=300):
+    """Progress toward TCGplayer Direct qualification: distinct SKUs (target 3000)
+    and rolling 7-day revenue (target $600). Reads inventory.db (mounted /tcg).
+    Cached; degrades to a zeroed dict. Targets overridable via env."""
+    return _cached("direct_progress", ttl, _direct_progress_compute)
+
+
+def _direct_progress_compute():
+    sku_target = int(os.environ.get("DIRECT_SKU_TARGET", "3000"))
+    rev_target = float(os.environ.get("DIRECT_REV_TARGET", "600"))
+    out = {"skus": 0, "sku_target": sku_target,
+           "week_rev": 0.0, "rev_target": rev_target, "week_orders": 0}
+    inv_path = Path(os.environ.get("TCG_DB_PATH", r"C:/tcg-inventory/inventory.db"))
+    if not inv_path.exists():
+        return out
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{inv_path}?mode=ro&immutable=1&nolock=1", uri=True)
+        row = con.execute(
+            "SELECT COUNT(DISTINCT tcgplayer_sku) FROM inventory "
+            "WHERE quantity > 0 AND tcgplayer_sku IS NOT NULL AND tcgplayer_sku != ''"
+        ).fetchone()
+        out["skus"] = int(row[0]) if row and row[0] else 0
+        # rolling 7-day revenue from the orders table (fuller than tcg-sales.db)
+        row = con.execute(
+            "SELECT COALESCE(SUM(CAST(order_total AS REAL)), 0), COUNT(*) FROM orders "
+            "WHERE substr(COALESCE(shipped_at, packed_at, labeled_at), 1, 10) "
+            ">= date('now', '-7 days')"
+        ).fetchone()
+        if row:
+            out["week_rev"] = round(float(row[0] or 0), 2)
+            out["week_orders"] = int(row[1] or 0)
+    except sqlite3.Error:
+        pass
+    finally:
+        if con is not None:
+            con.close()
+    out["sku_pct"] = min(100, round(out["skus"] / sku_target * 100)) if sku_target else 0
+    out["rev_pct"] = min(100, round(out["week_rev"] / rev_target * 100)) if rev_target else 0
+    return out
+
+
 # ── Oura (health glance) ─────────────────────────────────────────────────────
 def oura_summary(ttl=1800):
     """Latest Oura readiness / sleep / activity scores for the home health glance.
