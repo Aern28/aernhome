@@ -14,6 +14,7 @@ import requests
 import psutil
 import shutil
 import nexus_writes as ns_writes
+import nexus_md
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -411,6 +412,23 @@ def init_nexus_db():
         cur.execute("ALTER TABLE feed_items ADD COLUMN tag TEXT")
     except sqlite3.OperationalError:
         pass  # column already present
+
+    # Docs — long-form reference content authored in markdown, rendered natively in
+    # Nexus. The home for rich formats (tables, headings, playbooks) that outgrow a
+    # sticky Note but shouldn't be exiled to Obsidian. body_md is the source of truth;
+    # HTML is rendered + sanitized at read time (nexus_md.render_markdown).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS docs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT NOT NULL UNIQUE,       -- url key, derived from title
+            title TEXT NOT NULL,
+            body_md TEXT NOT NULL,           -- markdown source (canonical)
+            area TEXT,                       -- personal|work|house|tcg|null
+            pinned INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
     # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
     cur.execute("""
@@ -819,6 +837,7 @@ NEXUS_SECTIONS = [
     ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
     ("/nexus/games",      "Games",       "🎮", "Backlog & playing"),
     ("/nexus/notes",      "Notes",       "📝", "Pinned scratchpad"),
+    ("/nexus/docs",       "Docs",        "📄", "Reference & playbooks"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
@@ -996,6 +1015,26 @@ def nexus_notes():
         abort(404)
     return render_template("nexus_notes.html", sections=NEXUS_SECTIONS, active="/nexus/notes",
                            notes=ns_writes.list_notes())
+
+
+@app.route("/nexus/docs")
+def nexus_docs():
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_docs.html", sections=NEXUS_SECTIONS, active="/nexus/docs",
+                           docs=ns_writes.list_docs())
+
+
+@app.route("/nexus/docs/<slug>")
+def nexus_doc(slug):
+    if not _is_nexus_allowed():
+        abort(404)
+    doc = ns_writes.get_doc(slug)
+    if doc is None:
+        abort(404)
+    doc["html"] = nexus_md.render_markdown(doc["body_md"])
+    return render_template("nexus_doc.html", sections=NEXUS_SECTIONS, active="/nexus/docs",
+                           doc=doc)
 
 
 # Display metadata for feed sources (icon + label). Producers send only a slug;
@@ -1197,6 +1236,41 @@ def api_nexus_note_pin(nid):
 def api_nexus_note_delete(nid):
     _nexus_json()
     ns_writes.delete_note(nid)
+    return jsonify({"ok": True})
+
+
+# ── Docs (long-form markdown reference) ───────────────────────────────────────
+@app.route("/api/nexus/doc", methods=["POST"])
+def api_nexus_doc_create():
+    body = _nexus_json()
+    try:
+        res = ns_writes.add_doc(body.get("title", ""), body.get("body_md", ""), body.get("area"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, **res})
+
+
+@app.route("/api/nexus/doc/<int:did>", methods=["POST"])
+def api_nexus_doc_update(did):
+    body = _nexus_json()
+    try:
+        ns_writes.update_doc(did, body.get("body_md"), body.get("title"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/doc/<int:did>/pin", methods=["POST"])
+def api_nexus_doc_pin(did):
+    body = _nexus_json()
+    ns_writes.set_doc_pinned(did, bool(body.get("pinned")))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nexus/doc/<int:did>/delete", methods=["POST"])
+def api_nexus_doc_delete(did):
+    _nexus_json()
+    ns_writes.delete_doc(did)
     return jsonify({"ok": True})
 
 

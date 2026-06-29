@@ -335,6 +335,102 @@ def delete_note(note_id):
         conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
 
 
+# ── Docs (long-form markdown reference — tables/playbooks; rendered natively) ──
+# The shelf for rich content that outgrows a sticky Note. body_md is canonical;
+# HTML is rendered + sanitized at read time (nexus_md.render_markdown). Slug is the
+# url key, derived from the title and kept unique.
+import re as _re
+
+
+def _slugify(title):
+    s = _re.sub(r"[^a-z0-9]+", "-", (title or "").strip().lower()).strip("-")
+    return (s[:60].rstrip("-")) or "doc"
+
+
+def _unique_slug(conn, base):
+    slug, n = base, 2
+    while conn.execute("SELECT 1 FROM docs WHERE slug = ?", (slug,)).fetchone():
+        slug = f"{base}-{n}"
+        n += 1
+    return slug
+
+
+def add_doc(title, body_md, area=None):
+    title = (title or "").strip()
+    body_md = (body_md or "").strip()
+    if not title:
+        raise ValueError("title required")
+    if not body_md:
+        raise ValueError("empty doc")
+    if area not in ("personal", "work", "house", "tcg", None, ""):
+        area = None
+    with closing(_conn()) as conn, conn:
+        slug = _unique_slug(conn, _slugify(title))
+        cur = conn.execute(
+            "INSERT INTO docs (slug, title, body_md, area) VALUES (?, ?, ?, ?)",
+            (slug, title, body_md, area or None))
+        return {"id": cur.lastrowid, "slug": slug}
+
+
+def list_docs(area=None):
+    """Doc metadata (no body), pinned first then most-recently-updated."""
+    try:
+        with closing(_conn()) as conn, conn:
+            q = ("SELECT id, slug, title, area, pinned, created_at, updated_at "
+                 "FROM docs")
+            params = ()
+            if area:
+                q += " WHERE area = ?"; params = (area,)
+            q += " ORDER BY pinned DESC, updated_at DESC"
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def get_doc(slug):
+    """Full doc row (incl. body_md) by slug, or None."""
+    try:
+        with closing(_conn()) as conn, conn:
+            row = conn.execute(
+                "SELECT id, slug, title, body_md, area, pinned, created_at, updated_at "
+                "FROM docs WHERE slug = ?", (slug,)).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error:
+        return None
+
+
+def update_doc(doc_id, body_md=None, title=None):
+    sets, params = [], []
+    if title is not None:
+        t = title.strip()
+        if not t:
+            raise ValueError("title required")
+        sets.append("title = ?"); params.append(t)
+    if body_md is not None:
+        b = body_md.strip()
+        if not b:
+            raise ValueError("empty doc")
+        sets.append("body_md = ?"); params.append(b)
+    if not sets:
+        return
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(doc_id)
+    with closing(_conn()) as conn, conn:
+        conn.execute(f"UPDATE docs SET {', '.join(sets)} WHERE id = ?", params)
+
+
+def set_doc_pinned(doc_id, pinned):
+    with closing(_conn()) as conn, conn:
+        conn.execute(
+            "UPDATE docs SET pinned = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (1 if pinned else 0, doc_id))
+
+
+def delete_doc(doc_id):
+    with closing(_conn()) as conn, conn:
+        conn.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
+
+
 # ── Media (media_status; tv/movie/game — covers via TMDB) ─────────────────────
 # Generalized watch/play tracker. Surfaced as the TV shelf now; movies/games drop
 # into the same table later. Canonical in nexus.db — the on-ramp to retiring the

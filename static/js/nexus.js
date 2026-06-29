@@ -142,6 +142,36 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await nexusPost(`/api/nexus/note/${t.dataset.id}`, { body: ta.value });
       if (res.ok) location.reload();
     }
+
+    // ── Docs ──
+    else if (action === "doc-pin") {
+      const res = await nexusPost(`/api/nexus/doc/${t.dataset.id}/pin`, { pinned: t.dataset.pinned !== "1" });
+      if (res.ok) location.reload();
+    }
+
+    else if (action === "doc-edit") {
+      document.querySelector("[data-doc-view]").classList.add("hidden");
+      document.querySelector("[data-doc-editor]").classList.remove("hidden");
+      const md = document.querySelector("[data-doc-md]");
+      if (md) md.focus();
+    }
+
+    else if (action === "doc-cancel") {
+      document.querySelector("[data-doc-editor]").classList.add("hidden");
+      document.querySelector("[data-doc-view]").classList.remove("hidden");
+    }
+
+    else if (action === "doc-save") {
+      const md = document.querySelector("[data-doc-md]");
+      if (!md) return;
+      const res = await nexusPost(`/api/nexus/doc/${t.dataset.id}`, { body_md: md.value });
+      if (res.ok) location.reload();
+    }
+
+    else if (action === "doc-delete") {
+      const res = await nexusPost(`/api/nexus/doc/${t.dataset.id}/delete`, {});
+      if (res.ok) location.href = "/nexus/docs";
+    }
   });
 
   // ── Media progress (text input -> POST on change) ──
@@ -175,9 +205,10 @@ document.addEventListener("DOMContentLoaded", () => {
       form.querySelectorAll("[name]").forEach((el) => {
         if (el.value !== "") body[el.name] = el.value;
       });
-      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note" };
+      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note", doc: "/api/nexus/doc" };
       const res = await nexusPost(urls[kind], body);
-      if (res.ok) location.reload();
+      if (res.ok && kind === "doc" && res.slug) location.href = `/nexus/docs/${res.slug}`;
+      else if (res.ok) location.reload();
       else {
         const err = form.querySelector("[data-nx-err]");
         if (err) err.textContent = res.error || "failed";

@@ -1,3 +1,45 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Nexus Docs prose ─────────────────────────────────────────────────────────
+   Tailwind Preflight strips heading/list styling; this restores readable
+   typography for rendered markdown (nexus_md.render_markdown output). Plain CSS,
+   not @apply, so it survives without the typography plugin. Dark-theme tuned. */
+.nx-prose { color: #d1d5db; line-height: 1.65; font-size: 0.95rem; }
+.nx-prose > :first-child { margin-top: 0; }
+.nx-prose h1, .nx-prose h2, .nx-prose h3, .nx-prose h4 {
+  color: #fff; font-weight: 700; line-height: 1.25;
+  margin: 1.6em 0 0.6em; }
+.nx-prose h1 { font-size: 1.6rem; }
+.nx-prose h2 { font-size: 1.3rem; border-bottom: 1px solid #334155; padding-bottom: 0.3em; }
+.nx-prose h3 { font-size: 1.1rem; }
+.nx-prose h4 { font-size: 1rem; color: #e5e7eb; }
+.nx-prose p { margin: 0.75em 0; }
+.nx-prose a { color: #60a5fa; text-decoration: underline; }
+.nx-prose a:hover { color: #93c5fd; }
+.nx-prose strong { color: #f1f5f9; font-weight: 600; }
+.nx-prose ul, .nx-prose ol { margin: 0.75em 0; padding-left: 1.5em; }
+.nx-prose ul { list-style: disc; }
+.nx-prose ol { list-style: decimal; }
+.nx-prose li { margin: 0.3em 0; }
+.nx-prose li > ul, .nx-prose li > ol { margin: 0.3em 0; }
+.nx-prose blockquote {
+  border-left: 3px solid #334155; padding-left: 1em; margin: 1em 0;
+  color: #9ca3af; font-style: italic; }
+.nx-prose hr { border: 0; border-top: 1px solid #334155; margin: 1.5em 0; }
+.nx-prose code {
+  background: #0f172a; border: 1px solid #334155; border-radius: 4px;
+  padding: 0.1em 0.4em; font-size: 0.85em; font-family: ui-monospace, monospace; }
+.nx-prose pre {
+  background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+  padding: 0.9em 1em; overflow-x: auto; margin: 1em 0; }
+.nx-prose pre code { background: none; border: 0; padding: 0; font-size: 0.85rem; }
+.nx-prose table {
+  width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.9rem;
+  display: block; overflow-x: auto; }
+.nx-prose th, .nx-prose td {
+  border: 1px solid #334155; padding: 0.5em 0.75em; text-align: left; }
+.nx-prose th { background: #1e293b; color: #fff; font-weight: 600; }
+.nx-prose tr:nth-child(even) td { background: rgba(30, 41, 59, 0.4); }
+.nx-prose img { max-width: 100%; border-radius: 6px; }

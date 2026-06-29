@@ -1,0 +1,50 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Docs{% endblock %}
+
+{% block nexus_content %}
+<!-- New doc -->
+<section class="mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">New doc</label>
+        <form data-nx-form="doc" class="space-y-2">
+            <div class="flex flex-wrap gap-2">
+                <input type="text" name="title" autocomplete="off" placeholder="title"
+                       class="flex-1 min-w-[180px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                <select name="area" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400 focus:outline-none focus:border-blue-500">
+                    <option value="">unfiled</option>
+                    <option value="personal">personal</option>
+                    <option value="work">work</option>
+                    <option value="house">house</option>
+                    <option value="tcg">tcg</option>
+                </select>
+            </div>
+            <textarea name="body_md" rows="6" placeholder="Markdown — headings, tables, lists, code all render. The home for reference content that outgrew a sticky note."
+                      class="w-full font-mono bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"></textarea>
+            <div class="flex items-center gap-3">
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm">Create doc</button>
+                <span data-nx-err class="text-xs text-red-400"></span>
+                <span class="text-xs text-gray-400 ml-auto">Markdown in, rendered out — tables &amp; all.</span>
+            </div>
+        </form>
+    </div>
+</section>
+
+<!-- Docs list -->
+{% if docs %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for d in docs %}
+    <a href="/nexus/docs/{{ d.slug }}"
+       class="bg-dark-card border rounded-lg p-4 flex flex-col hover:border-blue-500 transition-colors {% if d.pinned %}border-amber-700/50{% else %}border-dark-border{% endif %}">
+        <div class="flex items-start justify-between gap-2">
+            <div class="text-sm font-semibold text-white break-words">{{ d.title }}</div>
+            {% if d.pinned %}<span class="text-amber-400 shrink-0" title="Pinned">📌</span>{% endif %}
+        </div>
+        {% if d.area %}<span class="text-[11px] uppercase text-gray-400 mt-1">{{ d.area }}</span>{% endif %}
+        <div class="text-[11px] text-gray-400 mt-auto pt-3">updated {{ d.updated_at[:16] }}</div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-400">No docs yet — write the first one above. 📄</p>
+{% endif %}
+{% endblock %}
