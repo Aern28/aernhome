@@ -347,6 +347,23 @@ def _slugify(title):
     return (s[:60].rstrip("-")) or "doc"
 
 
+def _norm_tags(tags):
+    """Accept a list or comma-string → normalized, deduped, sorted 'a,b,c' (or None)."""
+    if tags is None:
+        return None
+    parts = tags if isinstance(tags, (list, tuple)) else str(tags).split(",")
+    seen, out = set(), []
+    for p in parts:
+        t = p.strip().lower()
+        if t and t not in seen:
+            seen.add(t); out.append(t)
+    return ",".join(sorted(out)) or None
+
+
+def _split_tags(s):
+    return [t for t in (s or "").split(",") if t]
+
+
 def _unique_slug(conn, base):
     slug, n = base, 2
     while conn.execute("SELECT 1 FROM docs WHERE slug = ?", (slug,)).fetchone():
@@ -355,7 +372,7 @@ def _unique_slug(conn, base):
     return slug
 
 
-def add_doc(title, body_md, area=None):
+def add_doc(title, body_md, area=None, tags=None):
     title = (title or "").strip()
     body_md = (body_md or "").strip()
     if not title:
@@ -367,39 +384,61 @@ def add_doc(title, body_md, area=None):
     with closing(_conn()) as conn, conn:
         slug = _unique_slug(conn, _slugify(title))
         cur = conn.execute(
-            "INSERT INTO docs (slug, title, body_md, area) VALUES (?, ?, ?, ?)",
-            (slug, title, body_md, area or None))
+            "INSERT INTO docs (slug, title, body_md, area, tags) VALUES (?, ?, ?, ?, ?)",
+            (slug, title, body_md, area or None, _norm_tags(tags)))
         return {"id": cur.lastrowid, "slug": slug}
 
 
-def list_docs(area=None):
-    """Doc metadata (no body), pinned first then most-recently-updated."""
+def list_docs(area=None, tag=None):
+    """Doc metadata (no body) as dicts with a `tag_list`, pinned first then recent.
+    `tag` filters to docs carrying that tag (matched in Python — wiki-scale)."""
     try:
         with closing(_conn()) as conn, conn:
-            q = ("SELECT id, slug, title, area, pinned, created_at, updated_at "
+            q = ("SELECT id, slug, title, area, tags, pinned, created_at, updated_at "
                  "FROM docs")
             params = ()
             if area:
                 q += " WHERE area = ?"; params = (area,)
             q += " ORDER BY pinned DESC, updated_at DESC"
-            return [dict(r) for r in conn.execute(q, params).fetchall()]
+            rows = [dict(r) for r in conn.execute(q, params).fetchall()]
     except sqlite3.Error:
         return []
+    want = (tag or "").strip().lower()
+    out = []
+    for r in rows:
+        r["tag_list"] = _split_tags(r.get("tags"))
+        if want and want not in r["tag_list"]:
+            continue
+        out.append(r)
+    return out
+
+
+def all_doc_tags():
+    """[(tag, count)] across all docs, most-used first then alphabetical."""
+    counts = {}
+    for r in list_docs():
+        for t in r["tag_list"]:
+            counts[t] = counts.get(t, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
 def get_doc(slug):
-    """Full doc row (incl. body_md) by slug, or None."""
+    """Full doc row (incl. body_md + tag_list) by slug, or None."""
     try:
         with closing(_conn()) as conn, conn:
             row = conn.execute(
-                "SELECT id, slug, title, body_md, area, pinned, created_at, updated_at "
+                "SELECT id, slug, title, body_md, area, tags, pinned, created_at, updated_at "
                 "FROM docs WHERE slug = ?", (slug,)).fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            d = dict(row)
+            d["tag_list"] = _split_tags(d.get("tags"))
+            return d
     except sqlite3.Error:
         return None
 
 
-def update_doc(doc_id, body_md=None, title=None):
+def update_doc(doc_id, body_md=None, title=None, tags=None):
     sets, params = [], []
     if title is not None:
         t = title.strip()
@@ -411,12 +450,25 @@ def update_doc(doc_id, body_md=None, title=None):
         if not b:
             raise ValueError("empty doc")
         sets.append("body_md = ?"); params.append(b)
+    if tags is not None:
+        sets.append("tags = ?"); params.append(_norm_tags(tags))
     if not sets:
         return
     sets.append("updated_at = CURRENT_TIMESTAMP")
     params.append(doc_id)
     with closing(_conn()) as conn, conn:
         conn.execute(f"UPDATE docs SET {', '.join(sets)} WHERE id = ?", params)
+
+
+def doc_title_exists(title):
+    """True if a doc with this exact title already exists (importer idempotency)."""
+    try:
+        with closing(_conn()) as conn, conn:
+            return conn.execute(
+                "SELECT 1 FROM docs WHERE title = ? LIMIT 1", ((title or "").strip(),)
+            ).fetchone() is not None
+    except sqlite3.Error:
+        return False
 
 
 def set_doc_pinned(doc_id, pinned):

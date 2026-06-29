@@ -11,6 +11,14 @@
                 {% if doc.area %}<span class="uppercase mr-2">{{ doc.area }}</span>{% endif %}
                 updated {{ doc.updated_at[:16] }}
             </div>
+            {% if doc.tag_list %}
+            <div class="flex flex-wrap gap-1 mt-2">
+                {% for t in doc.tag_list %}
+                <a href="/nexus/docs?tag={{ t }}"
+                   class="text-[10px] px-1.5 py-0.5 rounded-full bg-dark-bg border border-dark-border text-gray-400 hover:border-blue-500 hover:text-gray-200">{{ t }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
         <div class="flex gap-2 shrink-0 text-sm">
             <button data-nx-action="doc-pin" data-id="{{ doc.id }}" data-pinned="{{ 1 if doc.pinned else 0 }}"
@@ -26,6 +34,8 @@
 
     <!-- Editor (hidden until ✎) -->
     <div class="hidden mt-2" data-doc-editor>
+        <input type="text" data-doc-tags value="{{ doc.tags or '' }}" placeholder="tags, comma, separated"
+               class="w-full mb-2 bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
         <textarea data-doc-md rows="20"
                   class="w-full font-mono bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">{{ doc.body_md }}</textarea>
         <div class="flex items-center gap-3 mt-2">

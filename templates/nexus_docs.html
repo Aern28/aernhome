@@ -10,6 +10,8 @@
             <div class="flex flex-wrap gap-2">
                 <input type="text" name="title" autocomplete="off" placeholder="title"
                        class="flex-1 min-w-[180px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                <input type="text" name="tags" autocomplete="off" placeholder="tags, comma, separated"
+                       class="flex-1 min-w-[160px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
                 <select name="area" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-400 focus:outline-none focus:border-blue-500">
                     <option value="">unfiled</option>
                     <option value="personal">personal</option>
@@ -29,6 +31,19 @@
     </div>
 </section>
 
+<!-- Tag filter -->
+{% if all_tags %}
+<div class="flex flex-wrap items-center gap-2 mb-5 text-xs">
+    <a href="/nexus/docs"
+       class="px-2.5 py-1 rounded-full border {% if not active_tag %}bg-blue-600 border-blue-500 text-white{% else %}bg-dark-card border-dark-border text-gray-300 hover:border-blue-500{% endif %}">all</a>
+    {% for tag, count in all_tags %}
+    <a href="/nexus/docs?tag={{ tag }}"
+       class="px-2.5 py-1 rounded-full border {% if tag == active_tag %}bg-blue-600 border-blue-500 text-white{% else %}bg-dark-card border-dark-border text-gray-300 hover:border-blue-500{% endif %}">
+        {{ tag }} <span class="text-gray-500">{{ count }}</span></a>
+    {% endfor %}
+</div>
+{% endif %}
+
 <!-- Docs list -->
 {% if docs %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -39,12 +54,21 @@
             <div class="text-sm font-semibold text-white break-words">{{ d.title }}</div>
             {% if d.pinned %}<span class="text-amber-400 shrink-0" title="Pinned">📌</span>{% endif %}
         </div>
-        {% if d.area %}<span class="text-[11px] uppercase text-gray-400 mt-1">{{ d.area }}</span>{% endif %}
-        <div class="text-[11px] text-gray-400 mt-auto pt-3">updated {{ d.updated_at[:16] }}</div>
+        {% if d.tag_list %}
+        <div class="flex flex-wrap gap-1 mt-2">
+            {% for t in d.tag_list %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-dark-bg border border-dark-border text-gray-400">{{ t }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="flex items-center gap-2 text-[11px] text-gray-400 mt-auto pt-3">
+            {% if d.area %}<span class="uppercase">{{ d.area }}</span>·{% endif %}
+            <span>updated {{ d.updated_at[:16] }}</span>
+        </div>
     </a>
     {% endfor %}
 </div>
 {% else %}
-<p class="text-gray-400">No docs yet — write the first one above. 📄</p>
+<p class="text-gray-400">{% if active_tag %}No docs tagged “{{ active_tag }}”.{% else %}No docs yet — write the first one above. 📄{% endif %}</p>
 {% endif %}
 {% endblock %}

@@ -424,11 +424,17 @@ def init_nexus_db():
             title TEXT NOT NULL,
             body_md TEXT NOT NULL,           -- markdown source (canonical)
             area TEXT,                       -- personal|work|house|tcg|null
+            tags TEXT,                       -- free-form, comma-joined (normalized lower)
             pinned INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # idempotent add for docs tables created before the tags column existed
+    try:
+        cur.execute("ALTER TABLE docs ADD COLUMN tags TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already present
 
     # Links — curated "connections to documents" (Obsidian notes, specs, dashboards).
     cur.execute("""
@@ -1021,8 +1027,10 @@ def nexus_notes():
 def nexus_docs():
     if not _is_nexus_allowed():
         abort(404)
+    tag = (request.args.get("tag") or "").strip().lower() or None
     return render_template("nexus_docs.html", sections=NEXUS_SECTIONS, active="/nexus/docs",
-                           docs=ns_writes.list_docs())
+                           docs=ns_writes.list_docs(tag=tag),
+                           all_tags=ns_writes.all_doc_tags(), active_tag=tag)
 
 
 @app.route("/nexus/docs/<slug>")
@@ -1244,7 +1252,8 @@ def api_nexus_note_delete(nid):
 def api_nexus_doc_create():
     body = _nexus_json()
     try:
-        res = ns_writes.add_doc(body.get("title", ""), body.get("body_md", ""), body.get("area"))
+        res = ns_writes.add_doc(body.get("title", ""), body.get("body_md", ""),
+                                body.get("area"), body.get("tags"))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({"ok": True, **res})
@@ -1254,7 +1263,7 @@ def api_nexus_doc_create():
 def api_nexus_doc_update(did):
     body = _nexus_json()
     try:
-        ns_writes.update_doc(did, body.get("body_md"), body.get("title"))
+        ns_writes.update_doc(did, body.get("body_md"), body.get("title"), body.get("tags"))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({"ok": True})

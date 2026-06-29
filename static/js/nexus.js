@@ -164,7 +164,9 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (action === "doc-save") {
       const md = document.querySelector("[data-doc-md]");
       if (!md) return;
-      const res = await nexusPost(`/api/nexus/doc/${t.dataset.id}`, { body_md: md.value });
+      const tags = document.querySelector("[data-doc-tags]");
+      const res = await nexusPost(`/api/nexus/doc/${t.dataset.id}`, {
+        body_md: md.value, tags: tags ? tags.value : undefined });
       if (res.ok) location.reload();
     }
 
