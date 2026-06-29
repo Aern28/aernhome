@@ -68,6 +68,8 @@ Nothing to close, nobody to cover — just miss didactics. Cheapest way to drain
 
 
 def main():
+    import app
+    app.init_nexus_db()  # ensure schema (incl. docs.tags) — don't race the app's startup init
     if w.get_doc(SLUG):
         print(f"doc '{SLUG}' already exists — skipping (edit in the UI instead)")
         return
