@@ -69,6 +69,7 @@ CHECK_META = {
     "relay_alive": ("Aernbot Relay", "aernbot"),
     "signal_cli": ("Signal CLI", "aernbot"),
     "containers": ("Containers", "infra"),
+    "qbittorrent": ("qBittorrent (NAS)", "infra"),
     "mirror_fresh": ("TCG Mirror", "tcg"),
     "price_fresh": ("TCG Prices", "tcg"),
     "disk": ("Disk Space", "infra"),
@@ -187,6 +188,19 @@ def check_price_fresh():
     return ("up", f"prices {age_d:.1f}d old")
 
 
+def check_qbittorrent():
+    """qBittorrent WebUI on the Synology (rides gluetun's network namespace —
+    died silently for 2 days when gluetun restarted 2026-07-04, hence this).
+    Checked via LAN IP; the container can reach the LAN through the bridge."""
+    try:
+        r = requests.get("http://192.168.1.118:8080", timeout=8)
+        if r.status_code < 400:
+            return ("up", f"WebUI HTTP {r.status_code}")
+        return ("down", f"WebUI HTTP {r.status_code}")
+    except requests.RequestException as e:
+        return ("down", f"unreachable: {type(e).__name__}")
+
+
 def check_disk():
     """psutil disk_usage on / and /data; reports the worse of the two."""
     try:
@@ -221,6 +235,7 @@ SIMPLE_CHECKS = {
     "relay_alive": check_relay_alive,
     "containers": check_containers,
     "signal_cli": check_signal_cli,
+    "qbittorrent": check_qbittorrent,
     "mirror_fresh": check_mirror_fresh,
     "price_fresh": check_price_fresh,
     "disk": check_disk,
