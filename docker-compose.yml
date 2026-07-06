@@ -48,10 +48,17 @@ services:
       # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
       # so point the connector there (default is a Windows path that doesn't exist here).
       - TCG_DB_PATH=/tcg/inventory.db
+      # Fleet sentinel → Signal alerting (numbers live in .env; empty = alerts log-and-skip)
+      - SIGNAL_HTTP_URL=http://signal-cli:8080
+      - SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT:-}
+      - SIGNAL_ALERT_TO=${SIGNAL_ALERT_TO:-}
+      - FLEET_INTERVAL=60
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - aernhome
+      # Joined so the sentinel can POST alerts to signal-cli's JSON-RPC directly
+      - relay-net
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -73,3 +80,6 @@ volumes:
 networks:
   aernhome:
     driver: bridge
+  relay-net:
+    external: true
+    name: discord-claude-relay_relay-net
