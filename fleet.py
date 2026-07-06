@@ -499,6 +499,14 @@ def sentinel_pass():
         entry["history"] = history[-HISTORY_LEN:]
         checks_state[cid] = entry
 
+    # Retire checks that no longer exist (e.g. canary_missing after the first
+    # real canary run, or a renamed host-collector check) — otherwise ghosts
+    # linger on the board forever. Only when this pass actually produced
+    # results, so a total run_all_checks failure can't wipe the board.
+    if results:
+        for cid in [c for c in checks_state if c not in results]:
+            del checks_state[cid]
+
     # Alert on: transition INTO warn/down/unknown, or recovery TO up.
     alert_lines = []
     for cid, old_status in transitions:
