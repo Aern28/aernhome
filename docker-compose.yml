@@ -15,6 +15,10 @@ services:
       - "100.110.245.37:5555:5555"   # Tailscale — browser access via http://ashaman:5555
       - "127.0.0.1:5555:5555"        # host-local debugging
     volumes:
+      # Live code overlay — /app comes from the repo checkout, not the baked image.
+      # Deploys are now `git pull` + `docker restart aernhome-dashboard`; NO rebuild
+      # (builds die over SSH). Rebuild is only needed when requirements.txt changes.
+      - C:/projects/aernhome:/app
       - C:/projects/aernhome/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - C:/projects/aernhome:/host_c:ro
