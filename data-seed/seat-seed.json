@@ -1,0 +1,34 @@
+{
+  "_comment": "Second Brain seat seed — installed by the orchestrator to /data/seat.json on first deploy (or after a reset). Shape matches GET /api/seat: {updated_at, updated_by, projects: [{id, title, status, detail, next_step, blocked_on, links}]}. Edit via the /api/seat POST API, not this file directly — this is a reference/seed copy checked into git.",
+  "updated_at": "2026-07-06T12:00:00+00:00",
+  "updated_by": "claude-code@trainer",
+  "projects": [
+    {
+      "id": "nentera-ssd-restore",
+      "title": "NenTera SSD restore",
+      "status": "blocked",
+      "detail": "NenTera's SSD failed 2026-07-03. Host has been down since; Trainer is acting as interim fleet admin over Tailscale/SSH to Ashaman. Replacement SSD is in hand.",
+      "next_step": "Run the extract script Wed 7/8 to pull the TCG canonical DB and configs off the old drive before reimaging.",
+      "blocked_on": "aern",
+      "links": []
+    },
+    {
+      "id": "tcg-price-fetch-interim",
+      "title": "TCG price-fetch interim workaround",
+      "status": "parked",
+      "detail": "Ashaman's mirror keeps sales/orders flowing, but the daily price fetch normally runs on NenTera. Parked on hold per Aern until NenTera is back up.",
+      "next_step": "Revisit once the NenTera SSD restore lands — likely just re-point the scheduled task at Ashaman in the interim, or wait it out.",
+      "blocked_on": null,
+      "links": []
+    },
+    {
+      "id": "fable-successor-handoff",
+      "title": "Fable → successor model handoff",
+      "status": "active",
+      "detail": "Documenting fleet conventions, gotchas, and lessons learned so a new model generation can pick up full context cleanly. This second-brain layer (seat/queue/needs-Aern) is the durable part of that handoff.",
+      "next_step": "Keep seat.json and queue.json current as work moves across sessions and machines — this is the thing that replaces re-deriving context from scratch.",
+      "blocked_on": null,
+      "links": []
+    }
+  ]
+}

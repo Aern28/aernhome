@@ -203,9 +203,64 @@ async function loadTcgOps() {
     }
 }
 
+/**
+ * "The Verdict" card — client-side render of /api/finance-verdict, a small
+ * rule-based editorial summary written monthly by
+ * aern-finance/finance_verdict.py (finance-check loop). The endpoint 404s
+ * (same gate as everything else, or the file simply isn't there yet) —
+ * either way the card hides itself rather than showing an error.
+ */
+function renderFinanceVerdict(data) {
+    const section = document.getElementById('verdict-section');
+    if (!section) return;
+
+    if (!data || data.available === false) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    const headlineEl = document.getElementById('verdict-headline');
+    const listEl = document.getElementById('verdict-list');
+    const asOfEl = document.getElementById('verdict-as-of');
+    const staleEl = document.getElementById('verdict-stale-note');
+
+    if (headlineEl) headlineEl.textContent = data.headline || 'No headline yet.';
+
+    if (listEl) {
+        const verdicts = Array.isArray(data.verdicts) ? data.verdicts : [];
+        listEl.innerHTML = verdicts.length
+            ? verdicts.map((v) => `<li class="text-sm text-gray-200">${tcgOpsEscapeHtml(v)}</li>`).join('')
+            : '<li class="text-sm text-gray-400">No verdicts yet.</li>';
+    }
+
+    if (asOfEl) asOfEl.textContent = tcgOpsRelativeTime(data.generated_at);
+
+    if (staleEl) staleEl.classList.toggle('hidden', !data.stale);
+
+    section.classList.remove('hidden');
+}
+
+async function loadFinanceVerdict() {
+    try {
+        const res = await fetch('/api/finance-verdict');
+        if (!res.ok) {
+            renderFinanceVerdict(null);
+            return;
+        }
+        const data = await res.json();
+        renderFinanceVerdict(data || null);
+    } catch (err) {
+        console.error('Failed to load finance verdict:', err);
+        renderFinanceVerdict(null);
+    }
+}
+
 function startTcgOpsAutoRefresh() {
     if (tcgOpsUpdateTimer) clearInterval(tcgOpsUpdateTimer);
-    tcgOpsUpdateTimer = setInterval(loadTcgOps, TCGOPS_UPDATE_INTERVAL);
+    tcgOpsUpdateTimer = setInterval(() => {
+        loadTcgOps();
+        loadFinanceVerdict();
+    }, TCGOPS_UPDATE_INTERVAL);
 }
 
 function stopTcgOpsAutoRefresh() {
@@ -217,6 +272,7 @@ function stopTcgOpsAutoRefresh() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadTcgOps();
+    loadFinanceVerdict();
     startTcgOpsAutoRefresh();
 
     document.addEventListener('visibilitychange', () => {
@@ -224,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stopTcgOpsAutoRefresh();
         } else {
             loadTcgOps();
+            loadFinanceVerdict();
             startTcgOpsAutoRefresh();
         }
     });

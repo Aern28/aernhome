@@ -1,0 +1,21 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Needs Aern{% endblock %}
+
+{% block nexus_content %}
+<!-- THE lane: everything waiting on the human, priority-ordered. Phone-first —
+     big touch targets, minimal chrome. Fetched client-side from
+     /api/needs-aern, re-rendered every 60s. -->
+
+<div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <p class="text-sm text-gray-400">Everything waiting on you. Priority order, top to bottom.</p>
+    <p class="text-xs text-gray-400">Checked: <span id="aern-generated-at">—</span></p>
+</div>
+
+<div id="aern-list" class="space-y-3">
+    <p class="text-sm text-gray-400">Loading…</p>
+</div>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script src="/static/js/nexus_sb.js"></script>
+{% endblock %}

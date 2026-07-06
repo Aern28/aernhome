@@ -1,0 +1,73 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Queue{% endblock %}
+
+{% block nexus_content %}
+<!-- Bidirectional queue: agents post non-urgent findings/questions for Aern
+     (to_aern), Aern posts next-session work for the fleet (to_fleet). All
+     data fetched client-side from /api/queue and re-rendered every 60s. -->
+
+<div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <p class="text-sm text-gray-400">Non-urgent findings and questions, both directions. Urgent? That's <a href="/nexus/aern" class="text-blue-400 hover:underline">/nexus/aern</a>, not here.</p>
+    <p class="text-xs text-gray-400">Last refresh: <span id="queue-last-update">—</span></p>
+</div>
+
+<!-- Add item -->
+<section class="mb-6">
+    <form data-sb-queue-form class="bg-dark-card border border-dark-border rounded-lg p-4 space-y-2">
+        <textarea name="text" required rows="2" placeholder="Finding, question, or next-session task…"
+                  class="w-full bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"></textarea>
+        <div class="flex flex-wrap gap-2">
+            <select name="dir" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
+                <option value="to_aern">→ For Aern</option>
+                <option value="to_fleet">→ For the fleet</option>
+            </select>
+            <select name="priority" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
+                <option value="1">P1 — highest</option>
+                <option value="2" selected>P2</option>
+                <option value="3">P3 — lowest</option>
+            </select>
+            <input type="text" name="source" autocomplete="off" placeholder="source — url, path, or command (please fill this in)"
+                   class="flex-1 min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+            <input type="text" name="created_by" autocomplete="off" placeholder="posted by (e.g. claude-code@nentera)"
+                   class="flex-1 min-w-[180px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm">Add to queue</button>
+            <span data-sb-err class="text-xs text-red-400"></span>
+        </div>
+    </form>
+</section>
+
+<!-- Two columns: For Aern / For the fleet -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <section>
+        <h3 class="text-lg font-semibold text-white mb-3">📥 For Aern</h3>
+        <ul id="queue-to-aern-open" class="space-y-2 mb-3">
+            <li class="text-sm text-gray-400">Loading…</li>
+        </ul>
+        <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+            <summary class="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-gray-300">✅ Done</summary>
+            <ul id="queue-to-aern-done" class="px-4 pb-3 pt-2 border-t border-dark-border space-y-2">
+                <li class="text-xs text-gray-400">Loading…</li>
+            </ul>
+        </details>
+    </section>
+
+    <section>
+        <h3 class="text-lg font-semibold text-white mb-3">📤 For the fleet</h3>
+        <ul id="queue-to-fleet-open" class="space-y-2 mb-3">
+            <li class="text-sm text-gray-400">Loading…</li>
+        </ul>
+        <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+            <summary class="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-gray-300">✅ Done</summary>
+            <ul id="queue-to-fleet-done" class="px-4 pb-3 pt-2 border-t border-dark-border space-y-2">
+                <li class="text-xs text-gray-400">Loading…</li>
+            </ul>
+        </details>
+    </section>
+</div>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script src="/static/js/nexus_sb.js"></script>
+{% endblock %}

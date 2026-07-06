@@ -42,6 +42,9 @@ HOST_STATS_PATH = os.path.join(DATA_DIR, "host_stats.json")
 CANARY_PATH = os.path.join(DATA_DIR, "canary.json")
 CANARY_STALE_H = 26  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 
+FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
+FINANCE_VERDICT_STALE_DAYS = 35  # finance-check is a monthly loop; give it a few days' slack
+
 WORKSPACE_ALIVE_PATH = "/workspace/.bot_alive"
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
@@ -824,3 +827,42 @@ def api_tcg_ops():
         "prices": prices,
         "mirror": mirror,
     })
+
+
+@fleet_bp.route("/api/finance-verdict")
+def api_finance_verdict():
+    """The Verdict card: passthrough of /data/finance_verdict.json, written
+    monthly by aern-finance/finance_verdict.py (finance-check loop). Same
+    Tailscale-only gate as the rest of the Nexus API. 404s (not 500s) when
+    the file is missing, same as _is_nexus_allowed()'s gate failure, so the
+    frontend's "hide gracefully" and "wrong network" paths look identical to
+    a caller — the card itself distinguishes "missing" from "stale" by
+    checking for a body."""
+    if not _is_nexus_allowed():
+        abort(404)
+
+    try:
+        with open(FINANCE_VERDICT_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[fleet] finance-verdict read failed: {e}")
+        return jsonify({"available": False}), 404
+
+    if not isinstance(data, dict):
+        return jsonify({"available": False}), 404
+
+    stale = None
+    generated_at = data.get("generated_at")
+    if generated_at:
+        try:
+            when = dt.datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=dt.timezone.utc)
+            age_days = (dt.datetime.now(dt.timezone.utc) - when).total_seconds() / 86400
+            stale = age_days > FINANCE_VERDICT_STALE_DAYS
+        except ValueError:
+            stale = None
+
+    data["available"] = True
+    data["stale"] = stale
+    return jsonify(data)

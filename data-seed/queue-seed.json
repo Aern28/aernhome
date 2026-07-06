@@ -1,0 +1,38 @@
+{
+  "_comment": "Second Brain queue seed — installed by the orchestrator to /data/queue.json on first deploy (or after a reset). Shape matches GET /api/queue: {items: [{id, dir, text, source, priority, created_at, created_by, status, resolved_at}]}. Edit via the /api/queue POST APIs, not this file directly — this is a reference/seed copy checked into git.",
+  "items": [
+    {
+      "id": "9f3a1c2d",
+      "dir": "to_aern",
+      "text": "Selector canary flagged the PirateShip ship form as a possible drift risk — worth a manual look before it breaks the unattended ship-label pipeline.",
+      "source": "canary 2026-07-06 — pirateship_ship_form check (canary/tcg_selector_canary.py)",
+      "priority": 2,
+      "created_at": "2026-07-06T13:00:00+00:00",
+      "created_by": "canary",
+      "status": "open",
+      "resolved_at": null
+    },
+    {
+      "id": "4b7e2f10",
+      "dir": "to_aern",
+      "text": "The cmdkey-stored credential for the Ashaman backup UNC share should be verified/rotated — the old mapped-drive (H:) scheduled task silently failed outside interactive logon sessions until this was caught on the Fleet board.",
+      "source": "fleet board — nexus_backup.py:26",
+      "priority": 2,
+      "created_at": "2026-07-05T09:00:00+00:00",
+      "created_by": "claude-code@ashaman",
+      "status": "open",
+      "resolved_at": null
+    },
+    {
+      "id": "c81d5e6a",
+      "dir": "to_aern",
+      "text": "Need this year's paystub YTD federal/state withholding numbers to finish the safe-harbor estimated-tax verdict for this month's finance-check.",
+      "source": "finance-check 2026-07-06",
+      "priority": 1,
+      "created_at": "2026-07-06T08:00:00+00:00",
+      "created_by": "claude-code@trainer",
+      "status": "open",
+      "resolved_at": null
+    }
+  ]
+}

@@ -2,6 +2,27 @@
 {% block nexus_title %}TCG{% endblock %}
 
 {% block nexus_content %}
+<!-- The Verdict — client-fetched from /api/finance-verdict, a short
+     rule-based editorial summary (not a data dump) written monthly by
+     aern-finance/finance_verdict.py. Starts hidden; JS reveals it only when
+     the file exists, so a missing verdict degrades gracefully to nothing
+     rather than an empty/broken card. -->
+<section id="verdict-section" class="mb-6 hidden">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="text-lg font-semibold text-white">📋 The Verdict</h3>
+        <span class="text-xs text-gray-400">as of <span id="verdict-as-of">—</span></span>
+    </div>
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div id="verdict-headline" class="text-xl font-bold text-white mb-3">—</div>
+        <ul id="verdict-list" class="space-y-2">
+            <li class="text-sm text-gray-400">Loading…</li>
+        </ul>
+        <div id="verdict-stale-note" class="hidden bg-dark-card border-l-4 border-l-amber-500 border border-dark-border rounded-lg px-4 py-2 mt-3 text-xs text-amber-300">
+            Stale — run <code class="text-amber-300">/finance-check</code>.
+        </div>
+    </div>
+</section>
+
 <!-- Ops strip — client-fetched from /api/tcg-ops, refreshed every 30s (same
      pattern as nexus_fleet.js). Nothing here depends on server-rendered
      context beyond the shared nexus_base layout. -->

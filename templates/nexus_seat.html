@@ -1,0 +1,38 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Seat{% endblock %}
+
+{% block nexus_content %}
+<!-- All data below is fetched client-side from /api/seat and re-rendered every
+     60s. Nothing here depends on server-rendered context beyond the shared
+     nexus_base layout — same pattern as nexus_fleet.html. -->
+
+<div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <p class="text-sm text-gray-400">Seat handoff — the fleet's in-flight state, one URL, any machine, any session.</p>
+    <p class="text-xs text-gray-400">Updated <span id="seat-updated-at">—</span> by <span id="seat-updated-by">—</span></p>
+</div>
+
+<div id="seat-groups">
+    <p class="text-sm text-gray-400">Loading seat…</p>
+</div>
+
+<!-- How to update — the curl one-liner any agent session can paste. -->
+<section class="mt-8">
+    <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+        <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-white">
+            🛠️ How to update
+        </summary>
+        <div class="px-4 pb-4 pt-3 border-t border-dark-border space-y-2">
+            <p class="text-xs text-gray-400">Upsert a single project by id (missing fields keep their current value):</p>
+            <pre class="font-mono text-[11px] text-gray-300 bg-dark-bg border border-dark-border rounded-md px-3 py-2 whitespace-pre-wrap break-words">curl -X POST https://aern.dev/api/seat \
+  -H "Content-Type: application/json" \
+  -d '{"updated_by":"claude-code@nentera","project":{"id":"nentera-ssd-restore","title":"NenTera SSD restore","status":"blocked","blocked_on":"aern","detail":"...","next_step":"..."}}'</pre>
+            <p class="text-xs text-gray-400">Set a project's <code class="font-mono text-gray-300">status</code> to <code class="font-mono text-gray-300">"done"</code>, then clear it out with:</p>
+            <pre class="font-mono text-[11px] text-gray-300 bg-dark-bg border border-dark-border rounded-md px-3 py-2 whitespace-pre-wrap break-words">curl -X POST https://aern.dev/api/seat/prune -H "Content-Type: application/json" -d '{"updated_by":"claude-code@nentera"}'</pre>
+        </div>
+    </details>
+</section>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script src="/static/js/nexus_sb.js"></script>
+{% endblock %}

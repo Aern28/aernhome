@@ -1,0 +1,23 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}{{ month.title }}{% endblock %}
+
+{% block nexus_content %}
+<div class="max-w-3xl mx-auto">
+    <a href="/nexus/ledger" class="text-xs text-gray-400 hover:text-gray-200">← the ledger</a>
+    <h2 class="text-3xl font-bold text-white mt-2 mb-1">{{ month.title }}</h2>
+    <p class="text-xs text-gray-400 mb-6">{{ month.words }} words</p>
+
+    <article class="nx-prose">{{ month.html | safe }}</article>
+
+    <div class="flex items-center justify-between mt-8 pt-3 border-t border-dark-border text-sm">
+        {% if prev_ym %}
+        <a href="/nexus/ledger/{{ prev_ym }}" class="text-gray-400 hover:text-gray-200">← previous month</a>
+        {% else %}
+        <span></span>
+        {% endif %}
+        {% if next_ym %}
+        <a href="/nexus/ledger/{{ next_ym }}" class="text-gray-400 hover:text-gray-200">next month →</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -16,6 +16,8 @@ import shutil
 import nexus_writes as ns_writes
 import nexus_md
 import fleet
+import second_brain
+import ledger
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -53,6 +55,8 @@ except ImportError:
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
 app.register_blueprint(fleet.fleet_bp)
+app.register_blueprint(second_brain.sb_bp)
+app.register_blueprint(ledger.ledger_bp)
 
 
 @app.context_processor
@@ -954,7 +958,14 @@ NEXUS_SECTIONS = [
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
     ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
+    ("/nexus/aern",       "For Aern",    "🎯", "Everything waiting on you"),
+    ("/nexus/queue",      "Queue",       "📮", "You ↔ the fleet"),
+    ("/nexus/ledger",     "Ledger",      "📔", "The year, written down"),
 ]
+
+# Blueprints (second_brain, ledger) render nexus pages outside app.py and pull
+# the shared nav from config.
+app.config["NEXUS_SECTIONS"] = NEXUS_SECTIONS
 
 
 @app.route("/nexus")
