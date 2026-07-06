@@ -15,6 +15,7 @@ import psutil
 import shutil
 import nexus_writes as ns_writes
 import nexus_md
+import fleet
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -51,6 +52,7 @@ except ImportError:
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
+app.register_blueprint(fleet.fleet_bp)
 
 
 @app.context_processor
@@ -1694,5 +1696,6 @@ def api_season():
 if __name__ == "__main__":
     init_db()
     init_nexus_db()
+    fleet.start_sentinel()
     # Bind to 0.0.0.0 to allow external access (Tailscale)
     app.run(host="0.0.0.0", port=5555, debug=False)
