@@ -485,13 +485,50 @@ def delete_doc(doc_id):
         conn.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
 
 
-# ── Media (media_status; tv/movie/game — covers via TMDB) ─────────────────────
-# Generalized watch/play tracker. Surfaced as the TV shelf now; movies/games drop
+# ── Media (media_status; tv/movie/game — covers via TMDB/IGDB) ─────────────────
+# Generalized watch/play tracker. Surfaced as the TV/Games shelves; movies drop
 # into the same table later. Canonical in nexus.db — the on-ramp to retiring the
-# Notion Media Tracker (Phase 4). Posters are remote TMDB CDN URLs (no local file
-# serving needed), so the shelf <img> points straight at image.tmdb.org.
+# Notion Media Tracker (Phase 4). Posters are localized the same way book covers
+# are (nexus_books_import.materialize_covers): downloaded once into
+# DATA_DIR/media_covers/<kind>-<id>.<ext> and poster_url rewritten to that
+# relative path, so the shelf works offline and doesn't hotlink TMDB/IGDB on
+# every page load. poster_url still holds a remote http(s) URL as a fallback
+# when the download fails (never blocks the add), or None when there was
+# nothing to enrich with (the shelf falls back to an emoji placeholder).
 _MEDIA_ORDER = "CASE status WHEN 'watching' THEN 0 WHEN 'want' THEN 1 ELSE 2 END"
 _MEDIA_STATUSES = ("want", "watching", "watched")
+_MEDIA_COVERS_DIR = "media_covers"
+
+
+def _media_cover_dest(kind, media_id, url):
+    """Local dest path (DATA_DIR/media_covers/<kind>-<id>.<ext>) and the relative
+    ref that gets stored in poster_url, for a given remote poster/cover url."""
+    ext = os.path.splitext((url or "").split("?")[0])[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        ext = ".jpg"
+    rel = "%s/%s-%d%s" % (_MEDIA_COVERS_DIR, kind, media_id, ext)
+    data_dir = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
+    return os.path.join(data_dir, rel.replace("/", os.sep)), rel
+
+
+def localize_poster(kind, media_id, url):
+    """Best-effort download of a remote poster/cover url into the portable
+    media_covers/ store, matching the book-covers convention. Returns the
+    relative ref to store in poster_url on success, or the original url
+    unchanged on any failure (never raises, never blocks the caller)."""
+    if not url:
+        return url
+    try:
+        import nexus_sources as ns
+    except Exception:
+        return url
+    dest_path, rel = _media_cover_dest(kind, media_id, url)
+    try:
+        if ns.download_poster_image(url, dest_path):
+            return rel
+    except Exception:
+        pass
+    return url
 
 
 def add_media(title, kind="tv", status="want", tmdb_id=None, poster_url=None,
@@ -510,7 +547,16 @@ def add_media(title, kind="tv", status="want", tmdb_id=None, poster_url=None,
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (kind, title, status, tmdb_id or None, poster_url or None,
              (overview or "").strip() or None, (str(year).strip() if year else None)))
-        return cur.lastrowid
+        media_id = cur.lastrowid
+        # Localize the remote poster/cover right away so the row is offline-ready
+        # from the moment it's added. Degrades to the remote url (still stored
+        # above) on any download failure — never blocks the add.
+        if poster_url and str(poster_url).lower().startswith(("http://", "https://")):
+            local_ref = localize_poster(kind, media_id, poster_url)
+            if local_ref != poster_url:
+                conn.execute("UPDATE media_status SET poster_url = ? WHERE id = ?",
+                             (local_ref, media_id))
+        return media_id
 
 
 def list_media(kind="tv", status=None):
@@ -576,6 +622,16 @@ def set_media_rating(media_id, rating):
 def delete_media(media_id):
     with closing(_conn()) as conn, conn:
         conn.execute("DELETE FROM media_status WHERE id = ?", (media_id,))
+
+
+def media_poster_path(media_id):
+    """Return the stored poster_url ref for a media row (used by the gated
+    media-cover route). Mirrors book_cover_path — same double duty: an
+    http(s) url, a media_covers/ relative ref, or None."""
+    with closing(_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT poster_url FROM media_status WHERE id = ?", (media_id,)).fetchone()
+        return row["poster_url"] if row else None
 
 
 # ── Feed (incoming generated briefs: n8n digests + Aernbot Notebook + …) ──────

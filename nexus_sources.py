@@ -325,6 +325,39 @@ def igdb_search(query):
     }
 
 
+def download_poster_image(url, dest_path, timeout=10):
+    """Download a TMDB/IGDB poster/cover URL to dest_path. Returns True on success,
+    False on any failure (bad url, network error, non-2xx, empty body) — never
+    raises. Mirrors the offline-first approach nexus_books_import.py uses for book
+    covers: fetch once, keep a local copy, so the shelf works with no network and
+    without leaking browsing to third-party CDNs on every page load. Writes to a
+    temp file first and renames into place so a failed download never leaves a
+    truncated/partial image at dest_path."""
+    if not url or not str(url).lower().startswith(("http://", "https://")):
+        return False
+    tmp_path = dest_path + ".part"
+    try:
+        resp = requests.get(url, timeout=timeout, stream=True)
+        resp.raise_for_status()
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+        if os.path.getsize(tmp_path) == 0:
+            os.remove(tmp_path)
+            return False
+        os.replace(tmp_path, dest_path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+        return False
+
+
 def todoist_close(task_id):
     """Complete a Todoist task by id. Returns True on success, False otherwise.
     Token resolved via _get_todoist_token() (never logged). Never raises."""

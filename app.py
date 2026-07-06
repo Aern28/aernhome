@@ -464,8 +464,10 @@ def init_nexus_db():
     """)
 
     # Media status — generalized watch/play tracker (tv|movie|game). Surfaced as the
-    # TV shelf now; canonical going forward (on-ramp to retiring the Notion Media
-    # Tracker). Posters are remote TMDB CDN URLs, so no local cover serving needed.
+    # TV/Games shelves; canonical going forward (on-ramp to retiring the Notion Media
+    # Tracker). poster_url is localized into DATA_DIR/media_covers/ on add (mirrors
+    # book_status.cover_ref) and served through /nexus/media_cover/<id>; it falls
+    # back to the remote TMDB/IGDB CDN url when the download failed.
     cur.execute("""
         CREATE TABLE IF NOT EXISTS media_status (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1073,6 +1075,32 @@ def nexus_cover(book_id):
     path = ref if os.path.isabs(ref) else os.path.join(DATA_DIR, ref)
     path = os.path.normpath(path)
     if not any(path.startswith(root + os.sep) for root in _COVER_ROOTS) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
+
+
+# Root the media-cover route is allowed to serve local files from — same pattern
+# as _COVER_ROOTS for books. media_covers/ under DATA_DIR is the only local root
+# (no legacy absolute refs here; TV/games posters were always TMDB/IGDB urls).
+_MEDIA_COVER_ROOTS = [os.path.normpath(os.path.join(DATA_DIR, "media_covers"))]
+
+
+@app.route("/nexus/media_cover/<int:mid>")
+def nexus_media_cover(mid):
+    """Serve a TV/game poster. Tailscale-only; resolves the stored poster_url and
+    only serves files under the whitelisted media_covers/ root (or redirects an
+    http(s) poster still pending localization / whose download failed).
+    Mirrors nexus_cover() for books exactly."""
+    if not _is_nexus_allowed():
+        abort(404)
+    ref = ns_writes.media_poster_path(mid)
+    if not ref:
+        abort(404)
+    if str(ref).lower().startswith(("http://", "https://")):
+        return redirect(ref)
+    path = ref if os.path.isabs(ref) else os.path.join(DATA_DIR, ref)
+    path = os.path.normpath(path)
+    if not any(path.startswith(root + os.sep) for root in _MEDIA_COVER_ROOTS) or not os.path.isfile(path):
         abort(404)
     return send_from_directory(os.path.dirname(path), os.path.basename(path))
 

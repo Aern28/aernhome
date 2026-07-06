@@ -283,7 +283,7 @@
             {% for m in data.watching %}
             <li class="flex items-center gap-3">
                 {% if m.poster_url %}
-                <img src="{{ m.poster_url }}" alt="" loading="lazy" class="w-8 h-11 shrink-0 rounded object-cover border border-dark-border">
+                <img src="/nexus/media_cover/{{ m.id }}" alt="" loading="lazy" class="w-8 h-11 shrink-0 rounded object-cover border border-dark-border">
                 {% else %}
                 <div class="w-8 h-11 shrink-0 rounded bg-dark-bg border border-dark-border flex items-center justify-center text-gray-400 text-lg">📺</div>
                 {% endif %}
@@ -310,7 +310,7 @@
             {% for m in data.playing %}
             <li class="flex items-center gap-3">
                 {% if m.poster_url %}
-                <img src="{{ m.poster_url }}" alt="" loading="lazy" class="w-8 h-11 shrink-0 rounded object-cover border border-dark-border">
+                <img src="/nexus/media_cover/{{ m.id }}" alt="" loading="lazy" class="w-8 h-11 shrink-0 rounded object-cover border border-dark-border">
                 {% else %}
                 <div class="w-8 h-11 shrink-0 rounded bg-dark-bg border border-dark-border flex items-center justify-center text-gray-400 text-lg">🎮</div>
                 {% endif %}

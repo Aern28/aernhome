@@ -8,7 +8,7 @@
 <div class="bg-dark-card border border-dark-border rounded-lg p-3" data-media="{{ m.id }}">
     <div class="aspect-[3/4] rounded bg-dark-bg border border-dark-border overflow-hidden mb-2 flex items-center justify-center relative">
         {% if m.poster_url %}
-        <img src="{{ m.poster_url }}" alt="" loading="lazy" class="w-full h-full object-cover"
+        <img src="/nexus/media_cover/{{ m.id }}" alt="" loading="lazy" class="w-full h-full object-cover"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         {% endif %}
         <div class="w-full h-full items-center justify-center text-gray-400 text-3xl" style="display:{% if m.poster_url %}none{% else %}flex{% endif %}">🎮</div>
