@@ -152,15 +152,15 @@ function Test-TcgAutoprocess {
 
 function Test-NexusBackup {
     $id = "nexus_backup"
-    $label = "Nexus Backup (H:)"
+    $label = "Nexus Backup (NAS)"
     try {
-        if (-not (Test-Path "H:\")) {
-            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "H: not accessible from this session - daily backups likely failing"
-        }
-
-        $dir = "H:\aernhome\backups"
+        # UNC to match nexus_backup.py (2026-07-06); mapped H: only exists in
+        # interactive sessions. Note: reading this UNC needs the cmdkey-stored
+        # NAS credential, which DPAPI only unlocks in password/interactive
+        # logons - the scheduled-task run sees it, key-auth SSH does not.
+        $dir = "\\192.168.1.118\home\aernhome\backups"
         if (-not (Test-Path $dir)) {
-            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "Backup directory not found: $dir"
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "NAS backup dir not reachable ($dir) - credential missing or share down"
         }
 
         $newest = Get-ChildItem -Path $dir -File -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 1
