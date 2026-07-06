@@ -535,7 +535,10 @@ def api_fleet():
             "status": entry.get("status", "unknown"),
             "detail": entry.get("detail", ""),
             "last_change": entry.get("last_change"),
-            "history": entry.get("history", []),
+            # UI contract: oldest-first 1/0 ticks (1 = up); internal state keeps
+            # the richer {status, ts} records.
+            "history": [1 if h.get("status") == "up" else 0
+                        for h in entry.get("history", []) if isinstance(h, dict)],
         }
         for cid, entry in checks_state.items()
     ]

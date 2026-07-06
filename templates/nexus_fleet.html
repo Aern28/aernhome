@@ -1,0 +1,43 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Fleet{% endblock %}
+
+{% block nexus_content %}
+<!-- All data below is fetched client-side from /api/fleet and re-rendered every 30s.
+     Nothing here depends on server-rendered context beyond the shared nexus_base layout. -->
+
+<div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <p class="text-sm text-gray-400">Aernbot · TCG business · infra · host — one glance, polled every 30s.</p>
+    <p class="text-xs text-gray-400">Server snapshot: <span id="fleet-generated-at">—</span></p>
+</div>
+
+<!-- Down banner — hidden until JS finds a down check -->
+<div id="fleet-down-banner" class="hidden bg-red-900/50 border border-red-700/50 text-red-300 rounded-lg px-4 py-3 mb-4">
+    <span class="font-semibold">⚠ Down:</span> <span data-fleet-down-list></span>
+</div>
+
+<!-- Group sections, rendered by nexus_fleet.js -->
+<div id="fleet-groups">
+    <p class="text-sm text-gray-400">Loading fleet status…</p>
+</div>
+
+<!-- Recent alerts (collapsible, newest first) -->
+<section class="mt-2 mb-4">
+    <details id="fleet-alerts" class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+        <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-white">
+            📋 Recent alerts
+        </summary>
+        <ul id="fleet-alerts-list" class="px-4 pb-4 pt-3 border-t border-dark-border space-y-2">
+            <li class="text-sm text-gray-400">Loading…</li>
+        </ul>
+    </details>
+</section>
+
+<!-- Last-updated stamp (bottom-right, matches the main dashboard's pattern) -->
+<div id="fleet-status-indicator" class="fixed bottom-4 right-4 text-xs text-gray-500">
+    <span id="fleet-last-update">Loading...</span>
+</div>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script src="/static/js/nexus_fleet.js"></script>
+{% endblock %}

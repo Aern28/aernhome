@@ -849,6 +849,7 @@ NEXUS_SECTIONS = [
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
+    ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
 ]
 
 
@@ -984,6 +985,13 @@ def nexus_infra():
     import nexus_sources as ns
     return render_template("nexus_infra.html", sections=NEXUS_SECTIONS, active="/nexus/infra",
                            infra=ns.infra_summary())
+
+
+@app.route("/nexus/fleet")
+def nexus_fleet():
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_fleet.html", sections=NEXUS_SECTIONS, active="/nexus/fleet")
 
 
 @app.route("/nexus/tv")
