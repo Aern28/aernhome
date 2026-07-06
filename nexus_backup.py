@@ -21,7 +21,10 @@ import sqlite3
 from datetime import datetime
 
 SRC = os.path.join(os.environ.get("DATA_DIR", "C:/projects/aernhome/data"), "nexus.db")
-DEST_DIR = os.environ.get("NEXUS_BACKUP_DIR", "H:/aernhome/backups")
+# UNC default: mapped drives (H:) only exist in interactive logon sessions, so the
+# scheduled task silently failed whenever it ran elsewhere (found 2026-07-05 by the
+# Fleet board). UNC + a cmdkey-stored credential works from any session.
+DEST_DIR = os.environ.get("NEXUS_BACKUP_DIR", r"\\192.168.1.118\home\aernhome\backups")
 KEEP = int(os.environ.get("NEXUS_BACKUP_KEEP", "14"))
 
 
