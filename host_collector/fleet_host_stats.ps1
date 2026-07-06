@@ -342,9 +342,22 @@ function Test-MattSession {
     $id = "matt_session"
     $label = "Matt Interactive Session"
     try {
-        $raw = quser 2>$null
+        # quser.exe lives in Sysnative/System32 and is often off PATH in scheduled/SSH
+        # contexts; 32-bit PowerShell also needs the Sysnative alias to reach it.
+        $quserExe = @("$env:windir\System32\quser.exe", "$env:windir\Sysnative\quser.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($quserExe) {
+            $raw = cmd /c "`"$quserExe`" 2>nul"
+        } else {
+            $raw = $null
+        }
         if (-not $raw) {
-            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "No sessions returned by quser (or quser unavailable)"
+            # Fallback: an explorer.exe process implies an interactive session exists
+            $exp = Get-Process explorer -ErrorAction SilentlyContinue
+            if ($exp) {
+                return New-CheckResult -Id $id -Label $label -Status "up" -Detail "explorer.exe running (quser unavailable; session user unverified)"
+            }
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "No quser output and no explorer.exe - no interactive session"
         }
 
         $mattLines = @($raw | Where-Object { $_ -match '(?i)\bmatt\b' })
