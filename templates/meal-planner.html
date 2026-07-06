@@ -243,6 +243,7 @@
             <button onclick="clearWeek()" class="text-sm text-slate-500 hover:text-slate-300 no-print">Clear Week</button>
           </div>
         </div>
+        <div id="sync-note" class="text-xs text-slate-500 no-print mb-2"></div>
 
         <!-- Week Grid -->
         <div class="week-grid grid grid-cols-1 gap-3 mb-8">
@@ -369,6 +370,8 @@
 
     async function syncToTRMNL() {
       const btn = document.getElementById('sync-btn');
+      const note = document.getElementById('sync-note');
+      if (note) note.textContent = '';
       const week = {};
       for (const day of days) {
         const mealId = state.week[day];
@@ -382,15 +385,19 @@
       }
 
       if (Object.keys(week).length === 0) {
-        alert('No meals assigned yet — pick some meals for the week first.');
+        if (note) note.textContent = 'No meals assigned yet — pick some meals for the week first.';
         return;
       }
 
       btn.textContent = '⏳ Syncing...';
       btn.disabled = true;
 
+      // Legacy n8n webhook (TRMNL family meal display). Hits an n8n instance on
+      // Ashaman over Tailscale; this workflow is barely used and is a candidate
+      // for retirement — see NEXUS_DEPLOY.md Phase 4. Failure here is expected
+      // and handled below (non-blocking note), never a hard error for the user.
       try {
-        const resp = await fetch('https://ashaman-1.tail125d67.ts.net:5678/webhook/family-meal-sync', {
+        const resp = await fetch('https://ashaman.tail125d67.ts.net:5678/webhook/family-meal-sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ week }),
@@ -402,7 +409,7 @@
         console.error('Sync failed:', err);
         btn.textContent = '❌ Failed';
         setTimeout(() => { btn.textContent = '📡 Sync to TRMNL'; btn.disabled = false; }, 3000);
-        alert('Sync failed — make sure you\'re on Tailscale and Ashaman is running n8n.');
+        if (note) note.textContent = '⚠️ Sync unavailable — n8n webhook unreachable (this feature is legacy; the meal plan itself is unaffected).';
       }
     }
 

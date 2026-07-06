@@ -43,6 +43,12 @@ HOST_STATS_PATH = os.path.join(DATA_DIR, "host_stats.json")
 WORKSPACE_ALIVE_PATH = "/workspace/.bot_alive"
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
+# The machine that normally syncs `orders` off this read-only mirror died on
+# 2026-07-03. Everything recorded in `orders` from that date forward is
+# accumulating here unsynced until that host is restored — /api/tcg-ops
+# surfaces the count/value of that backlog so it isn't silently missed.
+TCG_OUTAGE_SINCE = "2026-07-03"
+
 FLEET_INTERVAL = int(os.environ.get("FLEET_INTERVAL", "60") or "60")
 HISTORY_LEN = 100
 ALERT_COOLDOWN_S = 10 * 60  # max 1 alert per check per 10 min
@@ -511,6 +517,154 @@ def start_sentinel():
     return t
 
 
+# ── TCG business ops (GET /api/tcg-ops) ───────────────────────────────────
+def _tcg_ops_connect():
+    """Open inventory.db read-only. Raises sqlite3.Error/OSError on failure —
+    callers are responsible for the try/except (same immutable=1+nolock=1
+    convention as check_price_fresh / tcg_plugin_data.py, needed for
+    Docker Desktop's grpcfuse read-only bind mount)."""
+    uri = f"file:{TCG_DB_PATH}?mode=ro&immutable=1&nolock=1"
+    con = sqlite3.connect(uri, uri=True, timeout=5)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _parse_ts_utc(value):
+    """Best-effort parse of the orders table's timestamp columns. Values are
+    written by app code as naive ISO strings (no offset); treated as UTC —
+    same convention as tcg_plugin_data.friendly_age() and check_price_fresh()
+    above, kept consistent so ages/freshness read the same everywhere."""
+    if not value:
+        return None
+    try:
+        when = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    return when
+
+
+def _tcg_ops_orders(con, now):
+    """Order-lifecycle snapshot. Every sub-query is independently wrapped so
+    one bad column/query degrades just that field to None, never the whole
+    response. No buyer/PII columns (buyer_name, shipping_address) are ever
+    selected — order ids, values, statuses, and timestamps only."""
+    out = {
+        "status_counts_30d": None,
+        "outage_window_orders": {"since": TCG_OUTAGE_SINCE, "count": None, "total_value": None},
+        "held": {"count": None, "orders": None},
+        "most_recent_order_at": None,
+    }
+
+    # labeled_at is the timestamp an order first lands in this table (set at
+    # insert time), i.e. the closest thing to a "recorded on this mirror" clock
+    # — used below for the 30d bucket, the outage-window count, and ages.
+    try:
+        cutoff30 = (now - dt.timedelta(days=30)).isoformat()
+        rows = con.execute(
+            "SELECT status, COUNT(*) FROM orders WHERE labeled_at >= ? GROUP BY status",
+            (cutoff30,),
+        ).fetchall()
+        out["status_counts_30d"] = {r[0] or "unknown": r[1] for r in rows}
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops status_counts_30d query failed: {e}")
+
+    try:
+        row = con.execute(
+            "SELECT COUNT(*), COALESCE(SUM(order_total), 0) FROM orders WHERE labeled_at >= ?",
+            (TCG_OUTAGE_SINCE,),
+        ).fetchone()
+        if row:
+            out["outage_window_orders"]["count"] = row[0]
+            out["outage_window_orders"]["total_value"] = round(row[1], 2) if row[1] is not None else None
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops outage_window_orders query failed: {e}")
+
+    try:
+        rows = con.execute(
+            "SELECT order_id, order_total, labeled_at FROM orders WHERE status = 'held' ORDER BY labeled_at ASC"
+        ).fetchall()
+        held = []
+        for r in rows:
+            when = _parse_ts_utc(r["labeled_at"])
+            age_hours = round((now - when).total_seconds() / 3600, 1) if when else None
+            held.append({"order_id": r["order_id"], "value": r["order_total"], "age_hours": age_hours})
+        out["held"]["count"] = len(held)
+        out["held"]["orders"] = held
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops held query failed: {e}")
+
+    try:
+        row = con.execute("SELECT MAX(labeled_at) FROM orders").fetchone()
+        out["most_recent_order_at"] = row[0] if row else None
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops most_recent_order_at query failed: {e}")
+
+    return out
+
+
+def _tcg_ops_prices(con):
+    """Price freshness. Per-category (products.category) MAX(date) via a join
+    — measured ~0.7s over 744k price rows / 35k products on the real mirror
+    (idx_prices_product_date makes it a single covering-index scan + temp
+    group-by), acceptable for a Tailscale-only page polled every 30s. Falls
+    back to an overall MAX(date) + row count for that date if the join errors
+    for any reason (e.g. a much larger table on a future mirror)."""
+    out = {"by_category": None, "overall_last_date": None, "overall_last_date_rows": None}
+
+    try:
+        row = con.execute("SELECT MAX(date) FROM prices").fetchone()
+        last_date = row[0] if row else None
+        out["overall_last_date"] = last_date
+        if last_date:
+            cnt = con.execute("SELECT COUNT(*) FROM prices WHERE date = ?", (last_date,)).fetchone()
+            out["overall_last_date_rows"] = cnt[0] if cnt else None
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops overall price freshness query failed: {e}")
+
+    try:
+        rows = con.execute(
+            "SELECT pr.category, MAX(p.date) FROM prices p "
+            "JOIN products pr ON pr.id = p.product_id "
+            "GROUP BY pr.category"
+        ).fetchall()
+        out["by_category"] = {(r[0] or "Unknown"): r[1] for r in rows}
+    except sqlite3.Error as e:
+        print(f"[fleet] tcg-ops by-category price freshness query failed: {e}")
+
+    return out
+
+
+def _tcg_ops_autoprocess():
+    """Passthrough of the tcg_autoprocess entry from /data/host_stats.json
+    (written by host_collector/fleet_host_stats.ps1 on Ashaman). None if the
+    file is missing/unparseable or that check id isn't present."""
+    try:
+        with open(HOST_STATS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    items = data.get("checks") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return None
+    for c in items:
+        if isinstance(c, dict) and c.get("id") == "tcg_autoprocess":
+            return c
+    return None
+
+
+def _tcg_ops_mirror():
+    """inventory.db file mtime + size — the read-only mount's own freshness,
+    independent of what's inside it."""
+    try:
+        st = os.stat(TCG_DB_PATH)
+    except OSError:
+        return {"mtime": None, "size_bytes": None}
+    mtime = dt.datetime.fromtimestamp(st.st_mtime, tz=dt.timezone.utc).isoformat()
+    return {"mtime": mtime, "size_bytes": st.st_size}
+
+
 # ── API ────────────────────────────────────────────────────────────────────
 def _is_nexus_allowed():
     """Same Tailscale-only gate as app.py's _is_nexus_allowed(): allow only
@@ -547,4 +701,62 @@ def api_fleet():
         "generated_at": state.get("generated_at"),
         "checks": checks_out,
         "recent_alerts": state.get("recent_alerts", [])[-20:],
+    })
+
+
+@fleet_bp.route("/api/tcg-ops")
+def api_tcg_ops():
+    """TCG business-ops strip: order backlog (esp. the 2026-07-03 sync-host
+    outage window), held orders, autoprocess status, price freshness, and
+    mirror age. Every section is independently wrapped so a single failing
+    query/file read degrades that section to nulls — this route never 500s.
+    No buyer/PII fields (buyer_name, shipping_address) are ever queried."""
+    if not _is_nexus_allowed():
+        abort(404)
+
+    now = dt.datetime.now(dt.timezone.utc)
+
+    orders = {
+        "status_counts_30d": None,
+        "outage_window_orders": {"since": TCG_OUTAGE_SINCE, "count": None, "total_value": None},
+        "held": {"count": None, "orders": None},
+        "most_recent_order_at": None,
+    }
+    prices = {"by_category": None, "overall_last_date": None, "overall_last_date_rows": None}
+
+    if os.path.exists(TCG_DB_PATH):
+        con = None
+        try:
+            con = _tcg_ops_connect()
+            orders = _tcg_ops_orders(con, now)
+            prices = _tcg_ops_prices(con)
+        except (sqlite3.Error, OSError) as e:
+            print(f"[fleet] tcg-ops db open failed: {e}")
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except sqlite3.Error:
+                    pass
+    else:
+        print(f"[fleet] tcg-ops: {TCG_DB_PATH} not found")
+
+    try:
+        autoprocess = _tcg_ops_autoprocess()
+    except Exception as e:
+        print(f"[fleet] tcg-ops autoprocess read crashed: {e}")
+        autoprocess = None
+
+    try:
+        mirror = _tcg_ops_mirror()
+    except Exception as e:
+        print(f"[fleet] tcg-ops mirror stat crashed: {e}")
+        mirror = {"mtime": None, "size_bytes": None}
+
+    return jsonify({
+        "generated_at": now.isoformat(),
+        "orders": orders,
+        "autoprocess": autoprocess,
+        "prices": prices,
+        "mirror": mirror,
     })

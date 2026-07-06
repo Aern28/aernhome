@@ -1,56 +1,107 @@
-# Nexus — deployment & remaining work
+# Nexus — deployment status & remaining work
 
-The nexus (Phases 0–3) is built, verified locally, and committed. It runs inside the
-existing `aernhome` Flask app, **Tailscale-only**, reached at
-`http://ashaman.tail125d67.ts.net:5555/nexus`. This file is the runbook for getting it
-live on Ashaman and the work that still needs you.
+The nexus (Phases 0–5) is built and **live** on Ashaman, Tailscale-only, at
+`http://ashaman.tail125d67.ts.net:5555/nexus`. **Ashaman is canonical** —
+write to the live site, not a dev checkout. This file now doubles as the
+runbook for shipping *changes* to it, plus the remaining Phase 4 follow-up.
 
-## Deploy to Ashaman — the 3-step finish (the build MUST be local, not SSH)
-Everything below the build is already prepped from NenTera (code pushed, `data/` staged).
-The one thing that can't be done remotely is `docker compose build` (BuildKit/cred + DERP
-drop kills it over SSH — see CLAUDE.md). So this finishes in a short **RDP-to-Ashaman**
-session:
+## Deploying changes (current workflow)
 
-1. **`git pull`** in `C:\projects\aernhome`.
-2. **Add the connector tokens to `C:\projects\aernhome\.env`** (gitignored; sits next to
-   the compose alongside the existing `AERNHOME_UNLOCK_TOKEN` / `CLOUDFLARE_TUNNEL_TOKEN`):
-   ```
-   TODOIST_TOKEN=<bw: "Todoist API Token" (notes)>
-   TMDB_TOKEN=<bw: "TMDB API Key" (notes)>
-   IGDB_CLIENT_ID=<bw: "Twitch IGDB" (username)>
-   IGDB_CLIENT_SECRET=<bw: "Twitch IGDB" (password)>
-   ```
-   Any left blank → that connector just degrades (Todoist widget empty / posters
-   title-only); nothing errors.
-3. **`docker compose build aernhome ; docker compose up -d`** — **locally on Ashaman**.
-   Verify on the mesh: `http://ashaman.tail125d67.ts.net:5555/nexus`.
+`docker-compose.yml` bind-mounts the repo checkout straight into `/app`
+(`C:/projects/aernhome:/app`), so day-to-day changes need **no rebuild**:
 
-`nexus.db` + `book_covers/` are shipped into the `/data` volume (staged via scp from
-NenTera), so books/TV/games/notes/goals are all there on first boot. After this, **Ashaman
-is canonical** — write to the live site, not the NenTera dev box.
+```powershell
+cd C:\projects\aernhome
+git pull
+docker restart aernhome-dashboard
+```
 
-## Books locality — RESOLVED (covers are portable)
-Books are seeded/maintained on **NenTera** (where Calibre + Obsidian live) and the covers
-are **materialized into `data/book_covers/<id>.jpg`** by `nexus_books_import.py`, with
-`cover_ref` rewritten to a `DATA_DIR`-relative path. So the whole `data/` dir (db + covers)
-ships to any host and covers serve with no Calibre/Obsidian mount and no re-import on
-Ashaman. TV/game posters are remote TMDB/IGDB URLs — portable by nature.
-**To refresh the shelf later:** run `py nexus_books_import.py` on NenTera, then re-ship
-`nexus.db` + `book_covers/` to Ashaman (same scp as the initial deploy). A two-way sync
-(like TCG's `db_sync.py`) is the eventual upgrade if book edits on the live site need to
-survive a reseed; for now reseeds are NenTera→Ashaman one-way.
+Rebuild only when `requirements.txt` (Python deps) changes:
+
+```powershell
+docker compose build aernhome
+docker compose up -d
+```
+
+**Dev host**: NenTera (laptop) is currently down for an SSD replacement
+(expected back ~2026-07-08) — Trainer (desktop) is the dev host in the
+meantime. Once NenTera is restored, either machine can develop from; either
+way, a full `docker compose build` still needs to run **locally on Ashaman**
+(RDP or console session), not over SSH — BuildKit's credential helper plus
+the Tailscale DERP relay reliably kill long builds over SSH (see the
+Trainer/NenTera CLAUDE.md "Docker" lessons). `git pull` + `docker restart`
+work fine over SSH.
+
+## Connector tokens (`.env` on Ashaman)
+
+Nexus connectors read their tokens from `C:\projects\aernhome\.env`
+(gitignored), alongside the existing `AERNHOME_UNLOCK_TOKEN` /
+`CLOUDFLARE_TUNNEL_TOKEN` / `SIGNAL_*` vars (see `README.md`):
+
+```
+TODOIST_TOKEN=<bw: "Todoist API Token" (notes)>
+TMDB_TOKEN=<bw: "TMDB API Key" (notes)>
+IGDB_CLIENT_ID=<bw: "Twitch IGDB" (username)>
+IGDB_CLIENT_SECRET=<bw: "Twitch IGDB" (password)>
+```
+
+Any left blank → that connector just degrades (Todoist widget empty / posters
+title-only); nothing errors. Only relevant again if Ashaman is reprovisioned
+from scratch — these are already set on the live host.
+
+## Data directory
+
+Everything the nexus (and the rest of the dashboard) owns lives under
+`C:\projects\aernhome\data` on Ashaman, bind-mounted to `/data` in the
+container: `dashboard.db`, `nexus.db`, `book_covers/`, `services.json` (see
+`README.md` → Configuration), `host_stats.json`, `nas_stats.json`. This is a
+local disk path on Ashaman, **not** a NAS/`H:` path — the NAS is only used
+for the H:/I: disk-usage cards and as the nexus backup destination below.
+
+## Books locality — covers are portable
+
+Books are seeded/maintained wherever Calibre + Obsidian live (historically
+NenTera; while NenTera is down, this pauses — Trainer isn't set up with
+those yet). Covers are **materialized into `data/book_covers/<id>.jpg`** by
+`nexus_books_import.py`, with `cover_ref` rewritten to a `DATA_DIR`-relative
+path, so the whole `data/` dir (db + covers) is portable across hosts and
+covers serve with no Calibre/Obsidian mount needed on Ashaman. TV/game
+posters are remote TMDB/IGDB URLs — portable by nature.
+
+**To refresh the shelf later:** run `py nexus_books_import.py` on whichever
+machine has Calibre + Obsidian, then ship `nexus.db` + `book_covers/` to
+Ashaman's `data/` dir. A two-way sync (like TCG's `db_sync.py`) is the
+eventual upgrade if book edits made on the live site need to survive a
+reseed; for now reseeds are one-way (dev host → Ashaman).
 
 ## Backups (Phase 5)
-`nexus_backup.py` does a safe online `.backup` of `nexus.db` → `NEXUS_BACKUP_DIR`
-(default `H:/aernhome/backups`), integrity-checked, keeps last 14. Schedule it daily on
-the host that runs the nexus (Task Scheduler), e.g. `py C:\projects\aernhome\nexus_backup.py`.
 
-## Phase 4 — Notion retirement (needs you + n8n, after deploy)
-The write APIs n8n needs already exist (`/api/nexus/capture`, `/api/nexus/maintenance`).
-Once the nexus is live on the mesh:
-1. Re-point the n8n **"Maintenance Log → Inbox"** + weather/capture flows to POST the
-   aernhome `/api/nexus/*` endpoints instead of Notion.
-2. Keep the **Media-Tracker enrichment** (IGDB/TMDB/OpenLibrary) feeding `book_status`
-   until the local book feed is proven, then retire it.
-3. Retire each Notion DB (Inbox → capture, Maintenance Log → maintenance) once its local
-   replacement is trusted. Decide the cutover per-DB.
+`nexus_backup.py` does a safe online `.backup` of `nexus.db` →
+`NEXUS_BACKUP_DIR` (default `H:/aernhome/backups`), integrity-checked, keeps
+last 14. Scheduled daily on Ashaman via Task Scheduler:
+`py C:\projects\aernhome\nexus_backup.py`.
+
+**Known issue**: this is currently **failing** — the `H:` mapped drive isn't
+reliably visible from the Task Scheduler service context that runs the
+backup job, even though it shows up fine in an interactive session. The
+Fleet board's `nexus_backup` check (see `README.md` → Fleet Board & Host
+Stats, and `host_collector/README.md`) exists specifically to surface this
+silently-failing job — it currently reports `down` with detail `"H: not
+accessible from this session"`. Not yet fixed; tracked on `/nexus/fleet`.
+
+## Phase 4 — Notion retirement (needs you + n8n)
+
+The write APIs n8n needs already exist (`/api/nexus/capture`,
+`/api/nexus/maintenance`). With the nexus live on the mesh:
+
+1. Re-point the n8n **"Maintenance Log → Inbox"** + weather/capture flows to
+   POST the aernhome `/api/nexus/*` endpoints instead of Notion.
+2. Keep the **Media-Tracker enrichment** (IGDB/TMDB/OpenLibrary) feeding
+   `book_status` until the local book feed is proven, then retire it.
+3. Retire each Notion DB (Inbox → capture, Maintenance Log → maintenance)
+   once its local replacement is trusted. Decide the cutover per-DB.
+
+Note: n8n itself (the automation running these flows) is flagged
+`"deprecated": true` in `services.json` — it's barely used day-to-day and is
+a longer-term retirement candidate once Phase 4 completes and any other
+n8n-only flows are migrated or dropped.

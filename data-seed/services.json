@@ -1,0 +1,108 @@
+{
+  "_comment": "AernHome dashboard service definitions. Edit this file and restart the container (`docker restart aernhome-dashboard`) to add, remove, or change a monitored service card — no code change or rebuild needed. Fields per entry: name (unique slug, required), display_name (required), url (health-check URL, or null for docker-only checks), check_type ('http'|'docker'|'both', required), docker_container (container name for docker checks, or null), icon_emoji (required), enabled (1 or 0, default 1), public_url (optional — link opened when the card is clicked by an internal/unlocked client; defaults to null), lan_only (optional bool — a failed HTTP check reports as 'unknown (LAN-only, unreachable from here)' instead of 'down', for services only reachable from the home LAN), deprecated (optional bool, documentation-only — the current UI has no badge for it), notes (optional free text, documentation-only). This is a reference/seed copy checked into git — the live, editable file the app actually reads is /data/services.json (bind-mounted, gitignored). If that file is missing, the app (re)writes it from its built-in defaults (identical to this file) on next startup. If it exists but fails to parse, a warning is logged and the built-in defaults are used for that run only — the bad file is left untouched so you can fix it. To reset a host back to defaults, copy this file over /data/services.json and restart.",
+  "services": [
+    {
+      "name": "n8n",
+      "display_name": "n8n Workflows",
+      "url": "http://n8n:5678/healthz",
+      "public_url": "https://ashaman.tail125d67.ts.net:5678",
+      "check_type": "both",
+      "docker_container": "n8n",
+      "icon_emoji": "⚡",
+      "enabled": 1,
+      "deprecated": true,
+      "notes": "Barely used; kept alive for legacy automations. Candidate for retirement (see NEXUS_DEPLOY.md Phase 4)."
+    },
+    {
+      "name": "jellyfin",
+      "display_name": "Jellyfin Media",
+      "url": "http://ashaman.tail125d67.ts.net:8096",
+      "public_url": "https://jellyfin.aern.dev",
+      "check_type": "http",
+      "docker_container": "jellyfin",
+      "icon_emoji": "🎬",
+      "enabled": 1
+    },
+    {
+      "name": "qbittorrent",
+      "display_name": "qBittorrent",
+      "url": "http://192.168.1.118:8080",
+      "public_url": "http://192.168.1.118:8080",
+      "check_type": "http",
+      "docker_container": "qbittorrent",
+      "icon_emoji": "🌊",
+      "enabled": 1,
+      "lan_only": true
+    },
+    {
+      "name": "open-webui",
+      "display_name": "Open WebUI",
+      "url": "http://host.docker.internal:3000",
+      "public_url": "http://100.110.245.37:3000",
+      "check_type": "http",
+      "docker_container": "open-webui",
+      "icon_emoji": "🧠",
+      "enabled": 0
+    },
+    {
+      "name": "discord-relay",
+      "display_name": "Discord Relay",
+      "url": null,
+      "public_url": null,
+      "check_type": "docker",
+      "docker_container": "claude-relay",
+      "icon_emoji": "🤖",
+      "enabled": 1
+    },
+    {
+      "name": "cloudflared",
+      "display_name": "Cloudflare Tunnel",
+      "url": null,
+      "public_url": null,
+      "check_type": "docker",
+      "docker_container": "cloudflared-tunnel",
+      "icon_emoji": "☁️",
+      "enabled": 1
+    },
+    {
+      "name": "scan-runner",
+      "display_name": "Scan Runner",
+      "url": null,
+      "public_url": null,
+      "check_type": "docker",
+      "docker_container": "scan-runner",
+      "icon_emoji": "📦",
+      "enabled": 1
+    },
+    {
+      "name": "uptime-kuma",
+      "display_name": "Uptime Kuma",
+      "url": "http://host.docker.internal:3001",
+      "public_url": "http://100.110.245.37:3001",
+      "check_type": "http",
+      "docker_container": "uptime-kuma",
+      "icon_emoji": "📊",
+      "enabled": 1
+    },
+    {
+      "name": "home-assistant",
+      "display_name": "Home Assistant",
+      "url": "http://192.168.1.70:8123",
+      "public_url": "http://192.168.1.70:8123",
+      "check_type": "http",
+      "docker_container": null,
+      "icon_emoji": "🏠",
+      "enabled": 1
+    },
+    {
+      "name": "adguard-home",
+      "display_name": "AdGuard Home",
+      "url": "http://192.168.1.70:3000",
+      "public_url": "http://192.168.1.70:3000",
+      "check_type": "http",
+      "docker_container": null,
+      "icon_emoji": "🛡️",
+      "enabled": 0
+    }
+  ]
+}

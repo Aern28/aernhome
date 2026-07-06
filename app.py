@@ -77,9 +77,13 @@ def set_security_headers(response):
 DATA_DIR = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
 DB_PATH = os.path.join(DATA_DIR, "dashboard.db")
 NEXUS_DB_PATH = os.path.join(DATA_DIR, "nexus.db")  # personal nexus (Tailscale-only)
+SERVICES_CONFIG_PATH = os.path.join(DATA_DIR, "services.json")
 HTTP_TIMEOUT = 5  # seconds
 
-# Default services configuration
+# Built-in fallback service definitions. These are ONLY used to (a) seed
+# /data/services.json the very first time the app runs on a host, and (b) as a
+# safety net if that file ever goes missing or unparsable mid-life. Day-to-day,
+# edit /data/services.json instead of this list — see load_services() below.
 DEFAULT_SERVICES = [
     {
         "name": "n8n",
@@ -90,6 +94,12 @@ DEFAULT_SERVICES = [
         "docker_container": "n8n",
         "icon_emoji": "⚡",
         "enabled": 1,
+        # Barely used day-to-day but still running for a couple of legacy n8n
+        # automations; kept as a card rather than removed outright. The current
+        # dashboard UI has no badge for this flag (display purely cosmetic
+        # today) — it exists so the intent is recorded for whoever looks next.
+        "deprecated": True,
+        "notes": "Barely used; kept alive for legacy automations. Candidate for retirement (see NEXUS_DEPLOY.md Phase 4).",
     },
     {
         "name": "jellyfin",
@@ -104,12 +114,19 @@ DEFAULT_SERVICES = [
     {
         "name": "qbittorrent",
         "display_name": "qBittorrent",
-        "url": "http://100.73.108.55:8080",
-        "public_url": "http://100.73.108.55:8080",
+        # qBittorrent's web UI is only reachable from the home LAN, not over
+        # Tailscale — the container running this dashboard (and anyone hitting
+        # it remotely) won't be able to reach it. "lan_only" tells the checker
+        # to report a failed check as "unknown (LAN-only)" instead of "down",
+        # since "down" would be misleading (the service is fine; we just can't
+        # see it from here). See check_service_health()/_apply_lan_only().
+        "url": "http://192.168.1.118:8080",
+        "public_url": "http://192.168.1.118:8080",
         "check_type": "http",
         "docker_container": "qbittorrent",
         "icon_emoji": "🌊",
         "enabled": 1,
+        "lan_only": True,
     },
     {
         "name": "open-webui",
@@ -183,6 +200,78 @@ DEFAULT_SERVICES = [
     },
 ]
 
+# Schema documentation written as the "_comment" key of the generated
+# /data/services.json, so the file is self-describing for whoever edits it.
+SERVICES_JSON_SCHEMA_COMMENT = (
+    "AernHome dashboard service definitions. Edit this file and restart the "
+    "container (`docker restart aernhome-dashboard`) to add, remove, or change a "
+    "monitored service card — no code change or rebuild needed. Fields per entry: "
+    "name (unique slug, required), display_name (required), url (health-check URL, "
+    "or null for docker-only checks), check_type ('http'|'docker'|'both', required), "
+    "docker_container (container name for docker checks, or null), icon_emoji "
+    "(required), enabled (1 or 0, default 1), public_url (optional — link opened "
+    "when the card is clicked by an internal/unlocked client; defaults to null), "
+    "lan_only (optional bool — a failed HTTP check reports as 'unknown (LAN-only, "
+    "unreachable from here)' instead of 'down', for services only reachable from "
+    "the home LAN), deprecated (optional bool, documentation-only — the current UI "
+    "has no badge for it), notes (optional free text, documentation-only). "
+    "If this file is missing, it is (re)written from the app's built-in defaults on "
+    "next startup. If it exists but fails to parse, a warning is logged and the "
+    "built-in defaults are used for that run only — this file is left untouched so "
+    "you can fix it."
+)
+
+
+def _write_default_services_file():
+    """One-time migration: persist DEFAULT_SERVICES to disk so it becomes the
+    editable source of truth. Best-effort — if the write fails (e.g. read-only
+    mount), we just log it and carry on using the in-memory defaults."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    payload = {"_comment": SERVICES_JSON_SCHEMA_COMMENT, "services": DEFAULT_SERVICES}
+    try:
+        with open(SERVICES_CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        print(f"Wrote default service config to {SERVICES_CONFIG_PATH}")
+    except OSError as e:
+        print(f"WARNING: could not write {SERVICES_CONFIG_PATH} ({e}); using built-in defaults for this run")
+
+
+def load_services():
+    """Load service definitions for the dashboard.
+
+    If /data/services.json exists, load service definitions from it. If it
+    doesn't exist yet, write the built-in DEFAULT_SERVICES out to that path
+    (one-time migration) and load from there. Defensive: any malformed/invalid
+    file logs a warning and falls back to the built-in defaults in memory —
+    this must never crash startup, and the bad file is left alone on disk so
+    it can be inspected/fixed rather than silently overwritten.
+    """
+    if not os.path.exists(SERVICES_CONFIG_PATH):
+        _write_default_services_file()
+        return DEFAULT_SERVICES
+
+    try:
+        with open(SERVICES_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        services = data.get("services") if isinstance(data, dict) else data
+        if not isinstance(services, list) or not services:
+            raise ValueError("expected a non-empty 'services' list")
+        for s in services:
+            if not isinstance(s, dict) or not s.get("name") or not s.get("check_type"):
+                raise ValueError(f"service entry missing required 'name'/'check_type': {s!r}")
+        return services
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        print(f"WARNING: failed to load {SERVICES_CONFIG_PATH} ({e}); falling back to built-in defaults for this run")
+        return DEFAULT_SERVICES
+
+
+# The working service set for this run (loaded from /data/services.json, or
+# the built-in defaults — see load_services()). init_db() seeds/updates the DB
+# from this; SERVICES_BY_NAME is used at check time to look up display-only
+# flags (lan_only, deprecated) that aren't stored in the services table.
+SERVICES = load_services()
+SERVICES_BY_NAME = {s["name"]: s for s in SERVICES}
+
 
 def init_db():
     """Initialize SQLite database with services and health_checks tables"""
@@ -219,24 +308,29 @@ def init_db():
         )
     """)
 
-    # Seed default services (insert new, update existing to match config)
-    for service in DEFAULT_SERVICES:
-        cursor.execute("SELECT id FROM services WHERE name = ?", (service["name"],))
+    # Seed services from config (insert new, update existing to match config).
+    # .get() with fallbacks throughout: services.json is hand-edited, so a
+    # service entry missing an optional key should degrade gracefully rather
+    # than crash the whole app at startup.
+    for service in SERVICES:
+        name = service.get("name")
+        if not name:
+            continue  # load_services() already validated this, but stay defensive
+        display_name = service.get("display_name", name)
+        url = service.get("url")
+        check_type = service.get("check_type", "http")
+        docker_container = service.get("docker_container")
+        icon_emoji = service.get("icon_emoji", "🔧")
+        enabled = service.get("enabled", 1)
+
+        cursor.execute("SELECT id FROM services WHERE name = ?", (name,))
         if cursor.fetchone() is None:
             cursor.execute(
                 """
                 INSERT INTO services (name, display_name, url, check_type, docker_container, icon_emoji, enabled)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-                (
-                    service["name"],
-                    service["display_name"],
-                    service["url"],
-                    service["check_type"],
-                    service["docker_container"],
-                    service["icon_emoji"],
-                    service["enabled"],
-                ),
+                (name, display_name, url, check_type, docker_container, icon_emoji, enabled),
             )
         else:
             cursor.execute(
@@ -244,15 +338,7 @@ def init_db():
                 UPDATE services SET display_name=?, url=?, check_type=?, docker_container=?, icon_emoji=?, enabled=?
                 WHERE name=?
             """,
-                (
-                    service["display_name"],
-                    service["url"],
-                    service["check_type"],
-                    service["docker_container"],
-                    service["icon_emoji"],
-                    service["enabled"],
-                    service["name"],
-                ),
+                (display_name, url, check_type, docker_container, icon_emoji, enabled, name),
             )
 
     conn.commit()
@@ -531,6 +617,24 @@ def check_service_health(service):
                 result["error_message"] = docker_error
 
     return result
+
+
+def _apply_lan_only(service_name, health):
+    """Reinterpret a failed check for a `lan_only`-flagged service.
+
+    Some services (e.g. qBittorrent) are only reachable from the home LAN —
+    Tailscale/remote access can't reach them by design. For those, a failed
+    HTTP/docker check is expected, not a real outage, so a "down" is
+    downgraded to "unknown" with an honest explanation instead of paging
+    someone (or just looking alarming) for a service that's actually fine.
+    Mutates and returns `health` in place; a no-op for non-lan_only services
+    or checks that already came back "up".
+    """
+    config = SERVICES_BY_NAME.get(service_name, {})
+    if config.get("lan_only") and health["status"] == "down":
+        health["status"] = "unknown"
+        health["error_message"] = "LAN-only, unreachable from here"
+    return health
 
 
 def save_health_check(service_id, status, response_time_ms, error_message):
@@ -1450,11 +1554,12 @@ def api_health():
 
     # Internal clients (Tailscale/LAN) get clickable service links; public internet gets none
     show_links = _is_internal_request()
-    public_urls = {s["name"]: s["public_url"] for s in DEFAULT_SERVICES}
+    public_urls = {s["name"]: s.get("public_url") for s in SERVICES}
 
     results = []
     for service in services:
         health = check_service_health(service)
+        health = _apply_lan_only(service["name"], health)
 
         # Save health check to database
         save_health_check(
