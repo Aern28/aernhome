@@ -39,6 +39,8 @@ fleet_bp = Blueprint("fleet", __name__)
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 HOST_STATS_PATH = os.path.join(DATA_DIR, "host_stats.json")
+CANARY_PATH = os.path.join(DATA_DIR, "canary.json")
+CANARY_STALE_H = 26  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 
 WORKSPACE_ALIVE_PATH = "/workspace/.bot_alive"
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
@@ -262,6 +264,53 @@ def check_host_stats():
     return out or [("host_collector", "Host Collector", "host", "unknown", "no valid checks reported")]
 
 
+def check_canary():
+    """Fan out /data/canary.json's "checks" list into individual fleet
+    checks (group "tcg", ids prefixed canary_). That file is written nightly
+    by canary/tcg_selector_canary.py, running on Ashaman via Task Scheduler
+    in the same Python env as tcgsales-automation — it probes the TCGplayer
+    seller portal, PirateShip, LetterTrackPro, and TCGCSV for selector/markup
+    drift so it's caught before the unattended sales pipeline hits it
+    mid-run. Staleness follows the same dead-man's-switch shape as
+    check_host_stats(): missing file -> single unknown check (canary hasn't
+    run yet); file older than CANARY_STALE_H -> single warn check (the
+    canary job itself is presumed stuck/not running) instead of trusting
+    stale per-selector data.
+
+    Returns a list of (id, label, group, status, detail) tuples.
+    """
+    try:
+        age_h = (time.time() - os.path.getmtime(CANARY_PATH)) / 3600
+    except OSError:
+        return [("canary_missing", "Selector Canary", "tcg", "unknown", "canary.json not found — canary not yet run")]
+
+    if age_h > CANARY_STALE_H:
+        return [("canary_stale", "Selector Canary", "tcg", "warn", f"canary.json is {age_h:.1f}h old (canary stale)")]
+
+    try:
+        with open(CANARY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return [("canary_error", "Selector Canary", "tcg", "unknown", f"read error: {e}"[:200])]
+
+    items = data.get("checks") if isinstance(data, dict) else None
+    if not isinstance(items, list) or not items:
+        return [("canary_error", "Selector Canary", "tcg", "unknown", "no checks reported")]
+
+    out = []
+    for c in items:
+        if not isinstance(c, dict) or not c.get("id"):
+            continue
+        out.append((
+            f"canary_{c['id']}",
+            c.get("label", c["id"]),
+            "tcg",
+            c.get("status", "unknown"),
+            c.get("detail", ""),
+        ))
+    return out or [("canary_error", "Selector Canary", "tcg", "unknown", "no valid checks reported")]
+
+
 def run_all_checks():
     """Run every check, each wrapped so one crash can't take down the rest.
     Returns {id: {"label", "group", "status", "detail"}}."""
@@ -280,6 +329,13 @@ def run_all_checks():
     except Exception as e:
         host_items = [("host_collector", "Host Collector", "host", "unknown", f"check crashed: {e}"[:200])]
     for cid, label, group, status, detail in host_items:
+        results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
+
+    try:
+        canary_items = check_canary()
+    except Exception as e:
+        canary_items = [("canary_error", "Selector Canary", "tcg", "unknown", f"check crashed: {e}"[:200])]
+    for cid, label, group, status, detail in canary_items:
         results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
 
     return results
