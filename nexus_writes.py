@@ -187,11 +187,12 @@ def complete_maintenance(maint_id):
     today = date.today().isoformat()
     with closing(_conn()) as conn, conn:
         row = conn.execute(
-            "SELECT interval_days FROM maintenance WHERE id = ?", (maint_id,)
+            "SELECT task, interval_days FROM maintenance WHERE id = ?", (maint_id,)
         ).fetchone()
         if row is None:
             raise ValueError("no such maintenance item")
         interval = row["interval_days"]
+        task_name = row["task"]
         if interval:
             next_due = (date.today() + timedelta(days=int(interval))).isoformat()
             conn.execute(
@@ -203,6 +204,7 @@ def complete_maintenance(maint_id):
                 "UPDATE maintenance SET last_done = ?, completed = 1 WHERE id = ?",
                 (today, maint_id),
             )
+    return task_name
 
 
 # ── Books (book_status; seeded by nexus_books_import.py) ──────────────────────

@@ -18,6 +18,7 @@ import nexus_md
 import fleet
 import second_brain
 import ledger
+import todoist_bridge
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -1324,10 +1325,14 @@ def api_nexus_maint_create():
 def api_nexus_maint_done(mid):
     _nexus_json()
     try:
-        ns_writes.complete_maintenance(mid)
+        task_name = ns_writes.complete_maintenance(mid)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
-    return jsonify({"ok": True})
+    # Crossing off in the Nexus closes the Todoist twin too (the daily push job
+    # created it); best-effort — Todoist being down never breaks the crossing.
+    todoist_closed = todoist_bridge.close_by_content(
+        todoist_bridge.MAINT_PREFIX + task_name)
+    return jsonify({"ok": True, "todoist_closed": todoist_closed})
 
 
 @app.route("/api/nexus/todoist/<task_id>/close", methods=["POST"])

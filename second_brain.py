@@ -297,6 +297,17 @@ def api_queue_post():
         "resolved_at": None,
     }
 
+    # For-Aern items ride his normal GTD flow: mirror into Todoist (best-effort;
+    # a Todoist outage never blocks the queue write). Stored id lets resolve
+    # close the twin precisely.
+    if direction == "to_aern":
+        try:
+            import todoist_bridge
+            item["todoist_id"] = todoist_bridge.create_task(
+                todoist_bridge.QUEUE_PREFIX + text, priority=priority)
+        except Exception:
+            item["todoist_id"] = None
+
     doc = load_queue()
     doc["items"].append(item)
     try:
@@ -321,6 +332,16 @@ def api_queue_resolve():
             item["status"] = "done"
             item["resolved_at"] = _now_iso()
             found = True
+            # Close the Todoist twin (best-effort, never blocks the resolve)
+            try:
+                import todoist_bridge
+                if item.get("todoist_id"):
+                    todoist_bridge.close_task(item["todoist_id"])
+                elif item.get("dir") == "to_aern":
+                    todoist_bridge.close_by_content(
+                        todoist_bridge.QUEUE_PREFIX + item.get("text", ""))
+            except Exception:
+                pass
             break
 
     if not found:
