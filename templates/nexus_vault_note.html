@@ -1,0 +1,27 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}{{ title }}{% endblock %}
+
+{% block nexus_content %}
+<div class="max-w-3xl mx-auto">
+    <div class="mb-4 text-xs text-gray-400 flex flex-wrap items-center gap-1">
+        <a href="/nexus/vault" class="hover:text-gray-200">🗄️ vault</a>
+        {% for crumb in crumbs %}
+        <span>/</span>
+        <span class="{% if loop.last %}text-gray-200{% endif %}">{{ crumb }}</span>
+        {% endfor %}
+    </div>
+
+    <h2 class="text-2xl font-bold text-white mb-1 break-words">{{ title }}</h2>
+    {% if mtime %}
+    <p class="text-xs text-gray-400 mb-6">updated {{ mtime }}</p>
+    {% else %}
+    <div class="mb-6"></div>
+    {% endif %}
+
+    <article class="nx-prose">{{ html | safe }}</article>
+
+    <div class="mt-8 pt-3 border-t border-dark-border text-sm">
+        <a href="/nexus/vault" class="text-gray-400 hover:text-gray-200">← the vault</a>
+    </div>
+</div>
+{% endblock %}

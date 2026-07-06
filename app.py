@@ -19,6 +19,7 @@ import fleet
 import second_brain
 import ledger
 import todoist_bridge
+import vault
 
 # Unlock token for showing service links through Cloudflare Tunnel
 # Visit aern.dev/?unlock=<token> to set cookie, ?lock to clear
@@ -58,6 +59,7 @@ app.config["SECRET_KEY"] = os.urandom(24)
 app.register_blueprint(fleet.fleet_bp)
 app.register_blueprint(second_brain.sb_bp)
 app.register_blueprint(ledger.ledger_bp)
+app.register_blueprint(vault.vault_bp)
 
 
 @app.context_processor
@@ -964,6 +966,7 @@ NEXUS_SECTIONS = [
     ("/nexus/aern",       "For Aern",    "🎯", "Everything waiting on you"),
     ("/nexus/queue",      "Queue",       "📮", "You ↔ the fleet"),
     ("/nexus/ledger",     "Ledger",      "📔", "The year, written down"),
+    ("/nexus/vault",      "Vault",       "🗄️", "The Obsidian source, read-only"),
 ]
 
 # Blueprints (second_brain, ledger) render nexus pages outside app.py and pull

@@ -25,6 +25,9 @@ services:
       - G:/ollama:/host_g:ro
       - claude-workspace:/workspace:ro
       - C:/tcg-inventory:/tcg:ro
+      # Obsidian vault, read-only — browsed at /nexus/vault (Ashaman's checkout;
+      # Aernbot pushes to it, so this stays current without any sync step)
+      - C:/projects/obivault:/vault:ro
     security_opt:
       - no-new-privileges:true
     environment:

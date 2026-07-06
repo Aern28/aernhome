@@ -1,0 +1,71 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Vault{% endblock %}
+
+{% macro render_nodes(nodes) %}
+<ul class="space-y-1">
+    {% for node in nodes %}
+    <li class="vault-node" data-vault-type="{{ node.type }}">
+        {% if node.type == 'dir' %}
+        <div class="text-sm font-semibold text-gray-300 mt-2 mb-1">📁 {{ node.name }}</div>
+        <div class="ml-2">
+            {{ render_nodes(node.children) }}
+        </div>
+        {% else %}
+        <a href="/nexus/vault/{{ node.relpath }}" data-vault-name="{{ node.name|lower }}"
+           class="vault-file flex items-center justify-between gap-3 px-2 py-1 rounded-md hover:bg-dark-bg/40 text-gray-300 hover:text-white transition-colors">
+            <span class="truncate">📄 {{ node.name }}</span>
+            <span class="text-[11px] text-gray-500 shrink-0">{{ node.mtime }}</span>
+        </a>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endmacro %}
+
+{% block nexus_content %}
+<div class="max-w-3xl mx-auto">
+    <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div>
+            <h2 class="text-2xl font-bold text-white mb-1">🗄️ Vault</h2>
+            <p class="text-sm text-gray-400">Read-only mirror of the Obsidian vault — browse the source notes.</p>
+        </div>
+        {% if tree %}
+        <input type="text" id="vault-filter" placeholder="filter by name…" autocomplete="off"
+               class="min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+        {% endif %}
+    </div>
+
+    {% if vault_missing %}
+    <p class="text-gray-400 italic">The vault isn't mounted here — nothing to browse yet.</p>
+    {% elif not tree %}
+    <p class="text-gray-400 italic">No markdown notes found in the vault.</p>
+    {% else %}
+    <div id="vault-tree" class="bg-dark-card border border-dark-border rounded-lg p-4">
+        {{ render_nodes(tree) }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script>
+(function () {
+    var input = document.getElementById('vault-filter');
+    if (!input) return;
+    input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        document.querySelectorAll('.vault-file').forEach(function (el) {
+            var name = el.getAttribute('data-vault-name') || '';
+            el.classList.toggle('hidden', q.length > 0 && name.indexOf(q) === -1);
+        });
+        document.querySelectorAll('.vault-node[data-vault-type="dir"]').forEach(function (li) {
+            var anyVisible = false;
+            li.querySelectorAll('.vault-file').forEach(function (f) {
+                if (!f.classList.contains('hidden')) anyVisible = true;
+            });
+            li.classList.toggle('hidden', q.length > 0 && !anyVisible);
+        });
+    });
+})();
+</script>
+{% endblock %}
