@@ -80,6 +80,38 @@ def _iter_md_files(vault_root):
             yield rel, name
 
 
+def recent_notes(n=5):
+    """Most recently modified notes, for the Nexus home widget. Degrades to []
+    on any failure — a missing vault must never break the home page."""
+    root = _vault_root()
+    if not root:
+        return []
+    try:
+        import time
+        notes = []
+        for rel, name in _iter_md_files(root):
+            try:
+                mtime = os.path.getmtime(os.path.join(root, rel))
+            except OSError:
+                continue
+            notes.append((mtime, rel, name))
+        notes.sort(reverse=True)
+        out = []
+        now = time.time()
+        for mtime, rel, name in notes[:n]:
+            age_h = (now - mtime) / 3600
+            if age_h < 1:
+                age = f"{int(age_h * 60)}m"
+            elif age_h < 48:
+                age = f"{int(age_h)}h"
+            else:
+                age = f"{int(age_h / 24)}d"
+            out.append({"relpath": rel, "name": name[:-3], "age": age})
+        return out
+    except Exception:
+        return []
+
+
 def _build_wikilink_index(vault_root):
     """{stem_lower: relpath} for every note, first match wins (deterministic
     thanks to the sorted walk in _iter_md_files)."""

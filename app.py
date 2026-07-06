@@ -998,6 +998,7 @@ def nexus_home():
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
+    data["vault_recent"] = vault.recent_notes(5)
     data["links"] = ns_writes.list_links()
     data["notes"] = ns_writes.pinned_notes()
     # source-diverse teaser so once-daily digests aren't buried under Aernbot's volume
