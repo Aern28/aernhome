@@ -1,0 +1,95 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Inventory{% endblock %}
+
+{% block nexus_content %}
+{% if not inv %}
+<div class="bg-dark-card border border-dark-border rounded-lg p-6 text-sm text-gray-400">
+    No inventory snapshot yet. Publish one from the machine holding the newest
+    TCGplayer pricing export: <code class="text-amber-300">py tcg_inventory_publish.py</code>
+</div>
+{% else %}
+
+<!-- Header stats — server-rendered from data/live_inventory.json (published
+     after each confirmed listing change; the export IS the source of truth,
+     this page is its mirror). -->
+<section class="mb-6">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="text-lg font-semibold text-white">🗃️ Live listings</h3>
+        <span class="text-xs text-gray-400">export: {{ inv.source }} · published {{ inv.generated_at }}</span>
+    </div>
+    <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-white">{{ inv.totals.skus }}</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">SKUs</div>
+        </div>
+        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-white">{{ inv.totals.cards }}</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">cards</div>
+        </div>
+        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-white">${{ '%.2f'|format(inv.totals.value) }}</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">listed value</div>
+        </div>
+    </div>
+    <input id="inv-filter" type="text" placeholder="Filter by name, set, number…"
+           class="w-full bg-dark-card border border-dark-border rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500">
+</section>
+
+{% for line in inv.lines %}
+<section class="mb-6 inv-line">
+    <h3 class="text-base font-semibold text-white mb-2">{{ line.name }}
+        <span class="text-xs text-gray-400 font-normal">{{ line.skus }} SKUs · {{ line.cards }} cards</span>
+    </h3>
+    {% for set in line.sets %}
+    <div class="mb-4 inv-set">
+        <div class="text-sm text-gray-300 mb-2">{{ set.name }}
+            <span class="text-xs text-gray-500">({{ set.items|length }})</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {% for it in set.items %}
+            <div class="inv-card bg-dark-card border border-dark-border rounded-lg p-2 flex flex-col"
+                 data-search="{{ (it.name ~ ' ' ~ set.name ~ ' ' ~ it.number ~ ' ' ~ line.name)|lower }}">
+                <div class="relative">
+                    <img src="/nexus/card_image/{{ it.id }}" alt="" loading="lazy"
+                         class="w-full rounded aspect-[5/7] object-cover bg-black/40"
+                         onerror="this.style.visibility='hidden'">
+                    {% if it.qty > 1 %}
+                    <span class="absolute top-1 right-1 bg-amber-500 text-black text-xs font-bold rounded px-1.5">×{{ it.qty }}</span>
+                    {% endif %}
+                    {% if 'Foil' in it.condition or 'Holofoil' in it.condition %}
+                    <span class="absolute bottom-1 left-1 bg-purple-600/90 text-white text-[10px] font-semibold rounded px-1">FOIL</span>
+                    {% endif %}
+                </div>
+                <div class="mt-2 text-xs text-white leading-tight line-clamp-2" title="{{ it.name }}">{{ it.name }}</div>
+                <div class="mt-auto pt-1 flex items-center justify-between">
+                    <span class="text-[10px] text-gray-500">#{{ it.number }}</span>
+                    <span class="text-sm font-bold text-emerald-400">${{ '%.2f'|format(it.price) }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endfor %}
+
+<script>
+// Client-side filter: hides cards not matching, then hides sets/lines that
+// end up empty. No server round-trip — 89 SKUs is nothing.
+document.getElementById('inv-filter').addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.inv-card').forEach(c => {
+        c.style.display = (!q || c.dataset.search.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('.inv-set').forEach(s => {
+        const any = [...s.querySelectorAll('.inv-card')].some(c => c.style.display !== 'none');
+        s.style.display = any ? '' : 'none';
+    });
+    document.querySelectorAll('.inv-line').forEach(l => {
+        const any = [...l.querySelectorAll('.inv-set')].some(s => s.style.display !== 'none');
+        l.style.display = any ? '' : 'none';
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

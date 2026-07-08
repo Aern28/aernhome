@@ -961,6 +961,7 @@ NEXUS_SECTIONS = [
     ("/nexus/docs",       "Docs",        "📄", "Reference & playbooks"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
+    ("/nexus/inventory",  "Inventory",   "🗃️", "Live listings — visual confirm"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
     ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
     ("/nexus/aern",       "For Aern",    "🎯", "Everything waiting on you"),
@@ -1031,6 +1032,59 @@ def nexus_tcg():
     return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
                            tcg=ns.tcg_alerts(), biz=ns.tcg_business(),
                            direct=ns.direct_progress())
+
+
+@app.route("/nexus/inventory")
+def nexus_inventory():
+    """Visual live-listings mirror (Tailscale-only). Renders data/live_inventory.json,
+    published from the machine holding the newest TCGplayer pricing export via
+    tcg_inventory_publish.py — the export is the source of truth, this is its mirror
+    for physically confirming listings against the pull boxes."""
+    if not _is_nexus_allowed():
+        abort(404)
+    inv_path = os.path.join(DATA_DIR, "live_inventory.json")
+    inv = None
+    if os.path.isfile(inv_path):
+        try:
+            with open(inv_path, encoding="utf-8") as f:
+                raw = json.load(f)
+            lines = {}
+            for it in raw.get("items", []):
+                ln = lines.setdefault(it["line"], {"name": it["line"], "skus": 0,
+                                                   "cards": 0, "_sets": {}})
+                ln["skus"] += 1
+                ln["cards"] += it["qty"]
+                ln["_sets"].setdefault(it["set"], []).append(it)
+            for ln in lines.values():
+                ln["sets"] = [{"name": s, "items": items}
+                              for s, items in sorted(ln["_sets"].items())]
+                del ln["_sets"]
+            inv = {"source": raw.get("source", "?"),
+                   "generated_at": raw.get("generated_at", "?"),
+                   "totals": raw.get("totals", {}),
+                   "lines": sorted(lines.values(), key=lambda l: -l["cards"])}
+        except (ValueError, KeyError):
+            inv = None  # malformed snapshot degrades to the empty state
+    return render_template("nexus_inventory.html", sections=NEXUS_SECTIONS,
+                           active="/nexus/inventory", inv=inv)
+
+
+# Root the card-image route may serve from — same whitelist pattern as
+# _COVER_ROOTS / _MEDIA_COVER_ROOTS. card_images/ under DATA_DIR is the only
+# root; files are <tcgplayer_product_id>.jpg materialized by tcg_inventory_publish.py.
+_CARD_IMAGE_ROOTS = [os.path.normpath(os.path.join(DATA_DIR, "card_images"))]
+
+
+@app.route("/nexus/card_image/<int:pid>")
+def nexus_card_image(pid):
+    """Serve a localized TCGplayer card image. Tailscale-only; 404s when the
+    image was never localized — the template hides the img on error."""
+    if not _is_nexus_allowed():
+        abort(404)
+    path = os.path.normpath(os.path.join(DATA_DIR, "card_images", f"{pid}.jpg"))
+    if not any(path.startswith(root + os.sep) for root in _CARD_IMAGE_ROOTS) or not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
 
 
 @app.route("/nexus/books")
