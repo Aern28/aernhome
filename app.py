@@ -1056,8 +1056,10 @@ def nexus_inventory():
                 ln["cards"] += it["qty"]
                 ln["_sets"].setdefault(it["set"], []).append(it)
             for ln in lines.values():
-                ln["sets"] = [{"name": s, "items": items}
-                              for s, items in sorted(ln["_sets"].items())]
+                # key is "entries", not "items" — Jinja attribute lookup would
+                # resolve set.items to dict.items (the method) and 500
+                ln["sets"] = [{"name": s, "entries": entries}
+                              for s, entries in sorted(ln["_sets"].items())]
                 del ln["_sets"]
             inv = {"source": raw.get("source", "?"),
                    "generated_at": raw.get("generated_at", "?"),

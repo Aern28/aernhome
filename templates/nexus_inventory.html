@@ -40,15 +40,15 @@
     <h3 class="text-base font-semibold text-white mb-2">{{ line.name }}
         <span class="text-xs text-gray-400 font-normal">{{ line.skus }} SKUs · {{ line.cards }} cards</span>
     </h3>
-    {% for set in line.sets %}
+    {% for st in line.sets %}
     <div class="mb-4 inv-set">
-        <div class="text-sm text-gray-300 mb-2">{{ set.name }}
-            <span class="text-xs text-gray-500">({{ set.items|length }})</span>
+        <div class="text-sm text-gray-300 mb-2">{{ st.name }}
+            <span class="text-xs text-gray-500">({{ st.entries|length }})</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {% for it in set.items %}
+            {% for it in st.entries %}
             <div class="inv-card bg-dark-card border border-dark-border rounded-lg p-2 flex flex-col"
-                 data-search="{{ (it.name ~ ' ' ~ set.name ~ ' ' ~ it.number ~ ' ' ~ line.name)|lower }}">
+                 data-search="{{ (it.name ~ ' ' ~ st.name ~ ' ' ~ it.number ~ ' ' ~ line.name)|lower }}">
                 <div class="relative">
                     <img src="/nexus/card_image/{{ it.id }}" alt="" loading="lazy"
                          class="w-full rounded aspect-[5/7] object-cover bg-black/40"
