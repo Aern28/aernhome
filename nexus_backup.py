@@ -112,20 +112,29 @@ def backup_ssh(stamp):
 
 def main():
     # Date.now() is fine here — this is a plain script, not a workflow.
+    # SSH transport is PRIMARY: key-based, works from every session type, and
+    # never hangs. UNC is the fallback — SMB from non-interactive sessions can
+    # hang for minutes on auth negotiation (observed 2026-07-09), so it only
+    # runs if ssh failed, and callers should set an ExecutionTimeLimit.
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    try:
+        dest = backup_ssh(stamp)
+    except Exception as e:
+        print(f"[warn] ssh transport error: {e}")
+        dest = None
+    if dest:
+        print(f"[ok] nexus.db -> {dest} (ssh transport); keeping last {KEEP}")
+        return 0
+    print("[warn] ssh transport failed; trying UNC (may be slow)")
     try:
         dest = backup(stamp)
     except OSError as e:
-        print(f"[warn] UNC transport failed ({e}); trying ssh fallback")
-        dest = None
+        print(f"[fail] UNC transport too: {e}")
+        return 1
     if dest:
         prune()
         size_kb = os.path.getsize(dest) // 1024
         print(f"[ok] nexus.db -> {dest} ({size_kb} KB); keeping last {KEEP}")
-        return 0
-    dest = backup_ssh(stamp)
-    if dest:
-        print(f"[ok] nexus.db -> {dest} (ssh transport); keeping last {KEEP}")
         return 0
     return 1
 
