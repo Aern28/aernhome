@@ -66,14 +66,66 @@ def prune():
             pass
 
 
+def backup_ssh(stamp):
+    """Fallback transport: snapshot locally, scp via the 'synology' ssh alias.
+    UNC + cmdkey can't work from non-interactive sessions (Credential Manager
+    is unreachable there — proven 2026-07-09); key-based scp works from ANY
+    session, and the AernHome NAS Stats task proves the alias works scheduled.
+    Remote dir is the same physical folder the UNC path pointed at."""
+    import subprocess
+    staging = os.path.join(os.environ.get("TEMP", "."), f"nexus-{stamp}.db")
+    src = sqlite3.connect(SRC)
+    try:
+        dst = sqlite3.connect(staging)
+        try:
+            with dst:
+                src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    chk = sqlite3.connect(staging)
+    try:
+        ok = chk.execute("PRAGMA integrity_check").fetchone()[0]
+    finally:
+        chk.close()
+    if ok != "ok":
+        os.remove(staging)
+        print(f"[fail] integrity_check={ok} — ssh backup discarded")
+        return None
+    remote = "synology:aernhome/backups/"
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+                        "synology", "mkdir -p aernhome/backups"],
+                       capture_output=True, text=True, timeout=30)
+    r = subprocess.run(["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+                        staging, remote], capture_output=True, text=True, timeout=120)
+    os.remove(staging)
+    if r.returncode != 0:
+        print(f"[fail] scp: {r.stderr.strip()}")
+        return None
+    # prune remote to KEEP via the same alias (script-owned rotation)
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "synology",
+                    f"cd aernhome/backups && ls -1t nexus-*.db | tail -n +{KEEP + 1} | xargs -r rm --"],
+                   capture_output=True, text=True, timeout=30)
+    return remote + f"nexus-{stamp}.db"
+
+
 def main():
     # Date.now() is fine here — this is a plain script, not a workflow.
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
-    dest = backup(stamp)
+    try:
+        dest = backup(stamp)
+    except OSError as e:
+        print(f"[warn] UNC transport failed ({e}); trying ssh fallback")
+        dest = None
     if dest:
         prune()
         size_kb = os.path.getsize(dest) // 1024
         print(f"[ok] nexus.db -> {dest} ({size_kb} KB); keeping last {KEEP}")
+        return 0
+    dest = backup_ssh(stamp)
+    if dest:
+        print(f"[ok] nexus.db -> {dest} (ssh transport); keeping last {KEEP}")
         return 0
     return 1
 
