@@ -943,6 +943,48 @@ def podcast_file(filename):
     return send_from_directory(PODCAST_DIR, filename)
 
 
+# --- Static feed staging -----------------------------------------------------
+# aernhome is no longer the public podcast origin: a read-only nginx container
+# (aern-public) serves /podcast from disk while aernhome stays tailnet-only. That
+# means feed.xml must exist as a FILE. The feed template hardcodes https://aern.dev
+# for every URL, so rendering outside a request context is safe. This writer keeps
+# feed.xml fresh: it writes once at startup and regenerates within ~60s of any
+# episodes.json change. Atomic swap so nginx never reads a half-written file.
+def _write_podcast_feed():
+    feed_path = os.path.join(PODCAST_DIR, "feed.xml")
+    tmp_path = feed_path + ".tmp"
+    with app.app_context():
+        xml = render_template("podcast-feed.xml", episodes=load_podcast_data())
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(xml)
+    os.replace(tmp_path, feed_path)
+
+
+def _podcast_feed_writer_loop():
+    import time
+    src_path = os.path.join(PODCAST_DIR, "episodes.json")
+    feed_path = os.path.join(PODCAST_DIR, "feed.xml")
+    while True:
+        try:
+            src_m = os.path.getmtime(src_path)
+            feed_m = os.path.getmtime(feed_path) if os.path.exists(feed_path) else 0
+            if src_m > feed_m:
+                _write_podcast_feed()
+        except Exception:
+            pass
+        time.sleep(60)
+
+
+def _start_podcast_feed_writer():
+    import threading
+    threading.Thread(
+        target=_podcast_feed_writer_loop, name="podcast-feed-writer", daemon=True
+    ).start()
+
+
+_start_podcast_feed_writer()
+
+
 @app.route("/projects")
 def projects():
     """Projects overview page"""
