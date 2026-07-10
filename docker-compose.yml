@@ -52,6 +52,8 @@ services:
       # means the Gal sub-list stays empty. Must also be shared read-only with
       # claude-bot@claudendar.iam.gserviceaccount.com.
       - CALENDAR_ID_GAL=${CALENDAR_ID_GAL:-}
+      # Notion API token — used by nexus_notion_import.py and sync_family_agenda.py.
+      - NOTION_TOKEN=${NOTION_TOKEN:-}
       # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
       # so point the connector there (default is a Windows path that doesn't exist here).
       - TCG_DB_PATH=/tcg/inventory.db
