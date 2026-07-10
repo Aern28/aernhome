@@ -1734,6 +1734,26 @@ def api_tcg_stats():
     return jsonify({"merge_variables": payload})
 
 
+@app.route("/internal/sync-family-agenda", methods=["POST"])
+def internal_sync_family_agenda():
+    """Pulls Gal's Google Calendar for the current week and upserts the
+    Notion "Family Week Agenda" DB (Gal AM/PM + Notes). Triggered by an
+    Ashaman scheduled task. Internal only — no external exposure."""
+    if not _is_internal_request():
+        return jsonify({"status": "ok"})
+    try:
+        from sync_family_agenda import sync
+    except ImportError as e:
+        return jsonify({"error": "sync module unavailable", "detail": str(e)}), 500
+    try:
+        summary = sync()
+    except SystemExit as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": "sync failed", "detail": str(e)[:300]}), 500
+    return jsonify({"status": "ok", "summary": summary})
+
+
 # 72 Japanese micro-seasons (七十二候)
 # Each entry: (month, day_start, day_end, number, kanji, romaji, english,
 #              solar_term, solar_term_romaji, solar_term_english, pentad, season)
