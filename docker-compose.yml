@@ -48,6 +48,10 @@ services:
       # Defaults in-code to mcarroll203@gmail.com; share that calendar with
       # claude-bot@claudendar.iam.gserviceaccount.com (read-only) to populate it.
       - CALENDAR_ID=${CALENDAR_ID:-mcarroll203@gmail.com}
+      # Second schedule widget calendar (Gal's). No in-code default — empty
+      # means the Gal sub-list stays empty. Must also be shared read-only with
+      # claude-bot@claudendar.iam.gserviceaccount.com.
+      - CALENDAR_ID_GAL=${CALENDAR_ID_GAL:-}
       # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
       # so point the connector there (default is a Windows path that doesn't exist here).
       - TCG_DB_PATH=/tcg/inventory.db

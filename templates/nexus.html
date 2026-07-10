@@ -15,28 +15,38 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <div class="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Today</div>
-                {% if data.schedule.today %}
-                <ul class="space-y-1.5">
-                    {% for e in data.schedule.today %}
-                    <li class="flex items-baseline gap-2 text-sm">
-                        <span class="shrink-0 w-20 text-xs {% if e.allday %}text-gray-400{% else %}text-blue-300 font-medium{% endif %}">{{ e.when }}</span>
-                        <span class="text-gray-200">{{ e.summary }}</span>
-                    </li>
+                {% if data.schedule.today.matt or data.schedule.today.gal %}
+                    {% for owner, label in [("matt", "Matt"), ("gal", "Gal")] %}
+                    {% if data.schedule.today[owner] %}
+                    <div class="text-xs font-semibold text-gray-400 mt-2 first:mt-0">{{ label }}</div>
+                    <ul class="space-y-1.5">
+                        {% for e in data.schedule.today[owner] %}
+                        <li class="flex items-baseline gap-2 text-sm">
+                            <span class="shrink-0 w-20 text-xs {% if e.allday %}text-gray-400{% else %}text-blue-300 font-medium{% endif %}">{{ e.when }}</span>
+                            <span class="text-gray-200">{{ e.summary }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
                     {% endfor %}
-                </ul>
                 {% else %}<p class="text-sm text-gray-400">Nothing scheduled.</p>{% endif %}
             </div>
             <div class="sm:border-l sm:border-dark-border sm:pl-4">
                 <div class="text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Tomorrow</div>
-                {% if data.schedule.tomorrow %}
-                <ul class="space-y-1.5">
-                    {% for e in data.schedule.tomorrow %}
-                    <li class="flex items-baseline gap-2 text-sm">
-                        <span class="shrink-0 w-20 text-xs {% if e.allday %}text-gray-400{% else %}text-blue-300 font-medium{% endif %}">{{ e.when }}</span>
-                        <span class="text-gray-200">{{ e.summary }}</span>
-                    </li>
+                {% if data.schedule.tomorrow.matt or data.schedule.tomorrow.gal %}
+                    {% for owner, label in [("matt", "Matt"), ("gal", "Gal")] %}
+                    {% if data.schedule.tomorrow[owner] %}
+                    <div class="text-xs font-semibold text-gray-400 mt-2 first:mt-0">{{ label }}</div>
+                    <ul class="space-y-1.5">
+                        {% for e in data.schedule.tomorrow[owner] %}
+                        <li class="flex items-baseline gap-2 text-sm">
+                            <span class="shrink-0 w-20 text-xs {% if e.allday %}text-gray-400{% else %}text-blue-300 font-medium{% endif %}">{{ e.when }}</span>
+                            <span class="text-gray-200">{{ e.summary }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
                     {% endfor %}
-                </ul>
                 {% else %}<p class="text-sm text-gray-400">Nothing scheduled.</p>{% endif %}
             </div>
         </div>

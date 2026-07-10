@@ -951,27 +951,44 @@ def _oura_summary_compute():
 
 # ── Schedule (today + tomorrow from Google Calendar / QGenda) ────────────────
 def schedule_today(ttl=900):
-    """Today + tomorrow agenda (clinical QGenda blocks + appointments) from Google
-    Calendar, cached 15 min. Uses the service-account JSON mounted from the Aernbot
-    workspace (/workspace/.credentials/claudendar-service-account.json) — override
-    with GOOGLE_CALENDAR_SA / CALENDAR_ID. Degrades to {} if creds/libs/calendar
-    are unavailable. Never raises."""
+    """Today + tomorrow agenda for Matt + Gal (clinical QGenda blocks +
+    appointments) from Google Calendar, cached 15 min. Uses the service-account
+    JSON mounted from the Aernbot workspace
+    (/workspace/.credentials/claudendar-service-account.json) — override with
+    GOOGLE_CALENDAR_SA / CALENDAR_ID / CALENDAR_ID_GAL. Each owner's calendar
+    must be shared (read-only) with the service account's email. Degrades to
+    {} per owner if creds/libs/calendar are unavailable. Never raises.
+    Shape: {"today": {"matt": [...], "gal": [...]}, "tomorrow": {"matt": [...], "gal": [...]}}."""
     return _cached("schedule_today", ttl, _schedule_today_compute)
 
 
 def _schedule_today_compute():
+    matt = _schedule_for(os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com"))
+    gal_id = os.environ.get("CALENDAR_ID_GAL", "")
+    gal = _schedule_for(gal_id) if gal_id else {"today": [], "tomorrow": []}
+    out = {
+        "today": {"matt": matt["today"], "gal": gal["today"]},
+        "tomorrow": {"matt": matt["tomorrow"], "gal": gal["tomorrow"]},
+    }
+    has_any = any(out["today"].values()) or any(out["tomorrow"].values())
+    return out if has_any else {}
+
+
+def _schedule_for(cal_id):
+    """Today + tomorrow items for a single calendar id. Never raises;
+    returns {"today": [], "tomorrow": []} on any failure or missing config."""
+    empty = {"today": [], "tomorrow": []}
     sa_path = os.environ.get(
         "GOOGLE_CALENDAR_SA",
         "/workspace/.credentials/claudendar-service-account.json")
-    cal_id = os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com")
-    if not os.path.exists(sa_path):
-        return {}
+    if not cal_id or not os.path.exists(sa_path):
+        return empty
     try:
         from zoneinfo import ZoneInfo
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
     except Exception:
-        return {}
+        return empty
     try:
         tz = ZoneInfo("America/Chicago")
         now = datetime.datetime.now(tz)
@@ -987,7 +1004,7 @@ def _schedule_today_compute():
             timeZone="America/Chicago", maxResults=25,
         ).execute().get("items", [])
     except Exception:
-        return {}
+        return empty
 
     today_d, tom_d = now.date(), now.date() + datetime.timedelta(days=1)
     out = {"today": [], "tomorrow": []}
@@ -1014,5 +1031,5 @@ def _schedule_today_compute():
             out["today"].append(item)
         elif day == tom_d:
             out["tomorrow"].append(item)
-    return out if (out["today"] or out["tomorrow"]) else {}
+    return out
 
