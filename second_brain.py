@@ -12,6 +12,12 @@ as fleet.py's save_state_atomic):
                        dir="to_aern" (agent -> human) or dir="to_fleet"
                        (human -> next-session work), each carrying a `source`
                        receipt (url/path/command).
+  /data/agenda.json — the daily + weekly agenda markdown blobs (the files
+                       /whats-next, /good-morning, /goodnight and
+                       /start-of-week maintain), published here so every
+                       machine's skills read/write ONE agenda instead of
+                       per-machine ~/.claude copies. Content stays markdown —
+                       the skills' checkbox format is the schema.
 
 /api/needs-aern aggregates a priority-ordered "everything waiting on the
 human" list from four independently-guarded sources: open to_aern queue
@@ -41,12 +47,14 @@ sb_bp = Blueprint("second_brain", __name__)
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 SEAT_PATH = os.path.join(DATA_DIR, "seat.json")
 QUEUE_PATH = os.path.join(DATA_DIR, "queue.json")
+AGENDA_PATH = os.path.join(DATA_DIR, "agenda.json")
 FLEET_STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
 VALID_PROJECT_STATUS = {"active", "blocked", "parked", "done"}
 VALID_QUEUE_DIR = {"to_aern", "to_fleet"}
 VALID_QUEUE_STATUS = {"open", "done"}
+VALID_AGENDA_WHICH = {"daily", "weekly"}
 VALID_PRIORITY = {1, 2, 3}
 
 
@@ -353,6 +361,59 @@ def api_queue_resolve():
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
     return jsonify({"ok": True})
+
+
+# ── /api/agenda ────────────────────────────────────────────────────────────
+def _default_agenda():
+    return {"daily": None, "weekly": None}
+
+
+def load_agenda():
+    doc = _load_json(AGENDA_PATH, _default_agenda)
+    for which in VALID_AGENDA_WHICH:
+        entry = doc.get(which)
+        doc[which] = entry if isinstance(entry, dict) and isinstance(entry.get("content"), str) else None
+    return doc
+
+
+def save_agenda_atomic(doc):
+    _save_json_atomic(AGENDA_PATH, doc)
+
+
+@sb_bp.route("/api/agenda")
+def api_agenda_get():
+    if not _is_nexus_allowed():
+        abort(404)
+    doc = load_agenda()
+    which = request.args.get("which")
+    if which in VALID_AGENDA_WHICH:
+        return jsonify({which: doc[which]})
+    return jsonify(doc)
+
+
+@sb_bp.route("/api/agenda", methods=["POST"])
+def api_agenda_post():
+    body = _sb_json()
+    which = body.get("which")
+    if which not in VALID_AGENDA_WHICH:
+        return jsonify({"ok": False, "error": f"which must be one of {sorted(VALID_AGENDA_WHICH)}"}), 400
+    content = body.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return jsonify({"ok": False, "error": "content (non-empty markdown string) is required"}), 400
+
+    doc = load_agenda()
+    doc[which] = {
+        "content": content,
+        "updated_at": _now_iso(),
+        "updated_by": body.get("updated_by") or "unknown",
+    }
+
+    try:
+        save_agenda_atomic(doc)
+    except OSError as e:
+        return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
+
+    return jsonify({"ok": True, which: {k: v for k, v in doc[which].items() if k != "content"}})
 
 
 # ── /api/needs-aern ────────────────────────────────────────────────────────
