@@ -41,12 +41,19 @@ def main():
         r = c.get(p)
         check(p, r.status_code == 200, f"HTTP {r.status_code}")
 
+    print("== second-brain APIs (internal -> 200, read-only) ==")
+    for p in ["/api/seat", "/api/queue", "/api/agenda"]:
+        r = c.get(p)
+        check(p, r.status_code == 200 and isinstance(r.get_json(), dict), f"HTTP {r.status_code}")
+
     print("== security (via Cloudflare -> 404) ==")
-    for p in ["/nexus", "/nexus/goals"]:
+    for p in ["/nexus", "/nexus/goals", "/api/seat", "/api/queue", "/api/agenda"]:
         r = c.get(p, headers={"CF-Connecting-IP": "203.0.113.9"})
         check(f"{p} blocked", r.status_code == 404, f"HTTP {r.status_code}")
     r = c.post("/api/nexus/capture", json={"text": "x"}, headers={"CF-Connecting-IP": "203.0.113.9"})
     check("/api/nexus/capture blocked", r.status_code == 404, f"HTTP {r.status_code}")
+    r = c.post("/api/agenda", json={"which": "daily", "content": "x"}, headers={"CF-Connecting-IP": "203.0.113.9"})
+    check("/api/agenda POST blocked", r.status_code == 404, f"HTTP {r.status_code}")
 
     print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1
