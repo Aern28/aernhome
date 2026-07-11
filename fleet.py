@@ -70,6 +70,7 @@ CHECK_META = {
     "signal_cli": ("Signal CLI", "aernbot"),
     "containers": ("Containers", "infra"),
     "qbittorrent": ("qBittorrent (NAS)", "infra"),
+    "trainer_ollama": ("Trainer Ollama (5080)", "infra"),
     "mirror_fresh": ("TCG Mirror", "tcg"),
     "price_fresh": ("TCG Prices", "tcg"),
     "disk": ("Disk Space", "infra"),
@@ -201,6 +202,27 @@ def check_qbittorrent():
         return ("down", f"unreachable: {type(e).__name__}")
 
 
+def check_trainer_ollama():
+    """Trainer's RTX 5080 Ollama endpoint (tailscale serve, tailnet-only) —
+    the fleet's inference node; Aernbot's cheap-thought chores prefer it over
+    Ashaman's 2070S. Aern intentionally pauses it for gaming via /game-mode,
+    so unreachable is a warn with that explanation, never a red alert."""
+    base = "http://100.99.191.118:11434"
+    try:
+        r = requests.get(base + "/api/version", timeout=5)
+        if r.status_code != 200:
+            return ("warn", f"HTTP {r.status_code}")
+        ver = r.json().get("version", "?")
+        try:
+            models = requests.get(base + "/api/ps", timeout=5).json().get("models", [])
+            resident = ", ".join(m.get("name", "?") for m in models) if models else "idle"
+        except requests.RequestException:
+            resident = "residency unknown"
+        return ("up", f"v{ver} · {resident} · 5080")
+    except requests.RequestException as e:
+        return ("warn", f"unreachable ({type(e).__name__}) — game-mode or Trainer down; Aernbot on 2070S fallback")
+
+
 def check_disk():
     """psutil disk_usage on / and /data; reports the worse of the two."""
     try:
@@ -236,6 +258,7 @@ SIMPLE_CHECKS = {
     "containers": check_containers,
     "signal_cli": check_signal_cli,
     "qbittorrent": check_qbittorrent,
+    "trainer_ollama": check_trainer_ollama,
     "mirror_fresh": check_mirror_fresh,
     "price_fresh": check_price_fresh,
     "disk": check_disk,
