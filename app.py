@@ -74,6 +74,41 @@ app.register_blueprint(ledger.ledger_bp)
 app.register_blueprint(vault.vault_bp)
 
 
+import ipaddress
+
+
+def _host_ok(host):
+    """A legitimate caller uses an IP literal, localhost, a *.ts.net name, or a
+    single-label docker service name (aernhome, n8n, ...). A DNS-rebind attack
+    arrives with the attacker's multi-label PUBLIC domain in the Host header —
+    those are what we want to reject."""
+    if not host:
+        return True
+    h = host.split(":")[0].strip().lower()
+    if h == "localhost" or h.endswith(".localhost") or h.endswith(".ts.net"):
+        return True
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        pass
+    return "." not in h  # single-label hostname (docker service name)
+
+
+@app.before_request
+def _dns_rebind_guard():
+    # S1 anti-DNS-rebinding. LOG-ONLY for now: record any Host that WOULD be
+    # rejected so we can confirm no legitimate caller (n8n health polls, the
+    # tailnet browser) trips it before switching this to abort(404).
+    host = request.headers.get("Host", "")
+    if not _host_ok(host):
+        try:
+            print(f"[dns-rebind-guard] would-block Host={host!r} "
+                  f"path={request.path} from={request.remote_addr}", flush=True)
+        except Exception:
+            pass
+
+
 @app.context_processor
 def inject_asset_version():
     """Cache-bust /static/css/app.css by its mtime so a freshly rebuilt stylesheet

@@ -150,7 +150,21 @@ def _todoist_today_compute():
         raw = due.get("date")
         if not raw:
             continue
-        date_part = raw[:10]
+        if "T" in raw:
+            # Timed task: raw is a datetime, often UTC ('...Z'). A task due late
+            # local evening serializes to tomorrow in UTC — convert to local before
+            # bucketing so it isn't wrongly dropped as "future". All-day tasks (bare
+            # YYYY-MM-DD) are floating local dates and are left as-is.
+            try:
+                dtobj = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if dtobj.tzinfo is not None:
+                    from zoneinfo import ZoneInfo
+                    dtobj = dtobj.astimezone(ZoneInfo("America/Chicago"))
+                date_part = dtobj.date().isoformat()
+            except ValueError:
+                date_part = raw[:10]
+        else:
+            date_part = raw[:10]
         try:
             due_date = datetime.date.fromisoformat(date_part)
         except ValueError:
