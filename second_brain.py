@@ -397,6 +397,29 @@ def api_queue_resolve():
     return jsonify({"ok": True})
 
 
+@sb_bp.route("/api/queue/reopen", methods=["POST"])
+@_serialized
+def api_queue_reopen():
+    """Revive a resolved queue item (e.g. a fat-fingered ✓ Read on mobile).
+    Flips status back to open; leaves the (now-closed) Todoist twin alone —
+    re-resolving later just re-closes it harmlessly."""
+    body = _sb_json()
+    item_id = body.get("id")
+    if not item_id:
+        return jsonify({"ok": False, "error": "id is required"}), 400
+    doc = load_queue()
+    for item in doc["items"]:
+        if item.get("id") == item_id:
+            item["status"] = "open"
+            item["resolved_at"] = None
+            try:
+                save_queue_atomic(doc)
+            except OSError as e:
+                return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
+            return jsonify({"ok": True, "item": item})
+    return jsonify({"ok": False, "error": "no queue item with that id"}), 404
+
+
 @sb_bp.route("/api/queue/tag", methods=["POST"])
 @_serialized
 def api_queue_tag():
