@@ -61,6 +61,13 @@ app.config["SECRET_KEY"] = os.urandom(24)
 # Tailscale DERP. Short enough that a CSS/JS change self-heals within the hour; the
 # service worker (staleWhileRevalidate + VERSION bump) fronts registered clients.
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
+# gzip text responses (HTML/CSS/JS compress ~4-5x) — a large win over Tailscale
+# DERP. Degrades to no compression if the package is somehow unavailable.
+try:
+    from flask_compress import Compress
+    Compress(app)
+except Exception:
+    pass
 app.register_blueprint(fleet.fleet_bp)
 app.register_blueprint(second_brain.sb_bp)
 app.register_blueprint(ledger.ledger_bp)
@@ -1935,5 +1942,9 @@ if __name__ == "__main__":
     init_db()
     init_nexus_db()
     fleet.start_sentinel()
-    # Bind to 0.0.0.0 to allow external access (Tailscale)
-    app.run(host="0.0.0.0", port=5555, debug=False)
+    # Serve with waitress (production WSGI) instead of the Werkzeug dev server:
+    # real HTTP keep-alive — no fresh TCP handshake per asset over Tailscale DERP —
+    # plus a proper threaded server. Bind 0.0.0.0 inside the container; the compose
+    # port-publish scopes host exposure to the Tailscale IP + localhost.
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5555, threads=8)

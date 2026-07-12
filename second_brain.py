@@ -140,6 +140,26 @@ def save_queue_atomic(doc):
     _save_json_atomic(QUEUE_PATH, doc)
 
 
+# Serialize load->mutate->save across the shared JSON docs (seat/queue/agenda).
+# _save_json_atomic makes each individual write crash-safe, but concurrent POSTs
+# (multiple fleet machines; the threaded waitress server) still interleave
+# load-modify-save and silently lose an update / a queue receipt. This process-wide
+# lock closes that race — mandatory now that waitress serves requests on threads.
+import threading
+import functools
+_STORE_LOCK = threading.RLock()
+
+
+def _serialized(fn):
+    """Hold _STORE_LOCK for the whole handler so its load->mutate->save runs
+    atomically against every other JSON-store writer."""
+    @functools.wraps(fn)
+    def _wrapped(*args, **kwargs):
+        with _STORE_LOCK:
+            return fn(*args, **kwargs)
+    return _wrapped
+
+
 def _short_id():
     return secrets.token_hex(4)  # 8 hex chars
 
@@ -199,6 +219,7 @@ def api_seat_get():
 
 
 @sb_bp.route("/api/seat", methods=["POST"])
+@_serialized
 def api_seat_post():
     body = _sb_json()
     doc = load_seat()
@@ -243,6 +264,7 @@ def api_seat_post():
 
 
 @sb_bp.route("/api/seat/prune", methods=["POST"])
+@_serialized
 def api_seat_prune():
     body = _sb_json()
     doc = load_seat()
@@ -280,6 +302,7 @@ def api_queue_get():
 
 
 @sb_bp.route("/api/queue", methods=["POST"])
+@_serialized
 def api_queue_post():
     body = _sb_json()
     text = (body.get("text") or "").strip()
@@ -334,6 +357,7 @@ def api_queue_post():
 
 
 @sb_bp.route("/api/queue/resolve", methods=["POST"])
+@_serialized
 def api_queue_resolve():
     body = _sb_json()
     item_id = body.get("id")
@@ -399,6 +423,7 @@ def api_agenda_get():
 
 
 @sb_bp.route("/api/agenda", methods=["POST"])
+@_serialized
 def api_agenda_post():
     body = _sb_json()
     which = body.get("which")
