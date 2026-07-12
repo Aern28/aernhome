@@ -9,7 +9,7 @@
  *   - /api/*  and non-GET     → untouched (always live; never cache writes/state)
  *
  * Bump VERSION to force-evict old caches on next activate. */
-const VERSION = 'nexus-v2';
+const VERSION = 'nexus-v3';
 const STATIC_CACHE = `static-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;
@@ -50,6 +50,14 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return;      // other cross-origin: passthrough
   if (url.pathname.startsWith('/api/')) return;         // app API: always live
+
+  // Locally-served poster/cover art — cache-first, long-lived. The tmdb/igdb rule
+  // above went dead once posters were localized to these routes; media grids were
+  // re-downloading every cover on every visit.
+  if (/^\/nexus\/(media_cover|cover|card_image)\//.test(url.pathname)) {
+    event.respondWith(cacheFirst(req, IMG_CACHE));
+    return;
+  }
 
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(staleWhileRevalidate(req, STATIC_CACHE));

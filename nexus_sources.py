@@ -812,7 +812,7 @@ def maintenance_due():
         cur.execute(
             """
             SELECT id, task, category, due_date,
-                   CAST(julianday(due_date) - julianday('now', 'localtime')
+                   CAST(julianday(date(due_date)) - julianday(date('now', 'localtime'))
                         AS INTEGER) AS days_until
             FROM maintenance
             WHERE completed = 0
@@ -994,15 +994,25 @@ def _schedule_for(cal_id):
         now = datetime.datetime.now(tz)
         start = datetime.datetime.combine(now.date(), datetime.time.min, tzinfo=tz)
         end = start + datetime.timedelta(days=2)
-        creds = service_account.Credentials.from_service_account_file(
-            sa_path, scopes=["https://www.googleapis.com/auth/calendar.readonly"])
-        svc = build("calendar", "v3", credentials=creds, cache_discovery=False)
-        items = svc.events().list(
-            calendarId=cal_id, singleEvents=True, orderBy="startTime",
-            timeMin=start.astimezone(datetime.timezone.utc).isoformat(),
-            timeMax=end.astimezone(datetime.timezone.utc).isoformat(),
-            timeZone="America/Chicago", maxResults=25,
-        ).execute().get("items", [])
+        # Bound the calendar round-trip: googleapiclient/httplib2 have no default
+        # socket timeout, so a hung Google endpoint would otherwise wedge this
+        # request thread forever. A transient socket.timeout is caught below and
+        # degrades to empty, exactly like any other failure.
+        import socket
+        _prev_to = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(10)
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                sa_path, scopes=["https://www.googleapis.com/auth/calendar.readonly"])
+            svc = build("calendar", "v3", credentials=creds, cache_discovery=False)
+            items = svc.events().list(
+                calendarId=cal_id, singleEvents=True, orderBy="startTime",
+                timeMin=start.astimezone(datetime.timezone.utc).isoformat(),
+                timeMax=end.astimezone(datetime.timezone.utc).isoformat(),
+                timeZone="America/Chicago", maxResults=25,
+            ).execute().get("items", [])
+        finally:
+            socket.setdefaulttimeout(_prev_to)
     except Exception:
         return empty
 

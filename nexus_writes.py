@@ -56,21 +56,48 @@ def process_capture(capture_id):
 
 
 def capture_to_goal(capture_id, area="personal"):
-    """Promote a capture item into a goal, then mark the capture processed."""
+    """Promote a capture item into a goal and mark the capture processed, atomically.
+
+    Claim-then-insert in ONE transaction: the guarded UPDATE flips processed_at only
+    if it was still NULL, so a rapid double-click (the button doesn't self-disable)
+    can't promote the same capture into two goals — the second UPDATE matches 0 rows.
+    """
+    if area not in ("personal", "work", "house", "tcg"):
+        area = "personal"
     with closing(_conn()) as conn, conn:
-        row = conn.execute(
-            "SELECT text FROM capture WHERE id = ? AND processed_at IS NULL", (capture_id,)
-        ).fetchone()
-        if row is None:
+        cur = conn.execute(
+            "UPDATE capture SET processed_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND processed_at IS NULL",
+            (capture_id,),
+        )
+        if cur.rowcount != 1:
             raise ValueError("no such open capture")
-    gid = add_goal(row["text"], area)
-    process_capture(capture_id)
-    return gid
+        row = conn.execute(
+            "SELECT text FROM capture WHERE id = ?", (capture_id,)
+        ).fetchone()
+        gcur = conn.execute(
+            "INSERT INTO goals (title, area) VALUES (?, ?)",
+            ((row["text"] or "").strip(), area),
+        )
+        return gcur.lastrowid
+
+
+def _safe_url(u):
+    """Drop dangerous URL schemes (javascript:/data:/vbscript:) from a user- or
+    agent-supplied link before it's stored and later rendered into an <a href>.
+    Returns the trimmed url when its scheme is http/https/mailto or it's relative,
+    else '' — so a poisoned feed/link is stored empty instead of as an XSS vector."""
+    from urllib.parse import urlparse
+    u = (u or "").strip()
+    if not u:
+        return ""
+    scheme = urlparse(u).scheme.lower()
+    return u if (scheme == "" or scheme in ("http", "https", "mailto")) else ""
 
 
 # ── Links (curated "connections to documents") ───────────────────────────────
 def add_link(label, url, area=None):
-    label, url = (label or "").strip(), (url or "").strip()
+    label, url = (label or "").strip(), _safe_url(url)
     if not label or not url:
         raise ValueError("label and url required")
     with closing(_conn()) as conn, conn:
@@ -104,6 +131,7 @@ def add_goal(title, area="personal", detail=None, target=None, due=None, doc_lin
         raise ValueError("empty title")
     if area not in ("personal", "work", "house", "tcg"):
         area = "personal"
+    doc_link = _safe_url(doc_link) or None
     with closing(_conn()) as conn, conn:
         cur = conn.execute(
             """INSERT INTO goals (title, area, detail, target, due, doc_link)
@@ -540,6 +568,10 @@ def add_media(title, kind="tv", status="want", tmdb_id=None, poster_url=None,
         kind = "tv"
     if status not in _MEDIA_STATUSES:
         status = "want"
+    # First txn: insert and commit immediately so the write lock is released BEFORE
+    # any network I/O. Previously the poster download ran inside this block, holding
+    # a RESERVED lock across a slow/hanging CDN fetch — the one place a concurrent
+    # nexus write could hit 'database is locked' → OperationalError → HTTP 500.
     with closing(_conn()) as conn, conn:
         cur = conn.execute(
             """INSERT INTO media_status (kind, title, status, tmdb_id, poster_url,
@@ -548,15 +580,16 @@ def add_media(title, kind="tv", status="want", tmdb_id=None, poster_url=None,
             (kind, title, status, tmdb_id or None, poster_url or None,
              (overview or "").strip() or None, (str(year).strip() if year else None)))
         media_id = cur.lastrowid
-        # Localize the remote poster/cover right away so the row is offline-ready
-        # from the moment it's added. Degrades to the remote url (still stored
-        # above) on any download failure — never blocks the add.
-        if poster_url and str(poster_url).lower().startswith(("http://", "https://")):
-            local_ref = localize_poster(kind, media_id, poster_url)
-            if local_ref != poster_url:
+    # Localize the remote poster OUTSIDE any open transaction so the row is
+    # offline-ready. Degrades to the remote url (already stored) on any failure —
+    # never blocks the add. A second short txn records the local ref.
+    if poster_url and str(poster_url).lower().startswith(("http://", "https://")):
+        local_ref = localize_poster(kind, media_id, poster_url)
+        if local_ref != poster_url:
+            with closing(_conn()) as conn, conn:
                 conn.execute("UPDATE media_status SET poster_url = ? WHERE id = ?",
                              (local_ref, media_id))
-        return media_id
+    return media_id
 
 
 def list_media(kind="tv", status=None):
@@ -645,7 +678,7 @@ def add_feed_item(source, title=None, body=None, url=None, tag=None):
         cur = conn.execute(
             "INSERT INTO feed_items (source, title, body, url, tag) VALUES (?, ?, ?, ?, ?)",
             (source, (title or "").strip() or None, (body or "").strip() or None,
-             (url or "").strip() or None, (tag or "").strip() or None))
+             _safe_url(url) or None, (tag or "").strip() or None))
         return cur.lastrowid
 
 

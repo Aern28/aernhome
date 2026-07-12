@@ -152,13 +152,20 @@ def _slugify(title):
 
 
 def _clean_links(raw):
-    """Best-effort coercion of the links list — drop anything that isn't a
-    dict with at least a ref, never raise on malformed input."""
+    """Best-effort coercion of the links list — drop anything that isn't a dict
+    with at least a ref, never raise on malformed input, and strip dangerous URL
+    schemes so a ref can't become a javascript:/data: XSS vector when rendered as
+    an <a href>. Refs are often file paths (C:/…, /nexus/vault/…), so this
+    denylists the unsafe schemes rather than allowlisting http/https."""
+    from urllib.parse import urlparse
     out = []
     if isinstance(raw, list):
         for item in raw:
             if isinstance(item, dict) and item.get("ref"):
-                out.append({"label": str(item.get("label") or item.get("ref")), "ref": str(item["ref"])})
+                ref = str(item["ref"])
+                if urlparse(ref).scheme.lower() in ("javascript", "data", "vbscript"):
+                    continue
+                out.append({"label": str(item.get("label") or item.get("ref")), "ref": ref})
     return out
 
 

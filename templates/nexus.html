@@ -107,7 +107,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5 border-l-4 border-l-blue-500">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🗂️ Triage</h3>
-            <a href="/static/triage.html" class="text-xs font-medium text-blue-400 hover:text-blue-300">open →</a>
+            <a href="/static/triage.html" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">open →</a>
         </div>
         <p class="text-sm text-gray-300">Today's queue, sorted by effort — <span class="text-gray-100 font-medium">reads first</span>, then quick wins, then hands-on.</p>
         <a href="/static/triage.html" class="inline-block mt-3 text-sm text-blue-400 hover:text-blue-300">Open triage →</a>
@@ -141,7 +141,7 @@
                 {% if data.maintenance and data.maintenance[0].days_until < 0 %}border-l-4 border-l-red-500{% endif %}">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🏠 Maintenance</h3>
-            <a href="/nexus/house" class="text-xs font-medium text-blue-400 hover:text-blue-300">house →</a>
+            <a href="/nexus/house" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">house →</a>
         </div>
         {% if data.maintenance %}
         <ul class="space-y-2">
@@ -165,7 +165,7 @@
                 {% if data.infra.down %}border-l-4 border-l-amber-500{% endif %}">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🛰️ Infra</h3>
-            <a href="/?dash" class="text-xs font-medium text-blue-400 hover:text-blue-300">dash →</a>
+            <a href="/?dash" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">dash →</a>
         </div>
         <div class="flex items-baseline gap-2">
             <span class="text-2xl font-bold {% if data.infra.down %}text-amber-400{% elif data.infra.total %}text-emerald-400{% else %}text-gray-400{% endif %}">
@@ -206,7 +206,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🃏 TCG</h3>
-            <a href="/nexus/tcg" class="text-xs font-medium text-blue-400 hover:text-blue-300">ops →</a>
+            <a href="/nexus/tcg" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">ops →</a>
         </div>
         <div class="grid grid-cols-3 gap-2 text-center mb-3">
             <div><div class="text-lg font-bold text-emerald-400">${{ '%.0f'|format(data.tcg.inventory_value) }}</div><div class="text-[11px] uppercase tracking-wide text-gray-300">value</div></div>
@@ -225,7 +225,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🗄️ Vault</h3>
-            <a href="/nexus/vault" class="text-xs font-medium text-blue-400 hover:text-blue-300">browse →</a>
+            <a href="/nexus/vault" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">browse →</a>
         </div>
         {% if data.vault_recent %}
         {% for n in data.vault_recent %}
@@ -243,7 +243,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🎯 Goals</h3>
-            <a href="/nexus/goals" class="text-xs font-medium text-blue-400 hover:text-blue-300">all →</a>
+            <a href="/nexus/goals" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">all →</a>
         </div>
         {% if data.goals %}
         <ul class="space-y-3">
@@ -268,7 +268,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">📡 Feed</h3>
-            <a href="/nexus/feed" class="text-xs font-medium text-blue-400 hover:text-blue-300">all →</a>
+            <a href="/nexus/feed" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">all →</a>
         </div>
         {% if data.feed %}
         <ul class="space-y-2">
@@ -276,7 +276,7 @@
             <li class="flex items-start gap-2 text-sm border-t border-dark-border first:border-0 pt-2 first:pt-0">
                 <span title="{{ f.meta.label }}">{{ f.meta.icon }}</span>
                 <div class="min-w-0">
-                    <div class="text-gray-200 truncate">{{ f.title or f.body }}</div>
+                    <div class="text-gray-200 line-clamp-2 break-words">{{ f.title or f.body }}</div>
                     <div class="text-xs text-gray-400">{{ f.meta.label }} · {{ f.created_at[:16] }}</div>
                 </div>
             </li>
@@ -291,7 +291,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">📖 Reading</h3>
-            <a href="/nexus/books" class="text-xs font-medium text-blue-400 hover:text-blue-300">shelf →</a>
+            <a href="/nexus/books" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">shelf →</a>
         </div>
         {% if data.books %}
         <ul class="space-y-2">
@@ -314,7 +314,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">📺 Watching</h3>
-            <a href="/nexus/tv" class="text-xs font-medium text-blue-400 hover:text-blue-300">shows →</a>
+            <a href="/nexus/tv" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">shows →</a>
         </div>
         {% if data.watching %}
         <ul class="space-y-2">
@@ -341,7 +341,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">🎮 Playing</h3>
-            <a href="/nexus/games" class="text-xs font-medium text-blue-400 hover:text-blue-300">games →</a>
+            <a href="/nexus/games" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">games →</a>
         </div>
         {% if data.playing %}
         <ul class="space-y-2">
@@ -368,7 +368,7 @@
     <div class="bg-dark-card border border-dark-border rounded-lg p-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-white">📝 Pinned</h3>
-            <a href="/nexus/notes" class="text-xs font-medium text-blue-400 hover:text-blue-300">notes →</a>
+            <a href="/nexus/notes" class="text-sm font-medium text-blue-400 hover:text-blue-300 inline-flex items-center py-2 -my-2 px-1">notes →</a>
         </div>
         {% if data.notes %}
         <ul class="space-y-2">

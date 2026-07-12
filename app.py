@@ -56,6 +56,11 @@ except ImportError:
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
+# Cache /static/* at the HTTP layer for an hour: kills the per-visit conditional-GET
+# revalidation that (with no keep-alive) costs a fresh connection per asset over
+# Tailscale DERP. Short enough that a CSS/JS change self-heals within the hour; the
+# service worker (staleWhileRevalidate + VERSION bump) fronts registered clients.
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
 app.register_blueprint(fleet.fleet_bp)
 app.register_blueprint(second_brain.sb_bp)
 app.register_blueprint(ledger.ledger_bp)
@@ -1041,7 +1046,7 @@ def nexus_home():
         "infra": ns.infra_summary(),
     }
     data["captures"] = ns_writes.list_capture(limit=8)
-    data["vault_recent"] = vault.recent_notes(5)
+    data["vault_recent"] = ns._cached("vault_recent", 300, lambda: vault.recent_notes(5))
     data["links"] = ns_writes.list_links()
     data["notes"] = ns_writes.pinned_notes()
     # source-diverse teaser so once-daily digests aren't buried under Aernbot's volume
@@ -1095,7 +1100,7 @@ def nexus_inventory():
                 ln = lines.setdefault(it["line"], {"name": it["line"], "skus": 0,
                                                    "cards": 0, "_sets": {}})
                 ln["skus"] += 1
-                ln["cards"] += it["qty"]
+                ln["cards"] += int(it.get("qty") or 0)
                 ln["_sets"].setdefault(it["set"], []).append(it)
             for ln in lines.values():
                 # key is "entries", not "items" — Jinja attribute lookup would
@@ -1107,7 +1112,7 @@ def nexus_inventory():
                    "generated_at": raw.get("generated_at", "?"),
                    "totals": raw.get("totals", {}),
                    "lines": sorted(lines.values(), key=lambda l: -l["cards"])}
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, TypeError, AttributeError):
             inv = None  # malformed snapshot degrades to the empty state
     return render_template("nexus_inventory.html", sections=NEXUS_SECTIONS,
                            active="/nexus/inventory", inv=inv)
@@ -1874,6 +1879,8 @@ def _get_current_micro_season(month: int, day: int) -> dict:
     Returns:
         Dict with all micro-season fields, or an error dict if not found.
     """
+    if month == 2 and day == 29:  # leap day shares Feb 28's micro-season
+        day = 28
     idx = _SEASON_BY_MONTH_DAY.get((month, day))
     if idx is None:
         return {"error": f"No micro-season found for {month}/{day}"}
