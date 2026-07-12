@@ -9,7 +9,7 @@
  *   - /api/*  and non-GET     → untouched (always live; never cache writes/state)
  *
  * Bump VERSION to force-evict old caches on next activate. */
-const VERSION = 'nexus-v3';
+const VERSION = 'nexus-v4';
 const STATIC_CACHE = `static-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;

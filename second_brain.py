@@ -324,6 +324,9 @@ def api_queue_post():
         "id": _short_id(),
         "dir": direction,
         "text": text,
+        # Optional triage lane for the For-Aern page: "read" items collapse into
+        # the pinned "Read & done" group; everything else is the priority lane.
+        "effort": body.get("effort") if body.get("effort") in ("read", "quick", "hands-on") else None,
         # Receipts matter more than politeness here — an empty source is
         # allowed (never 500s) but every template/page nudges toward filling
         # it in, since "where did this come from" is the whole point.
@@ -394,6 +397,27 @@ def api_queue_resolve():
     return jsonify({"ok": True})
 
 
+@sb_bp.route("/api/queue/tag", methods=["POST"])
+@_serialized
+def api_queue_tag():
+    """Set (or clear) the triage effort tag on an existing open queue item."""
+    body = _sb_json()
+    item_id = body.get("id")
+    effort = body.get("effort")
+    if effort not in ("read", "quick", "hands-on", None):
+        return jsonify({"ok": False, "error": "effort must be read|quick|hands-on|null"}), 400
+    doc = load_queue()
+    for item in doc["items"]:
+        if item.get("id") == item_id:
+            item["effort"] = effort
+            try:
+                save_queue_atomic(doc)
+            except OSError as e:
+                return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
+            return jsonify({"ok": True, "item": item})
+    return jsonify({"ok": False, "error": "no queue item with that id"}), 404
+
+
 # ── /api/agenda ────────────────────────────────────────────────────────────
 def _default_agenda():
     return {"daily": None, "weekly": None}
@@ -458,6 +482,8 @@ def _needs_from_queue():
             if item.get("dir") == "to_aern" and item.get("status") == "open":
                 out.append({
                     "source_kind": "queue",
+                    "id": item.get("id"),
+                    "effort": item.get("effort"),
                     "title": item.get("text", "")[:140],
                     "detail": f"source: {item.get('source')}" if item.get("source") else "",
                     "priority": item.get("priority") if item.get("priority") in VALID_PRIORITY else 2,

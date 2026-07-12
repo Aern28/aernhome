@@ -241,7 +241,7 @@ function sbWireQueueResolve() {
         t.disabled = true;
         const res = await sbPostJson('/api/queue/resolve', { id: t.dataset.id });
         if (res.ok) {
-            sbLoadQueue();
+            sbLoadAll();
         } else {
             t.disabled = false;
         }
@@ -257,6 +257,11 @@ function sbRenderAernItem(item) {
     const icon = SB_AERN_KIND_ICON[item.source_kind] || '•';
     const div = document.createElement('div');
     div.className = `bg-dark-card border border-dark-border rounded-lg p-5 ${border}`;
+    // Queue items get a tap-to-clear (resolve) button; other sources keep their
+    // ref link (those clear at the source, not from this lane).
+    const action = (item.source_kind === 'queue' && item.id)
+        ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="shrink-0 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">${item.effort === 'read' ? '✓ Read' : 'Done'}</button>`
+        : (item.ref ? `<div class="shrink-0">${sbRenderSource(item.ref, 'text-blue-400 hover:underline text-sm')}</div>` : '');
     div.innerHTML = `
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -264,23 +269,44 @@ function sbRenderAernItem(item) {
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
                 ${item.detail ? `<div class="text-sm text-gray-300 mt-1 break-words">${sbEscapeHtml(item.detail)}</div>` : ''}
             </div>
-            ${item.ref ? `<div class="shrink-0">${sbRenderSource(item.ref, 'text-blue-400 hover:underline text-sm')}</div>` : ''}
+            ${action}
         </div>
     `;
     return div;
 }
 
+function sbAernSection(title, items) {
+    const sec = document.createElement('section');
+    sec.className = 'mb-6';
+    sec.innerHTML = `<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">${title} <span class="font-normal">(${items.length})</span></h3><div class="space-y-3" data-aern-group></div>`;
+    const g = sec.querySelector('[data-aern-group]');
+    items.forEach((item) => g.appendChild(sbRenderAernItem(item)));
+    return sec;
+}
+
 function sbRenderAern(data) {
     const el = document.getElementById('aern-list');
     if (!el) return;
-    const items = (Array.isArray(data.items) ? data.items.slice() : [])
+    const all = Array.isArray(data.items) ? data.items.slice() : [];
+    // Pure-FYI queue items (effort==="read") pin to the top as a quick skim;
+    // everything else is the priority-ordered "needs you" lane below.
+    const reads = all.filter((i) => i.source_kind === 'queue' && i.effort === 'read');
+    const needs = all.filter((i) => !(i.source_kind === 'queue' && i.effort === 'read'))
         .sort((a, b) => (a.priority || 3) - (b.priority || 3));
 
     el.innerHTML = '';
-    if (items.length) {
-        items.forEach((item) => el.appendChild(sbRenderAernItem(item)));
-    } else {
+    if (!all.length) {
         el.innerHTML = '<p class="text-center text-lg text-gray-400 py-6">Nothing needs you. Go live your life.</p>';
+    } else {
+        if (reads.length) el.appendChild(sbAernSection('📖 Read &amp; done', reads));
+        if (needs.length) {
+            el.appendChild(sbAernSection('🎯 Needs you', needs));
+        } else if (reads.length) {
+            const done = document.createElement('p');
+            done.className = 'text-sm text-gray-400';
+            done.textContent = 'Nothing else waiting — just the reads above.';
+            el.appendChild(done);
+        }
     }
 
     const genEl = document.getElementById('aern-generated-at');
