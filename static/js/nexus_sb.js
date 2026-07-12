@@ -268,7 +268,7 @@ function sbRenderAernItem(item) {
     div.innerHTML = `
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div class="min-w-0">
-                <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}${item.id ? ` · <span class="font-mono normal-case text-gray-400">#${sbEscapeHtml(item.id)}</span>` : ''}</div>
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
                 ${item.detail ? `<div class="text-sm text-gray-300 mt-1 break-words">${sbEscapeHtml(item.detail)}</div>` : ''}
             </div>
