@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Queue — Sun Jul 12</title>
+<style>
+  :root {
+    --bg: #f5f7f9;
+    --card: #ffffff;
+    --ink: #1a2029;
+    --ink-soft: #566072;
+    --line: #e3e8ee;
+    --accent: #2b7a86;
+    --read: #4a6fa5;
+    --quick: #3f9668;
+    --hands: #b7823a;
+    --mono-bg: #eef1f4;
+    --shadow: 0 1px 2px rgba(20,30,45,.05), 0 4px 16px rgba(20,30,45,.05);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1218; --card: #161c25; --ink: #dbe3ee; --ink-soft: #8b98ab;
+      --line: #26303c; --accent: #4fb3c1; --read: #7ea3d8; --quick: #5cc08a;
+      --hands: #d6a862; --mono-bg: #1e2732;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 18px 64px; }
+  .backlink {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; letter-spacing: .04em; color: var(--accent);
+    text-decoration: none; border: 1px solid var(--line);
+    padding: 5px 11px; border-radius: 999px; background: var(--card);
+  }
+  .backlink:hover { border-color: var(--accent); }
+  header { margin-bottom: 26px; }
+  .kicker {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 6px;
+  }
+  h1 { font-size: 27px; line-height: 1.15; margin: 0 0 8px; text-wrap: balance; letter-spacing: -.01em; }
+  .lede { color: var(--ink-soft); font-size: 15px; margin: 0; }
+  section { margin-top: 34px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+  .sec-head h2 { font-size: 15px; margin: 0; letter-spacing: -.01em; }
+  .sec-head .count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: var(--ink-soft);
+  }
+  .sec-note { color: var(--ink-soft); font-size: 13.5px; margin: -4px 0 14px; }
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 16px 16px 15px; position: relative;
+    border-left: 3px solid var(--stripe, var(--line));
+  }
+  .card.read  { --stripe: var(--read); }
+  .card.quick { --stripe: var(--quick); }
+  .card.hands { --stripe: var(--hands); }
+  .card-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 8px; }
+  .card h3 { font-size: 16px; margin: 0; flex: 1 1 auto; min-width: 0; letter-spacing: -.01em; }
+  .id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px; color: var(--ink-soft); background: var(--mono-bg);
+    padding: 2px 7px; border-radius: 6px; white-space: nowrap;
+  }
+  .card p { margin: 0 0 8px; font-size: 14.5px; color: var(--ink); }
+  .card p:last-child { margin-bottom: 0; }
+  .card ul { margin: 6px 0 0; padding-left: 18px; }
+  .card li { font-size: 14px; margin: 4px 0; color: var(--ink); }
+  .muted { color: var(--ink-soft); }
+  code, kbd, .path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; background: var(--mono-bg); padding: 1px 5px; border-radius: 5px;
+    word-break: break-word;
+  }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; margin: 8px 0 0; }
+  .steps li { position: relative; padding-left: 26px; margin: 6px 0; font-size: 14px; }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: 1px;
+    font-family: ui-monospace, monospace; font-size: 11px;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: var(--stripe, var(--accent)); color: #fff;
+    display: grid; place-items: center; font-weight: 600;
+  }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line);
+    color: var(--ink-soft); font-size: 12.5px; }
+  .tag {
+    font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: .06em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--stripe); color: var(--stripe); font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="backlink" href="/nexus">← Nexus home</a>
+  <header>
+    <p class="kicker">Nexus queue · to-aern</p>
+    <h1>Sunday triage — reads first</h1>
+    <p class="lede">Everything open on your queue, sorted by effort. The two reads up top are read-and-done; the rest waits for your hands or a decision.</p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="tag" style="--stripe:var(--read)">Read</span><h2>Read &amp; you're done</h2><span class="count">2</span></div>
+    <div class="cards">
+
+      <article class="card read">
+        <div class="card-top"><h3>Overnight recap</h3><span class="id">48aa2412</span></div>
+        <ul>
+          <li>Nexus dashboard now shows <strong>Gal's schedule</strong> beside yours — live.</li>
+          <li><strong>Family Agenda TRMNL pipeline</strong> fully wired (Gal calendar → Notion → n8n → device), verified with a real push.</li>
+          <li>Deleted an orphaned <code>SoftLandingCreativeManagementTask</code> — PUP/adware leftover, no payload on disk, confirmed by you first.</li>
+          <li>Fixed 4 scheduled tasks that were flashing PowerShell windows all day (<code>TCG Order Sync</code> q15min was the main one).</li>
+          <li class="muted">Still open elsewhere: BuzzFence USPS (SOL ~7/24), Medhub/ACOG, one uncategorized FEMA flood-premium charge — all tracked in Todoist/agenda.</li>
+        </ul>
+      </article>
+
+      <article class="card read">
+        <div class="card-top"><h3>Security note — Komga stack</h3><span class="id">7f4b21b8</span></div>
+        <p>The NAS SMB password for the <code>komga_comics</code> volume sits in <strong>plaintext</strong> in the compose file (<span class="path">//192.168.1.118/usbshare1-2</span>) — against the no-plaintext-secrets rule.</p>
+        <p class="muted">Fix next time you touch the stack: move the credential to a gitignored <code>.env</code> (or a Bitwarden value) and recreate the container. Same NAS cred is likely reused elsewhere — worth rotating since it sat exposed. Nothing to do this second; just so you know it's there.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="tag" style="--stripe:var(--quick)">2-min</span><h2>Quick wins — your hands</h2><span class="count">1</span></div>
+    <p class="sec-note">Both are deletes I'm not allowed to do (a Bitwarden item and a remote file).</p>
+    <div class="cards">
+      <article class="card quick">
+        <div class="card-top"><h3>Two 1-minute cleanups</h3><span class="id">fb8b1a07</span></div>
+        <ul>
+          <li>Delete dead Bitwarden item <code>claude cloudflare API token</code> (<span class="path">c211bc59</span>) — credential's already revoked.</li>
+          <li>Delete <span class="path">H:/play-b-restore-canary.txt</span> — a 24-byte snapshot restore-test leftover.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="tag" style="--stripe:var(--hands)">Hands-on</span><h2>At the keyboard / a decision</h2><span class="count">5</span></div>
+    <div class="cards">
+
+      <article class="card hands">
+        <div class="card-top"><h3>Apply Play A — managed fence</h3><span class="id">223eedef</span></div>
+        <p>Staged &amp; validated (Phoenix's own 93-rule deny list + canary). Needs your UAC:</p>
+        <ol class="steps">
+          <li>Run <span class="path">C:\projects\fleet-hardening\install-managed-fence.ps1</span> → approve UAC.</li>
+          <li>Start a <strong>fresh</strong> Claude session, have it run <code>echo FLEET-FENCE-CANARY</code> — it must be <strong>denied</strong>.</li>
+        </ol>
+      </article>
+
+      <article class="card hands">
+        <div class="card-top"><h3>A/B test both Apple Pencils</h3><span class="id">566aa3d4</span></div>
+        <p>You own two Pencil Pros (one died months ago). Reunite them, open the <strong>Batteries widget</strong>, snap each to the volume edge — the good one shows a % within a minute.</p>
+        <p class="muted">Most likely you grabbed the old dead one and your good one's at home. Only if <em>both</em> test dead is the 2-mo-old one faulty → I set up a mail-in warranty swap (no store).</p>
+      </article>
+
+      <article class="card hands">
+        <div class="card-top"><h3>Buy device insurance</h3><span class="id">4f5665c1</span></div>
+        <p>Accidental-damage cover for Phoenix, so no repeat juice-saga. Compare: Asus ADP · homeowner's valuable-items rider · Asurion/Worth Ave · credit-card purchase protection.</p>
+        <p class="muted">Say the word and I'll pull and compare quotes.</p>
+      </article>
+
+      <article class="card hands">
+        <div class="card-top"><h3>OneDrive migration</h3><span class="id">db06c270</span></div>
+        <p>Make <span class="path">C:\projects\Obivault</span> the canonical vault <em>out</em> of OneDrive (git + Obsidian Sync), re-point the two dead publishers still writing to the old NenTera path, then get personal files off OneDrive and unlink. Do together at the machine.</p>
+      </article>
+
+      <article class="card hands">
+        <div class="card-top"><h3>Retrobox</h3><span class="id">f0c52774</span></div>
+        <p>Weekend project — restore the portable DOSBox games to <span class="path">C:\Games</span> from the SSD extraction on Trainer.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <footer>
+    Pulled from <span class="path">ashaman:5555/api/queue</span> · 8 open · Sun Jul 12. Tell me when one's done and I'll close it out.
+  </footer>
+</div>
+</body>
+</html>
