@@ -97,16 +97,19 @@ def _host_ok(host):
 
 @app.before_request
 def _dns_rebind_guard():
-    # S1 anti-DNS-rebinding. LOG-ONLY for now: record any Host that WOULD be
-    # rejected so we can confirm no legitimate caller (n8n health polls, the
-    # tailnet browser) trips it before switching this to abort(404).
+    # S1 anti-DNS-rebinding: reject a Host header carrying a multi-label public
+    # domain (the rebind vector — the network-position gate can't tell a rebound
+    # attacker page in your own tailnet browser from a same-origin fetch). Verified
+    # over a log-only window that no legit caller (n8n polls, tailnet browser) trips
+    # it; every legitimate host is an IP / localhost / *.ts.net / single-label name.
     host = request.headers.get("Host", "")
     if not _host_ok(host):
         try:
-            print(f"[dns-rebind-guard] would-block Host={host!r} "
+            print(f"[dns-rebind-guard] blocked Host={host!r} "
                   f"path={request.path} from={request.remote_addr}", flush=True)
         except Exception:
             pass
+        abort(404)
 
 
 @app.context_processor
