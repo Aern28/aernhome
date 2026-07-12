@@ -256,14 +256,17 @@ function sbRenderAernItem(item) {
     const border = SB_AERN_BORDER[item.priority] != null ? SB_AERN_BORDER[item.priority] : SB_AERN_BORDER[3];
     const icon = SB_AERN_KIND_ICON[item.source_kind] || '•';
     const div = document.createElement('div');
-    div.className = `bg-dark-card border border-dark-border rounded-lg p-5 ${border}`;
+    div.className = `bg-dark-card border border-dark-border rounded-lg p-4 sm:p-5 ${border}`;
     // Queue items get a tap-to-clear (resolve) button; other sources keep their
     // ref link (those clear at the source, not from this lane).
     const action = (item.source_kind === 'queue' && item.id)
-        ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="shrink-0 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">${item.effort === 'read' ? '✓ Read' : 'Done'}</button>`
-        : (item.ref ? `<div class="shrink-0">${sbRenderSource(item.ref, 'text-blue-400 hover:underline text-sm')}</div>` : '');
+        ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="self-start shrink-0 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">${item.effort === 'read' ? '✓ Read' : 'Done'}</button>`
+        : (item.ref ? `<div class="shrink-0 min-w-0 break-words">${sbRenderSource(item.ref, 'text-blue-400 hover:underline text-sm')}</div>` : '');
+    // Stack on mobile so the text uses the FULL card width (the side-by-side row
+    // reserved right-hand space and squeezed the text into a hard-wrapping column);
+    // side-by-side again at sm+.
     div.innerHTML = `
-        <div class="flex items-start justify-between gap-3">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div class="min-w-0">
                 <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}</div>
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
