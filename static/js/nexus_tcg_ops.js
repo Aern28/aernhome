@@ -48,28 +48,20 @@ function tcgOpsFormatAgeHours(hours) {
     return `${(hours / 24).toFixed(1)}d old`;
 }
 
-function renderOutage(outage) {
-    const countEl = document.getElementById('tcgops-outage-count');
-    const valueEl = document.getElementById('tcgops-outage-value');
-    const banner = document.getElementById('tcgops-outage-banner');
-    if (!outage) {
-        if (countEl) { countEl.textContent = '—'; countEl.className = 'text-2xl font-bold text-white'; }
-        if (valueEl) valueEl.textContent = '—';
-        if (banner) banner.classList.add('hidden');
-        return;
-    }
-    const count = outage.count;
-    const hasBacklog = typeof count === 'number' && count > 0;
+function renderOrders30(orders) {
+    const countEl = document.getElementById('tcgops-orders30-count');
+    const detailEl = document.getElementById('tcgops-orders30-detail');
+    const counts = orders && orders.status_counts_30d;
     if (countEl) {
-        countEl.textContent = count == null ? '—' : count;
-        countEl.className = `text-2xl font-bold ${hasBacklog ? 'text-amber-400' : 'text-white'}`;
+        countEl.textContent = counts
+            ? Object.values(counts).reduce((a, b) => a + b, 0)
+            : '—';
     }
-    if (valueEl) {
-        valueEl.textContent = outage.total_value != null
-            ? `${tcgOpsFormatMoney(outage.total_value)} since ${outage.since || '?'}`
-            : `since ${outage.since || '?'}`;
+    if (detailEl) {
+        detailEl.textContent = counts
+            ? Object.entries(counts).map(([s, n]) => `${n} ${s}`).join(' · ')
+            : '—';
     }
-    if (banner) banner.classList.toggle('hidden', !hasBacklog);
 }
 
 function renderHeldTile(held) {
@@ -181,7 +173,7 @@ function renderMirror(mirror) {
 }
 
 function renderTcgOps(data) {
-    renderOutage(data.orders && data.orders.outage_window_orders);
+    renderOrders30(data.orders);
     renderHeldTile(data.orders && data.orders.held);
     renderHeldList(data.orders && data.orders.held);
     renderAutoprocess(data.autoprocess);

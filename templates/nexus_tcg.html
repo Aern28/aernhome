@@ -34,9 +34,9 @@
 
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-            <div id="tcgops-outage-count" class="text-2xl font-bold text-white">—</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">unsynced since outage</div>
-            <div id="tcgops-outage-value" class="text-xs text-gray-400 mt-1">—</div>
+            <div id="tcgops-orders30-count" class="text-2xl font-bold text-white">—</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400">orders (30d)</div>
+            <div id="tcgops-orders30-detail" class="text-xs text-gray-400 mt-1 break-words">—</div>
         </div>
         <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
             <div id="tcgops-held-count" class="text-2xl font-bold text-white">—</div>
@@ -51,11 +51,6 @@
             <div id="tcgops-mirror-age" class="text-2xl font-bold text-white">—</div>
             <div class="text-[11px] uppercase tracking-wide text-gray-400">mirror age</div>
         </div>
-    </div>
-
-    <!-- Outage caption — shown only when outage_window_orders.count > 0 -->
-    <div id="tcgops-outage-banner" class="hidden bg-dark-card border-l-4 border-l-amber-500 border border-dark-border rounded-lg px-4 py-2 mb-4 text-xs text-amber-300">
-        Unsynced — merge on NenTera restore.
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

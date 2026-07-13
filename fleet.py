@@ -48,12 +48,6 @@ FINANCE_VERDICT_STALE_DAYS = 35  # finance-check is a monthly loop; give it a fe
 WORKSPACE_ALIVE_PATH = "/workspace/.bot_alive"
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
-# The machine that normally syncs `orders` off this read-only mirror died on
-# 2026-07-03. Everything recorded in `orders` from that date forward is
-# accumulating here unsynced until that host is restored — /api/tcg-ops
-# surfaces the count/value of that backlog so it isn't silently missed.
-TCG_OUTAGE_SINCE = "2026-07-03"
-
 FLEET_INTERVAL = int(os.environ.get("FLEET_INTERVAL", "60") or "60")
 HISTORY_LEN = 100
 ALERT_COOLDOWN_S = 10 * 60  # max 1 alert per check per 10 min
@@ -657,14 +651,13 @@ def _tcg_ops_orders(con, now):
     selected — order ids, values, statuses, and timestamps only."""
     out = {
         "status_counts_30d": None,
-        "outage_window_orders": {"since": TCG_OUTAGE_SINCE, "count": None, "total_value": None},
         "held": {"count": None, "orders": None},
         "most_recent_order_at": None,
     }
 
     # labeled_at is the timestamp an order first lands in this table (set at
     # insert time), i.e. the closest thing to a "recorded on this mirror" clock
-    # — used below for the 30d bucket, the outage-window count, and ages.
+    # — used below for the 30d bucket and ages.
     try:
         cutoff30 = (now - dt.timedelta(days=30)).isoformat()
         rows = con.execute(
@@ -674,17 +667,6 @@ def _tcg_ops_orders(con, now):
         out["status_counts_30d"] = {r[0] or "unknown": r[1] for r in rows}
     except sqlite3.Error as e:
         print(f"[fleet] tcg-ops status_counts_30d query failed: {e}")
-
-    try:
-        row = con.execute(
-            "SELECT COUNT(*), COALESCE(SUM(order_total), 0) FROM orders WHERE labeled_at >= ?",
-            (TCG_OUTAGE_SINCE,),
-        ).fetchone()
-        if row:
-            out["outage_window_orders"]["count"] = row[0]
-            out["outage_window_orders"]["total_value"] = round(row[1], 2) if row[1] is not None else None
-    except sqlite3.Error as e:
-        print(f"[fleet] tcg-ops outage_window_orders query failed: {e}")
 
     try:
         rows = con.execute(
@@ -811,9 +793,11 @@ def api_fleet():
 
 @fleet_bp.route("/api/tcg-ops")
 def api_tcg_ops():
-    """TCG business-ops strip: order backlog (esp. the 2026-07-03 sync-host
-    outage window), held orders, autoprocess status, price freshness, and
-    mirror age. Every section is independently wrapped so a single failing
+    """TCG business-ops strip: order lifecycle (30d status counts), held
+    orders, autoprocess status, price freshness, and mirror age. (The
+    2026-07-03 NenTera-outage backlog counter was retired 2026-07-13 —
+    Phoenix's q15min Order Sync resumed 7/10 and parity was verified.)
+    Every section is independently wrapped so a single failing
     query/file read degrades that section to nulls — this route never 500s.
     No buyer/PII fields (buyer_name, shipping_address) are ever queried."""
     if not _is_nexus_allowed():
@@ -823,7 +807,6 @@ def api_tcg_ops():
 
     orders = {
         "status_counts_30d": None,
-        "outage_window_orders": {"since": TCG_OUTAGE_SINCE, "count": None, "total_value": None},
         "held": {"count": None, "orders": None},
         "most_recent_order_at": None,
     }
