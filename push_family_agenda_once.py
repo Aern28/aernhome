@@ -64,7 +64,10 @@ def main():
     from urllib.request import Request, urlopen
     req = Request(f"https://trmnl.com/api/custom_plugins/{TRMNL_PLUGIN_UUID}",
                   data=json.dumps(payload).encode(),
-                  headers={"Content-Type": "application/json"}, method="POST")
+                  headers={"Content-Type": "application/json",
+                           # bare Python-urllib UA gets Cloudflare-403'd; any browser-ish UA passes
+                           "User-Agent": "Mozilla/5.0 (aernhome family-agenda push)"},
+                  method="POST")
     with urlopen(req, timeout=30) as resp:
         print(f"TRMNL push: HTTP {resp.status} | {len(days)} days | "
               f"today={payload['merge_variables']['today']} "
