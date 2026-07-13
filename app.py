@@ -9,6 +9,7 @@ import time
 import sqlite3
 from email.utils import formatdate
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request, make_response, redirect
 import requests
 import psutil
@@ -117,7 +118,7 @@ def inject_asset_version():
     """Cache-bust /static/css/app.css by its mtime so a freshly rebuilt stylesheet
     (npm run build:css) is fetched immediately instead of serving a stale, browser-
     cached copy — which otherwise makes newly added Tailwind classes render unstyled."""
-    out = {}
+    out = {"served_at": datetime.now(ZoneInfo("America/Chicago")).strftime("%m/%d %H:%M")}
     for key, rel in (("css_ver", ("css", "app.css")), ("js_ver", ("js", "nexus_sb.js"))):
         try:
             out[key] = int(os.path.getmtime(os.path.join(app.static_folder, *rel)))
