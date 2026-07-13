@@ -8,7 +8,7 @@ import json
 import time
 import sqlite3
 from email.utils import formatdate
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request, make_response, redirect
 import requests
 import psutil
@@ -1520,6 +1520,25 @@ def api_nexus_todoist_close(task_id):
     _nexus_json()
     import nexus_sources as ns
     return jsonify({"ok": ns.todoist_close(task_id)})
+
+
+@app.route("/api/thread-note")
+def api_thread_note():
+    """Aernbot's daily cross-seat thread note (BUILD #7), served off the
+    read-only claude-workspace mount so fleet seats can auto-inject it at
+    session start instead of Matt pasting it manually (queue b90c2f4f).
+    ok:True with content:None means Aernbot hasn't written one yet — that is
+    a normal state, not an error."""
+    if not _is_nexus_allowed():
+        abort(404)
+    path = "/workspace/inputs/thread-note.md"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        mtime = datetime.fromtimestamp(os.stat(path).st_mtime, tz=timezone.utc).isoformat()
+        return jsonify({"ok": True, "mtime": mtime, "content": content})
+    except OSError:
+        return jsonify({"ok": True, "mtime": None, "content": None})
 
 
 # ── Notes ─────────────────────────────────────────────────────────────────────
