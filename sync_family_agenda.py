@@ -42,6 +42,19 @@ SHIFT_MAP = {
     "wc 2": ("both", "Service"),
 }
 
+# Matt's QGenda events (AutoSync onto his primary calendar, "GEN - ..." prefix).
+# Substring -> category; slot comes from the AM/PM suffix or the event's times.
+# Gyn BU = hospital on-call per the QGenda-codes lore, NOT clinic.
+MATT_CODE_MAP = [
+    ("gyn bu", "Call"),
+    ("l&d night", "Night Shift"),
+    ("l&d", "Night Shift"),
+    ("post call", "Postcall"),
+    ("clinic", "Clinic"),
+    ("education", "Education"),
+]
+MATT_FALLBACK = "Service"
+
 
 def _token():
     t = os.environ.get("NOTION_TOKEN")
@@ -78,13 +91,13 @@ def _week_dates(tz):
     return [monday + datetime.timedelta(days=i) for i in range(7)]
 
 
-def fetch_gal_events(tz):
-    """Events on the Gal calendar for this week (Mon 00:00 - next Mon 00:00),
+def fetch_events(tz, cal_env, default_cal=""):
+    """Events on one calendar for this week (Mon 00:00 - next Mon 00:00),
     same service-account pattern as nexus_sources._schedule_for. Returns raw
     Google Calendar API items; never raises — returns [] on any failure."""
     sa_path = os.environ.get(
         "GOOGLE_CALENDAR_SA", "/workspace/.credentials/claudendar-service-account.json")
-    cal_id = os.environ.get("CALENDAR_ID_GAL", "")
+    cal_id = os.environ.get(cal_env, default_cal)
     if not cal_id or not os.path.exists(sa_path):
         return []
     try:
@@ -170,12 +183,67 @@ def classify(events, tz):
     return by_day
 
 
+def classify_matt(events, tz):
+    """Matt's clinical week from QGenda AutoSync events on his primary calendar.
+    ONLY '(GEN)' / 'GEN -' prefixed events count — personal appointments never
+    reach the family board. No Meetings fallback. Returns
+    {date: {"am": cat_or_None, "pm": cat_or_None}}."""
+    by_day = {}
+
+    def day(d):
+        return by_day.setdefault(d, {"am": None, "pm": None})
+
+    for ev in events:
+        s = ev.get("start", {})
+        e = ev.get("end", {})
+        summary = (ev.get("summary") or "").strip()
+        key = summary.lower()
+        if not key.startswith("gen"):
+            continue
+
+        category = MATT_FALLBACK
+        for sub, cat in MATT_CODE_MAP:
+            if sub in key:
+                category = cat
+                break
+
+        if s.get("date") and not s.get("dateTime"):
+            d = datetime.date.fromisoformat(s["date"])
+            slots = ("am",) if category == "Postcall" else ("am", "pm")
+            for slot in slots:
+                day(d)[slot] = category
+            continue
+        if not s.get("dateTime"):
+            continue
+        when = datetime.datetime.fromisoformat(s["dateTime"]).astimezone(tz)
+        d = when.date()
+        if key.endswith(" am"):
+            day(d)["am"] = category
+        elif key.endswith(" pm"):
+            day(d)["pm"] = category
+        elif category == "Night Shift":
+            day(d)["pm"] = category
+        elif category == "Postcall":
+            day(d)["am"] = category
+        else:
+            end_dt = None
+            if e.get("dateTime"):
+                end_dt = datetime.datetime.fromisoformat(e["dateTime"]).astimezone(tz)
+            if when.hour < 12:
+                day(d)["am"] = category
+            if when.hour >= 12 or (end_dt and end_dt.hour > 13):
+                day(d)["pm"] = category
+
+    return by_day
+
+
 def sync(dry_run=False):
     from zoneinfo import ZoneInfo
     tz = ZoneInfo("America/Chicago")
     dates = _week_dates(tz)
-    events = fetch_gal_events(tz)
+    events = fetch_events(tz, "CALENDAR_ID_GAL")
     by_day = classify(events, tz)
+    matt_by_day = classify_matt(fetch_events(tz, "CALENDAR_ID_MATT"), tz)
 
     token = None if dry_run else _token()
     rows = None
@@ -187,14 +255,21 @@ def sync(dry_run=False):
             title = _plain(r["properties"].get("Day", {}).get("title", []))
             rows[title.strip().lower()] = r
 
+    # Only touch Matt columns when the calendar actually yielded events —
+    # an unshared/failing calendar must not wipe hand-entered values with Off.
+    matt_enabled = bool(os.environ.get("CALENDAR_ID_MATT")) and bool(matt_by_day)
     summary_lines = []
     for d in dates:
         weekday = d.strftime("%A")
         info = by_day.get(d, {"am": None, "pm": None, "notes": []})
         am = info["am"] or "Off"
         pm = info["pm"] or "Off"
+        m_info = matt_by_day.get(d, {"am": None, "pm": None})
+        m_am = m_info["am"] or "Off"
+        m_pm = m_info["pm"] or "Off"
         note_text = "; ".join(info["notes"])
-        summary_lines.append(f"{weekday} ({d.isoformat()}): AM={am} PM={pm}"
+        summary_lines.append(f"{weekday} ({d.isoformat()}): Gal AM={am} PM={pm}"
+                              + (f" | Matt AM={m_am} PM={m_pm}" if matt_enabled else "")
                               + (f"  notes: {note_text}" if note_text else ""))
 
         if dry_run:
@@ -217,6 +292,9 @@ def sync(dry_run=False):
             "Notes": {"rich_text": [{"text": {"content": new_notes[:2000]}}]} if new_notes
                      else {"rich_text": []},
         }
+        if matt_enabled:
+            props["Matt AM"] = {"select": {"name": m_am}}
+            props["Matt PM"] = {"select": {"name": m_pm}}
         _api(f"https://api.notion.com/v1/pages/{row['id']}", token, "PATCH", {"properties": props})
 
     return "\n".join(summary_lines)
