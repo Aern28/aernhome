@@ -117,10 +117,13 @@ def inject_asset_version():
     """Cache-bust /static/css/app.css by its mtime so a freshly rebuilt stylesheet
     (npm run build:css) is fetched immediately instead of serving a stale, browser-
     cached copy — which otherwise makes newly added Tailwind classes render unstyled."""
-    try:
-        return {"css_ver": int(os.path.getmtime(os.path.join(app.static_folder, "css", "app.css")))}
-    except OSError:
-        return {"css_ver": ""}
+    out = {}
+    for key, rel in (("css_ver", ("css", "app.css")), ("js_ver", ("js", "nexus_sb.js"))):
+        try:
+            out[key] = int(os.path.getmtime(os.path.join(app.static_folder, *rel)))
+        except OSError:
+            out[key] = ""
+    return out
 
 
 @app.after_request
