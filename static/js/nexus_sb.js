@@ -246,11 +246,24 @@ function sbWireQueueResolve() {
             t.disabled = false;
         }
     });
+    // Todoist tasks in the /nexus/aern Today group close through the same
+    // endpoint the home Today card uses.
+    document.addEventListener('click', async (e) => {
+        const t = e.target.closest('[data-sb-action="todoist-close"]');
+        if (!t) return;
+        t.disabled = true;
+        const res = await sbPostJson(`/api/nexus/todoist/${encodeURIComponent(t.dataset.id)}/close`, {});
+        if (res.ok) {
+            sbLoadAll();
+        } else {
+            t.disabled = false;
+        }
+    });
 }
 
 // ── /nexus/aern ──────────────────────────────────────────────────────────────
 const SB_AERN_BORDER = { 1: 'border-l-4 border-l-red-500', 2: 'border-l-4 border-l-amber-500', 3: '' };
-const SB_AERN_KIND_ICON = { queue: '📥', fleet: '🛰️', tcg_held: '🃏', seat: '📋' };
+const SB_AERN_KIND_ICON = { queue: '📥', fleet: '🛰️', tcg_held: '🃏', seat: '📋', todoist: '📅' };
 
 function sbRenderAernItem(item) {
     const border = SB_AERN_BORDER[item.priority] != null ? SB_AERN_BORDER[item.priority] : SB_AERN_BORDER[3];
@@ -261,6 +274,8 @@ function sbRenderAernItem(item) {
     // ref link (those clear at the source, not from this lane).
     const action = (item.source_kind === 'queue' && item.id)
         ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="self-start shrink-0 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">${item.effort === 'read' ? '✓ Read' : 'Done'}</button>`
+        : (item.source_kind === 'todoist' && item.todoist_id)
+        ? `<button data-sb-action="todoist-close" data-id="${sbEscapeHtml(item.todoist_id)}" class="self-start shrink-0 px-3 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs">Done</button>`
         : (item.ref ? `<div class="shrink-0 min-w-0 break-words">${sbRenderSource(item.ref, 'text-blue-400 hover:underline text-sm')}</div>` : '');
     // Stack on mobile so the text uses the FULL card width (the side-by-side row
     // reserved right-hand space and squeezed the text into a hard-wrapping column);
@@ -291,16 +306,20 @@ function sbRenderAern(data) {
     const el = document.getElementById('aern-list');
     if (!el) return;
     const all = Array.isArray(data.items) ? data.items.slice() : [];
-    // Pure-FYI queue items (effort==="read") pin to the top as a quick skim;
-    // everything else is the priority-ordered "needs you" lane below.
+    // Today's dated Todoist tasks anchor the top (the personal-GTD half of the
+    // morning view); pure-FYI queue items (effort==="read") follow as a quick
+    // skim; everything else is the priority-ordered "needs you" lane below.
+    const today = all.filter((i) => i.source_kind === 'todoist')
+        .sort((a, b) => (a.priority || 3) - (b.priority || 3));
     const reads = all.filter((i) => i.source_kind === 'queue' && i.effort === 'read');
-    const needs = all.filter((i) => !(i.source_kind === 'queue' && i.effort === 'read'))
+    const needs = all.filter((i) => i.source_kind !== 'todoist' && !(i.source_kind === 'queue' && i.effort === 'read'))
         .sort((a, b) => (a.priority || 3) - (b.priority || 3));
 
     el.innerHTML = '';
     if (!all.length) {
         el.innerHTML = '<p class="text-center text-lg text-gray-400 py-6">Nothing needs you. Go live your life.</p>';
     } else {
+        if (today.length) el.appendChild(sbAernSection('📅 Today', today));
         if (reads.length) el.appendChild(sbAernSection('📖 Read &amp; done', reads));
         if (needs.length) {
             el.appendChild(sbAernSection('🎯 Needs you', needs));

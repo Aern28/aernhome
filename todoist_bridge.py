@@ -54,6 +54,35 @@ def close_task(task_id):
         return False
 
 
+def active_task_ids():
+    """Set of ALL active task ids (as strings), following v1 pagination.
+    Returns None — never an empty set — on ANY failure, so the reverse-sync
+    caller can never mistake a Todoist outage for 'every task was completed'.
+    Hard-capped at 20 pages (4000 tasks) against a broken cursor loop."""
+    H = _headers()
+    if not H:
+        return None
+    ids = set()
+    params = {"limit": 200}
+    try:
+        for _ in range(20):
+            r = requests.get(API, headers=H, params=params, timeout=15)
+            if r.status_code >= 300:
+                return None
+            data = r.json()
+            tasks = data.get("results", data) if isinstance(data, dict) else data
+            if not isinstance(tasks, list):
+                return None
+            ids.update(str(t["id"]) for t in tasks if isinstance(t, dict) and t.get("id") is not None)
+            cursor = data.get("next_cursor") if isinstance(data, dict) else None
+            if not cursor:
+                return ids
+            params["cursor"] = cursor
+        return ids
+    except (requests.RequestException, ValueError):
+        return None
+
+
 def close_by_content(content):
     """Close the open Todoist task whose content matches exactly (first match).
     Used when we never stored the task id (e.g. maintenance tasks created by

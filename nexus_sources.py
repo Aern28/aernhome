@@ -143,6 +143,12 @@ def _todoist_today_compute():
     for t in tasks:
         if not isinstance(t, dict):
             continue
+        content = t.get("content")
+        if isinstance(content, str) and content.startswith("Nexus: "):
+            # Queue twins (todoist_bridge.QUEUE_PREFIX — hardcoded here because
+            # todoist_bridge imports from this module) live on /nexus/aern;
+            # never double-list them, even once Aern dates one.
+            continue
         due = t.get("due")
         if not isinstance(due, dict):
             continue  # undated task — skip

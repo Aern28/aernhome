@@ -37,6 +37,7 @@ import json
 import secrets
 import sqlite3
 import tempfile
+import time
 import datetime as dt
 
 from flask import Blueprint, jsonify, request, abort, render_template, current_app
@@ -496,6 +497,79 @@ def api_agenda_post():
 
 
 # ── /api/needs-aern ────────────────────────────────────────────────────────
+# Reverse half of the Todoist mirror (the forward half: a to_aern POST creates
+# a "Nexus: " twin, and /api/queue/resolve closes it). A twin completed — or
+# deleted — IN Todoist auto-resolves its queue item here, so checking off on
+# the phone counts everywhere. Throttled to one pass per _TODOIST_SYNC_MIN_S,
+# and it only acts on a DEFINITIVELY successful active-task fetch:
+# todoist_bridge.active_task_ids() returns None on any failure, because an
+# outage reading as "no active tasks" would mass-resolve the whole lane.
+_TODOIST_SYNC_MIN_S = 180
+_todoist_sync_last = 0.0
+
+
+def _sync_todoist_completions():
+    global _todoist_sync_last
+    now = time.time()
+    if now - _todoist_sync_last < _TODOIST_SYNC_MIN_S:
+        return
+    _todoist_sync_last = now
+    try:
+        doc = load_queue()
+        pending = [i for i in doc["items"]
+                   if isinstance(i, dict) and i.get("dir") == "to_aern"
+                   and i.get("status") == "open" and i.get("todoist_id")]
+        if not pending:
+            return
+        import todoist_bridge
+        active = todoist_bridge.active_task_ids()  # None = fetch failed
+        if active is None:
+            return
+        with _STORE_LOCK:
+            doc = load_queue()  # reload under the lock; never clobber a write
+            changed = False
+            for item in doc["items"]:
+                if (isinstance(item, dict) and item.get("dir") == "to_aern"
+                        and item.get("status") == "open" and item.get("todoist_id")
+                        and str(item["todoist_id"]) not in active):
+                    item["status"] = "done"
+                    item["resolved_at"] = _now_iso()
+                    item["resolved_via"] = "todoist"
+                    changed = True
+            if changed:
+                save_queue_atomic(doc)
+    except Exception as e:
+        print(f"[second_brain] todoist reverse-sync failed: {e}")
+
+
+def _needs_from_todoist():
+    """(e) Today/overdue Todoist tasks — the personal-GTD half of the morning
+    view. "Nexus: " queue twins are excluded at the source (nexus_sources
+    filters them out of todoist_today) so queue items never double-list.
+    Degrades to [] on any failure."""
+    out = []
+    try:
+        import nexus_sources
+        for t in nexus_sources.todoist_today() or []:
+            if not isinstance(t, dict):
+                continue
+            overdue = t.get("overdue_days") or 0
+            due = t.get("due")
+            detail = f"due {due}" + (f" · {overdue}d overdue" if overdue > 0 else "") if due else ""
+            out.append({
+                "source_kind": "todoist",
+                "todoist_id": str(t.get("id")),
+                "title": str(t.get("content", ""))[:140],
+                "detail": detail,
+                # Todoist API priority is inverted (4=urgent … 1=none)
+                "priority": 1 if (overdue > 0 or t.get("priority") == 4)
+                            else (2 if t.get("priority") == 3 else 3),
+            })
+    except Exception as e:
+        print(f"[second_brain] needs-aern todoist aggregation failed: {e}")
+    return out
+
+
 def _needs_from_queue():
     """(a) Open to_aern queue items."""
     out = []
@@ -602,11 +676,14 @@ def api_needs_aern():
     if not _is_nexus_allowed():
         abort(404)
 
+    _sync_todoist_completions()
+
     items = []
     items.extend(_needs_from_queue())
     items.extend(_needs_from_fleet())
     items.extend(_needs_from_tcg_held())
     items.extend(_needs_from_seat())
+    items.extend(_needs_from_todoist())
 
     items.sort(key=lambda i: i.get("priority", 3))
 
