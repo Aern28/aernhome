@@ -44,9 +44,9 @@ SHIFT_MAP = {
 
 # Matt's QGenda events (AutoSync onto his primary calendar, "GEN - ..." prefix).
 # Substring -> category; slot comes from the AM/PM suffix or the event's times.
-# Gyn BU = hospital on-call per the QGenda-codes lore, NOT clinic.
+# Gyn BU = working Labor (L&D coverage) per Aern 2026-07-13, NOT clinic.
 MATT_CODE_MAP = [
-    ("gyn bu", "Call"),
+    ("gyn bu", "Labor"),
     ("l&d night", "Night Shift"),
     ("l&d", "Night Shift"),
     ("post call", "Postcall"),
