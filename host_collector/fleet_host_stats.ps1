@@ -159,8 +159,18 @@ function Test-NexusBackup {
         # NAS credential, which DPAPI only unlocks in password/interactive
         # logons - the scheduled-task run sees it, key-auth SSH does not.
         $dir = "\\192.168.1.118\home\aernhome\backups"
+
+        # Drop any cached SMB connection to the NAS first so Test-Path opens a
+        # FRESH session and re-authenticates against the stored credential.
+        # Without this, a rotated/stale cmdkey cred stays GREEN until the
+        # cached session recycles (7/14 NAS rotation: board green for hours
+        # while the stored cred was already dead). Deleting only the UNC
+        # connection leaves any lettered drive mappings untouched; failures
+        # (no existing connection) are expected and ignored.
+        net use "\\192.168.1.118\home" /delete /y 2>$null | Out-Null
+
         if (-not (Test-Path $dir)) {
-            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "NAS backup dir not reachable ($dir) - credential missing or share down"
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "NAS backup dir not reachable on a FRESH SMB session ($dir) - stored credential stale/rotated, or share down"
         }
 
         $newest = Get-ChildItem -Path $dir -File -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 1

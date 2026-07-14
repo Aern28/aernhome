@@ -40,14 +40,16 @@ matching the host's local time zone.
    40 minutes ago with result `0`; `warn` if the last result was nonzero;
    `down` if it's been more than 40 minutes since the last run, or the task
    is disabled or missing.
-2. **nexus_backup** - newest file under `H:\aernhome\backups`. `up` if under
-   26h old, `warn` if under 50h, `down` if older. If `H:\` itself isn't
-   reachable (a mapped drive frequently isn't present in a Task
-   Scheduler/service context, even when it shows up in an interactive
-   session) this reports `down` with detail `"H: not accessible from this
-   session - daily backups likely failing"` - `nexus_backup.py` is currently
-   failing for exactly this reason, so this check specifically exists to
-   surface silently-failed nightly backups.
+2. **nexus_backup** - newest file under `\\192.168.1.118\home\aernhome\backups`
+   (UNC, matching `nexus_backup.py`). `up` if under 26h old, `warn` if under
+   50h, `down` if older. Before the reachability test the check drops any
+   cached SMB connection to the share (`net use \\...\home /delete`) so each
+   poll opens a **fresh authenticated session** against the cmdkey-stored
+   credential — a rotated/stale NAS password therefore goes `down` within one
+   poll cycle instead of staying green on a cached session (added after the
+   7/14 NAS rotation, where the board stayed green for hours on a dead cred).
+   `down` with `"not reachable on a FRESH SMB session"` means stored
+   credential stale/rotated or share down.
 3. **supersaiyan_backup** - newest `backup_log_*.txt` directly on `F:\`
    (monthly job). `up` if under 35 days old, `warn` if under 45, `down` if
    older or `F:\` is missing.
