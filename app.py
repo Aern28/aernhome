@@ -18,6 +18,7 @@ import nexus_writes as ns_writes
 import nexus_md
 import fleet
 import second_brain
+import fleet_facts
 import ledger
 import todoist_bridge
 import vault
@@ -71,6 +72,7 @@ except Exception:
     pass
 app.register_blueprint(fleet.fleet_bp)
 app.register_blueprint(second_brain.sb_bp)
+app.register_blueprint(fleet_facts.facts_bp)
 app.register_blueprint(ledger.ledger_bp)
 app.register_blueprint(vault.vault_bp)
 
