@@ -62,9 +62,23 @@ def chase_index(cur, category):
     for pid, d, v in rows:
         series[pid][d] = v
     means = {pid: statistics.mean(s.values()) for pid, s in series.items() if len(s) >= 20}
+    # forward-fill each card up to 7 days so a day's missing fetch can't shift
+    # the median's composition (the 2026-07-15 false-rollover lesson)
+    all_dates = sorted({d for pid in means for d in series[pid]})
+    filled = {}
+    for pid in means:
+        f, last, last_d = {}, None, None
+        for d in all_dates:
+            if d in series[pid]:
+                last, last_d = series[pid][d], date.fromisoformat(d)
+            elif last is not None and (date.fromisoformat(d) - last_d).days > 7:
+                last = None
+            if last is not None:
+                f[d] = last
+        filled[pid] = f
     idx = {}
-    for d in sorted({d for pid in means for d in series[pid]}):
-        vals = [series[pid][d] / means[pid] for pid in means if d in series[pid]]
+    for d in all_dates:
+        vals = [filled[pid][d] / means[pid] for pid in means if d in filled[pid]]
         if len(vals) >= 5:
             idx[d] = statistics.median(vals)
     return idx
@@ -101,15 +115,15 @@ def diagnose(idx):
     if win8 and base56:
         peak_d, peak_v = max(win8.items(), key=lambda kv: kv[1])
         if now <= 0.90 * peak_v and peak_v >= 1.10 * base56:
-            return "rollover", (f"{detail} — {((now / peak_v) - 1) * 100:+.1f}% off peak "
+            return "rollover", (f"{detail} - {((now / peak_v) - 1) * 100:+.1f}% off peak "
                                 f"{peak_v:.3f} ({peak_d}); wave leaving")
     # ignition: +5%/7d after a flat prior month
     if wk1 and prior and now / wk1 >= 1.05 and max(prior) / min(prior) <= 1.06:
-        return "ignition", f"{detail} after flat month — mechanism unattributed, investigate"
+        return "ignition", f"{detail} after flat month - mechanism unattributed, investigate"
     # surge continuation: +10%/14d
     wk2 = nearest(idx, today - timedelta(days=14))
     if wk2 and now / wk2 >= 1.10:
-        return "surge", f"{detail}, 14d {((now / wk2) - 1) * 100:+.1f}% — wave live"
+        return "surge", f"{detail}, 14d {((now / wk2) - 1) * 100:+.1f}% - wave live"
     return None, detail
 
 
