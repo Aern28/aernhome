@@ -39,6 +39,17 @@ GAMES = [
 
 SEALED_WORDS = ("%Booster%", "%Case%", "%Display%", "%Box%", "%Deck%")
 
+# Card watchlist (Aern 2026-07-15: Green Mihawk vs new Green Shanks renaissance).
+# number=None entries are SPOILER WATCHES: alert when a matching product first
+# appears in the feed (new reveal hits TCGplayer listings), then start pricing.
+WATCH = [
+    {"label": "Green Mihawk L AA (OP14-020)", "number": "OP14-020", "name_like": "%Alternate%"},
+    {"label": "Mihawk SEC AA (OP14-119)", "number": "OP14-119", "name_like": "%Alternate%"},
+    {"label": "Mihawk Manga (OP14-119)", "number": "OP14-119", "name_like": "%Manga%"},
+    {"label": "NEW Shanks Leader (spoiler watch)", "number": None,
+     "name_like": "%Shanks%", "rarity": "L", "exclude_nums": ("OP09-001", "ST05-001")},
+]
+
 
 def chase_index(cur, category):
     """Top-15 chase cards with >=20 days coverage, mean-normalized, daily median."""
@@ -134,6 +145,47 @@ def diagnose(idx):
     return None, detail
 
 
+def watch_report(cur):
+    """Per-card watch: latest price + 7d/30d deltas (event-log aware), and
+    spoiler watches that fire when a matching product first appears."""
+    out = []
+    today = date.today()
+    for w in WATCH:
+        if w["number"] is None:
+            ph = " AND ".join(f"number != '{n}'" for n in w.get("exclude_nums", ()))
+            rows = cur.execute(f"""
+                SELECT number, name, set_name FROM products
+                WHERE name LIKE ? AND rarity = ? AND {ph or '1=1'}
+            """, (w["name_like"], w.get("rarity", "L"))).fetchall()
+            if rows:
+                found = "; ".join(f"{r[0]} {r[1][:36]} ({r[2][:20]})" for r in rows[:4])
+                out.append((w["label"], "spoiler-hit", f"PRODUCT LISTED: {found}"))
+            else:
+                out.append((w["label"], None, "not yet listed"))
+            continue
+        # priced watch: latest value and values ~7d/30d back (last row <= cutoff)
+        def px(cutoff):
+            r = cur.execute("""
+                SELECT pr.market_price FROM products p
+                JOIN prices pr ON pr.product_id = p.id
+                WHERE p.number = ? AND p.name LIKE ? AND pr.market_price > 0
+                  AND pr.date <= ? ORDER BY pr.date DESC LIMIT 1
+            """, (w["number"], w["name_like"], cutoff.isoformat())).fetchone()
+            return r[0] if r else None
+        now = px(today)
+        if now is None:
+            out.append((w["label"], None, "no price data"))
+            continue
+        d7, d30 = px(today - timedelta(days=7)), px(today - timedelta(days=30))
+        s7 = f"7d {((now / d7) - 1) * 100:+.1f}%" if d7 else "7d n/a"
+        s30 = f"30d {((now / d30) - 1) * 100:+.1f}%" if d30 else "30d n/a"
+        sig = None
+        if d7 and abs(now / d7 - 1) >= 0.10:
+            sig = "watch-move"
+        out.append((w["label"], sig, f"${now:,.2f} ({s7}, {s30})"))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--post", action="store_true", help="POST new alerts to the queue")
@@ -153,6 +205,15 @@ def main():
         if sig and state.get(g) != sig:
             alerts.append((g, sig, detail))
         state[g] = sig  # None clears the episode -> same sig can alert again later
+
+    print("  -- watchlist --")
+    for label, sig, detail in watch_report(cur):
+        tag = f"[{sig.upper()}]" if sig else "[-]"
+        print(f"  {tag:<14} {label}: {detail}")
+        key = f"watch:{label}"
+        if sig and state.get(key) != sig:
+            alerts.append((label, sig, detail))
+        state[key] = sig
     con.close()
 
     if args.post and alerts:
