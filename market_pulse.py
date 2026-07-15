@@ -43,14 +43,15 @@ SEALED_WORDS = ("%Booster%", "%Case%", "%Display%", "%Box%", "%Deck%")
 def chase_index(cur, category):
     """Top-15 chase cards with >=20 days coverage, mean-normalized, daily median."""
     sealed = " AND ".join(f"p.name NOT LIKE '{w}'" for w in SEALED_WORDS)
-    # rank by average of the last 21 days' NONZERO prices: no troll-ask ghosts,
-    # no cards that have gone dark; zeros are feed noise, never prices
+    # LIQUID chase cards only: priced on >=15 of the last 21 days (levels, not
+    # prints - illiquid whale cards quote sporadically and wreck the median),
+    # nonzero (zeros are feed noise), then top-15 by recent average price
     top = cur.execute(f"""
         SELECT p.id, AVG(pr.market_price) AS recent, COUNT(DISTINCT pr.date) AS days
         FROM products p JOIN prices pr ON pr.product_id = p.id
         WHERE p.category = ? AND p.product_type NOT LIKE '%Sealed%' AND {sealed}
           AND pr.market_price > 0 AND pr.date >= date('now', '-21 days')
-        GROUP BY p.id HAVING days >= 5 ORDER BY recent DESC LIMIT 15
+        GROUP BY p.id HAVING days >= 15 ORDER BY recent DESC LIMIT 15
     """, (category,)).fetchall()
     ids = [t[0] for t in top]
     if len(ids) < 5:
