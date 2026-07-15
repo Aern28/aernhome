@@ -43,15 +43,17 @@ SEALED_WORDS = ("%Booster%", "%Case%", "%Display%", "%Box%", "%Deck%")
 def chase_index(cur, category):
     """Top-15 chase cards with >=20 days coverage, mean-normalized, daily median."""
     sealed = " AND ".join(f"p.name NOT LIKE '{w}'" for w in SEALED_WORDS)
-    # LIQUID chase cards only: priced on >=15 of the last 21 days (levels, not
-    # prints - illiquid whale cards quote sporadically and wreck the median),
-    # nonzero (zeros are feed noise), then top-15 by recent average price
+    # NOTE data model: the prices table is an EVENT LOG - a row appears only
+    # when a card's price CHANGES; a missing day means "unchanged", so
+    # forward-fill below is the correct reading, not interpolation.
+    # Chase pool: active cards (>=5 repricing events in 21 days), nonzero
+    # (zeros are feed noise), top-15 by recent average price.
     top = cur.execute(f"""
         SELECT p.id, AVG(pr.market_price) AS recent, COUNT(DISTINCT pr.date) AS days
         FROM products p JOIN prices pr ON pr.product_id = p.id
         WHERE p.category = ? AND p.product_type NOT LIKE '%Sealed%' AND {sealed}
           AND pr.market_price > 0 AND pr.date >= date('now', '-21 days')
-        GROUP BY p.id HAVING days >= 15 ORDER BY recent DESC LIMIT 15
+        GROUP BY p.id HAVING days >= 5 ORDER BY recent DESC LIMIT 15
     """, (category,)).fetchall()
     ids = [t[0] for t in top]
     if len(ids) < 5:
@@ -66,8 +68,9 @@ def chase_index(cur, category):
     for pid, d, v in rows:
         series[pid][d] = v
     means = {pid: statistics.mean(s.values()) for pid, s in series.items() if len(s) >= 20}
-    # forward-fill each card up to 7 days so a day's missing fetch can't shift
-    # the median's composition (the 2026-07-15 false-rollover lesson)
+    # forward-fill: in an event-log table an absent date means "price
+    # unchanged", so carry the last value (cap 21 days in case a card
+    # falls out of the fetch entirely)
     all_dates = sorted({d for pid in means for d in series[pid]})
     filled = {}
     for pid in means:
@@ -75,7 +78,7 @@ def chase_index(cur, category):
         for d in all_dates:
             if d in series[pid]:
                 last, last_d = series[pid][d], date.fromisoformat(d)
-            elif last is not None and (date.fromisoformat(d) - last_d).days > 7:
+            elif last is not None and (date.fromisoformat(d) - last_d).days > 21:
                 last = None
             if last is not None:
                 f[d] = last
