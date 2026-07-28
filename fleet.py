@@ -68,6 +68,7 @@ CHECK_META = {
     "mirror_fresh": ("TCG Mirror", "tcg"),
     "price_fresh": ("TCG Prices", "tcg"),
     "disk": ("Disk Space", "infra"),
+    "signup_webhook": ("aern-signup Notifications", "infra"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -217,6 +218,43 @@ def check_trainer_ollama():
         return ("warn", f"unreachable ({type(e).__name__}) — game-mode or Trainer down; Aernbot on 2070S fallback")
 
 
+def check_signup_webhook():
+    """aern-signup booking-notification webhook, probed end-to-end via the SAME
+    route the booking app uses (host.docker.internal -> published :5678 -> n8n),
+    so it catches both the Docker port-proxy break AND the workflow being
+    unregistered. The latter is the 2026-07-28 incident: n8n booted with the
+    workflow deactivated (a CLI import or user-management reset can do this),
+    every booking POST 404'd "webhook not registered", and a real student's
+    invite was lost invisibly. The workflow's Code node no-ops event="probe"
+    (guard added same day), so this sends zero emails; each probe does log one
+    trivial n8n execution — throttled to every 10 min (the fleet loop is 60s,
+    which would otherwise mean 1,440 junk executions/day)."""
+    now = time.time()
+    if now - _signup_probe_cache["ts"] < 600 and _signup_probe_cache["result"]:
+        return _signup_probe_cache["result"]
+    try:
+        r = requests.post(
+            "http://host.docker.internal:5678/webhook/aern-signup",
+            json={"event": "probe"}, timeout=10)
+    except requests.RequestException as e:
+        result = ("down", f"n8n unreachable via app's route: {type(e).__name__} "
+                          "(port-proxy or n8n down — bookings are NOT notifying)")
+    else:
+        if r.status_code == 200:
+            result = ("up", "probe accepted (workflow registered)")
+        elif r.status_code == 404:
+            result = ("down", "webhook NOT registered — workflow deactivated in n8n; "
+                              "bookings are silently losing invites. Activate "
+                              "'aern-signup booking notifications' in the n8n UI.")
+        else:
+            result = ("warn", f"unexpected HTTP {r.status_code}")
+    _signup_probe_cache.update(ts=now, result=result)
+    return result
+
+
+_signup_probe_cache = {"ts": 0.0, "result": None}
+
+
 def check_disk():
     """psutil disk_usage on / and /data; reports the worse of the two."""
     try:
@@ -256,6 +294,7 @@ SIMPLE_CHECKS = {
     "mirror_fresh": check_mirror_fresh,
     "price_fresh": check_price_fresh,
     "disk": check_disk,
+    "signup_webhook": check_signup_webhook,
 }
 
 
