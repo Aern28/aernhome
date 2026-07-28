@@ -1,0 +1,10 @@
+{
+  "name": "Trip Name — what & why",
+  "emoji": "✈️",
+  "destination": "City, ST",
+  "dates": "Mon D–D, YYYY",
+  "start": "YYYY-MM-DD",
+  "end": "YYYY-MM-DD",
+  "artifact": "",
+  "note": "Gate scannables (tickets, parking QRs, boarding passes) also go in Apple Wallet — the hub is the organized reference, Wallet is the offline fallback you flash at the scanner."
+}

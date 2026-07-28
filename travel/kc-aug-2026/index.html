@@ -1,0 +1,301 @@
+<title>KC Hotel Dad Ops — Aug 6–8</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #FBFAF7; --ink: #22344A; --sub: #5C6B7C; --line: #D8DDE3;
+    --track: #B9C2CC; --blue: #3D7EA6; --blue-soft: #E3EEF5; --gold: #E9A820;
+    --gold-soft: #FBF1DA; --red: #B5483A; --red-soft: #F7E7E4; --card: #FFFFFF;
+    --green: #2E7D5B; --green-soft: #E1F0E9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 1.25rem 1rem 3rem;
+  }
+  main { max-width: 620px; margin: 0 auto; }
+  h1, h2, h3 {
+    font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN",
+      Quicksand, Comfortaa, Manjari, system-ui, sans-serif;
+    text-wrap: balance;
+  }
+  h1 { font-size: 1.7rem; line-height: 1.15; margin: 0 0 .25rem; }
+  .sub { color: var(--sub); margin: 0 0 1.25rem; font-size: .95rem; }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+          font-variant-numeric: tabular-nums; }
+
+  /* header board */
+  .board {
+    background: #22344A; color: #FBFAF7; border-radius: 14px;
+    padding: 1rem 1.15rem; margin-bottom: 1.5rem;
+  }
+  .board .route { font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+  .board .big { font-size: 1.28rem; font-weight: 700; margin: .15rem 0 .5rem;
+    font-family: ui-rounded, "SF Pro Rounded", Quicksand, system-ui, sans-serif; }
+  .board .row { display: flex; flex-wrap: wrap; gap: .4rem .9rem; font-size: .86rem; opacity: .92; }
+  .board .flights { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.18);
+    display: flex; flex-wrap: wrap; gap: .4rem .9rem; font-size: .84rem; }
+
+  /* section label */
+  .seclabel { font-size: .74rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--sub); margin: 1.9rem 0 .7rem; font-weight: 700; }
+
+  /* doctrine strip */
+  .doctrine {
+    background: var(--blue-soft); border-radius: 12px; padding: .8rem 1rem;
+    font-size: .92rem; margin-bottom: 1.5rem;
+  }
+  .doctrine b { color: var(--blue); }
+
+  /* day sections */
+  .day { margin-bottom: 2.1rem; }
+  .dayhead { display: flex; align-items: baseline; gap: .6rem; margin-bottom: .9rem; flex-wrap: wrap; }
+  .dayhead h2 { font-size: 1.18rem; margin: 0; }
+  .dayhead .tag {
+    font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--blue); border: 1.5px solid var(--blue); border-radius: 999px;
+    padding: .12rem .6rem; white-space: nowrap;
+  }
+
+  /* the track */
+  .track { position: relative; padding-left: 1.65rem; display: flex; flex-direction: column; gap: .85rem; }
+  .track::before {
+    content: ""; position: absolute; left: .52rem; top: .6rem; bottom: .6rem;
+    border-left: 3px dashed var(--track);
+  }
+  .stop { position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: .7rem .9rem; }
+  .stop::before {
+    content: ""; position: absolute; left: -1.42rem; top: 1.05rem;
+    width: .72rem; height: .72rem; border-radius: 50%;
+    background: var(--paper); border: 3px solid var(--blue);
+  }
+  .stop.food::before  { border-color: var(--red); }
+  .stop.flag::before  { border-color: var(--gold); }
+  .stop.book::before  { border-color: var(--green); }
+  .stop .when { font-size: .78rem; color: var(--sub); }
+  .stop .what { font-weight: 700; }
+  .stop .why  { font-size: .9rem; color: var(--sub); margin-top: .15rem; }
+  .stop .why b { color: var(--ink); font-weight: 600; }
+  .pill { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; border-radius: 999px; padding: .1rem .55rem; margin-left: .35rem;
+    vertical-align: 1px; }
+  .pill.free { background: var(--blue-soft); color: var(--blue); }
+  .pill.book { background: var(--gold-soft); color: var(--gold); }
+  .pill.food { background: var(--red-soft); color: var(--red); }
+  .pill.walk { background: var(--blue-soft); color: var(--blue); }
+  .pill.booked { background: var(--green-soft); color: var(--green); }
+
+  /* panels */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1rem 1.15rem; margin-bottom: 1.1rem; }
+  .panel h3 { margin: 0 0 .55rem; font-size: 1rem; }
+  .panel ul { margin: 0; padding-left: 1.15rem; font-size: .92rem; }
+  .panel li { margin: .3rem 0; }
+  .panel.gold { border-left: 5px solid var(--gold); }
+  .panel.red { border-left: 5px solid var(--red); }
+  .panel.blue { border-left: 5px solid var(--blue); }
+  .panel.green { border-left: 5px solid var(--green); }
+  ul.loc { list-style: none; padding-left: 0; }
+  ul.loc li { margin: .45rem 0; }
+  ul.loc a { font-weight: 700; }
+  ul.loc .addr { color: var(--sub); font-size: .84rem; }
+  a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
+  footer { text-align: center; color: var(--sub); font-size: .8rem; margin-top: 2rem; }
+
+  /* tickets */
+  .ticket { border: 1px solid var(--line); border-radius: 12px; padding: .85rem 1rem;
+    margin: .6rem 0; background: var(--card); }
+  .ticket .thead { font-weight: 700; }
+  .ticket .meta { font-size: .86rem; color: var(--sub); margin-top: .1rem; }
+  .ticket .kv { font-size: .88rem; margin-top: .5rem; }
+  .ticket .kv b { color: var(--ink); }
+  .qrgrid { display: flex; flex-wrap: wrap; gap: .9rem; margin-top: .8rem; }
+  .qrcard { flex: 1 1 130px; max-width: 170px; text-align: center;
+    border: 1px solid var(--line); border-radius: 10px; padding: .6rem; background: #fff; }
+  .qrcard img { width: 100%; max-width: 150px; height: auto; image-rendering: pixelated; display: block; margin: 0 auto; }
+  .qrcard .lbl { font-size: .78rem; font-weight: 700; margin-top: .4rem; }
+  .qrcard .num { font-size: .66rem; color: var(--sub); font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+  .note { font-size: .82rem; color: var(--sub); margin-top: .5rem; }
+</style>
+
+<main>
+  <h1>🚂 KC Hotel Dad Ops</h1>
+  <p class="sub">Two dad-and-kid days in Kansas City while Mom conquers PHM · Aug 6–8, 2026</p>
+
+  <div class="board">
+    <div class="route">Now boarding · Carroll party of 3</div>
+    <div class="big">Marriott Downtown ⇄ Union Station ⇄ Crown Center</div>
+    <div class="row">
+      <span>🏨 200 W 12th St</span>
+      <span>🚋 KC Streetcar: <b>free</b>, every ~10 min</span>
+      <span>🌡️ ~95°F — travel by tunnel</span>
+    </div>
+    <div class="flights mono">
+      <span>✈️ IN — Thu 4:47p (UA 3987)</span>
+      <span>✈️ OUT — Sat 2:56p (UA 6124)</span>
+    </div>
+  </div>
+
+  <!-- ===== TICKETS & DOCS ===== -->
+  <div class="seclabel">📱 Tickets &amp; docs — have these ready</div>
+
+  <div class="panel green">
+    <h3>🧱 LEGOLAND + SEA LIFE — booked</h3>
+    <div class="ticket">
+      <div class="thead">LEGOLAND Discovery Center + SEA LIFE</div>
+      <div class="meta">Crown Center, Kansas City · Order #632244490</div>
+      <div class="kv"><b>Entry:</b> Fri Aug 7, <b>1:00 PM</b> (LEGOLAND). <b>SEA LIFE:</b> next door, anytime within 30 days — no booking, so do it right after.</div>
+      <div class="qrgrid">
+        <div class="qrcard"><img alt="Adult ticket QR" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATgAAAE4CAIAAABAHXg9AAABNWlDQ1BJQ0MgUHJvZmlsZQAAeJx9kL1Kw2AUhh9rQRTFQYcODhkcXNT+aH/Apa1YXFuFVqc0TYvYn5Cm6AXo5uDqJi7egOhlKAgO4uAliKCzbxokBann8OZ7ePOSL+dAJIYqGodO13PLpYJRrR0YU+9MqIdlWn2H8aXU90uQfV79Jzeupht239L5IXmuLtcnG+LFVsCnPtcDvvD5xHM88bXP7l65KL4Tr7RGuD7CluP6+TfxVqc9sML/Ztbu7ld0VqUlSvTULdrYrFPhmCNMUYYim+yQJ0lClCBFTu7GUHniemZJU1AX1Vm9z0gptpXO+fsMruzdQPYLJi9Dr34FD+cQew29Zc02fwb3j6EX7tgxXXNoRaVIswmftzBXg4UnmDn8XeyYWY0/sxrs0sViTZTUNAnSP4XNS70FAaPvAAAD7klEQVR42u3d0W3kQAxEwdZh8095LwXB0FIkpyoA+yzhYfTRmLu+32+A3v55BCBUQKggVECogFBBqIBQAaGCUAGhglABoQJCBaECQgWECkIFhAoIFYQKCBWECggVECoIFRAqIFQQKvC8z+9+9HVdxz7Wp/6PvG7P8M7f5b07UcGnLyBUQKggVECogFBBqIBQAaGCUIG03/rm1W1k2m+Y7/ycym1t5bs4+b07UcGnLyBUQKggVECogFBBqIBQQaiAUIEM2fqm2cZy6971qc1w5b9563t3ooJPX0CogFBBqIBQAaGCUAGhglABoQJZtPXdqtt9vBPv2nWiAkIFhApCBYQKCBWECggVhAoIFRAqxNaXzN4MT7zXFycqCBUQKggVECogVBAqIFRAqCBUQKgQW9/2tu5LK/+up+4Q9t6dqIBQQaiAUEGogFABoYJQAaECQgWhAjlm6ztxg7r1Pt7Kd3Hye3eiglABoQJCBaECQgWECkIFhApCBYQK3Ha5PXX6ztkbdKICQgWECkIFhAoIFYQKCBWECggVECrEvb6Zfbdtpcr9beVm+OTf9e6m2okKPn0BoYJQAaECQgWhAkIFhApCBYQKca/v6ntrT96OnnyHcOWe/HfPx4kKPn0BoYJQAaECQgWhAkIFhApCBYQKsfVtucPMwD1wmt0PvHXnXPm+3OsLCBWECggVECoIFRAqCBUQKiBUECqQw+71rdyOdrtr95w7ae2Bnajg0xcQKiBUECogVECoIFRAqCBUQKjAn3yyYsu69S7iblvorfo/Hycq+PQFhApCBYQKCBWECggVECoIFRAqxL2+LN0MT9xUT3xf7vUFn76AUAGhglABoQJCBaECQgWECkIFMmTr657YWXvgDNwnT/xdTlTw6QsIFRAqCBUQKiBUECogVBAqIFTgtk9WbGIz8D7ep+6JvfNzKu+krbxnuPJvf3e77kQFn76AUEGogFABoYJQAaECQgWhAkKF2Ppm87Y2S7fHWzexlfvk/ndQO1HBpy8gVBAqIFRAqCBUQKiAUEGogFAhtr6QLtvjFG7F+2+8najg0xcQKggVECogVBAqIFRAqCBUQKgQW1+ycxNbuWXtdh/vjufsRAWfvoBQQaiAUAGhglABoQJCBaECQoXY+mbqJnaiiffNdruPd+Ie2IkKPn0BoQJCBaECQgWECkIFhApCBYQK3Hb9bk367jYyK/bJlTvViZvqc56PExV8+gJCBaECQgWECkIFhAoIFYQKCBVi6ws4UQGhglABoQJCBaECQgWECkIFhApCBYQKCBWECggVECoIFRAqCBUQKiBUECogVECoIFRAqIBQQaiAUOEU/wFPihmB6JFZ4QAAAABJRU5ErkJggg=="><div class="lbl">Adult</div><div class="num">380022886507436730</div></div>
+        <div class="qrcard"><img alt="Child ticket QR" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATgAAAE4CAIAAABAHXg9AAABNWlDQ1BJQ0MgUHJvZmlsZQAAeJx9kL1Kw2AUhh9rQRTFQYcODhkcXNT+aH/Apa1YXFuFVqc0TYvYn5Cm6AXo5uDqJi7egOhlKAgO4uAliKCzbxokBann8OZ7ePOSL+dAJIYqGodO13PLpYJRrR0YU+9MqIdlWn2H8aXU90uQfV79Jzeupht239L5IXmuLtcnG+LFVsCnPtcDvvD5xHM88bXP7l65KL4Tr7RGuD7CluP6+TfxVqc9sML/Ztbu7ld0VqUlSvTULdrYrFPhmCNMUYYim+yQJ0lClCBFTu7GUHniemZJU1AX1Vm9z0gptpXO+fsMruzdQPYLJi9Dr34FD+cQew29Zc02fwb3j6EX7tgxXXNoRaVIswmftzBXg4UnmDn8XeyYWY0/sxrs0sViTZTUNAnSP4XNS70FAaPvAAAD60lEQVR42u3dwW3DMBBE0VHg/lt2WtBBpobc9wpwbAkf5GGxub7fb4Bufx4BCBUQKggVECogVBAqIFRAqCBUQKggVECogFBBqIBQAaGCUAGhAkIFoQJCBaECQgWECkIFhAoIFYQKPO/zu4++rmvsY73zP/LuPJ8d/9ee9+5EBVdfQKiAUEGogFABoYJQAaECQgWhAqmf9c2rs5EZM8v61PdZ+S68dycquPoCQgWECkIFhApCBYQKCBWECggVSP2sb8pmLHecd33qc9r2DJ/63p2o4OoLCBUQKggVECogVBAqIFQQKiBUIAfN+k5m3hUnKggVECoIFRAqIFQQKiBUQKggVECoELO+VFq5s7dtry9OVBAqIFQQKiBUQKggVECogFBBqIBQIWZ9M2XeNYN3/+74DL13JyoIFRAqCBUQKiBUECogVECoIFRAqBCzvmmfU40Z3eO+z+T37kQFoQJCBYQKQgWECggVhAoIFYQKCBW47bI9dcLMcOzRdaICQgWECkIFhApCBYQKCBWECggVECrErO/eu2133El75/ms/M47zgz3z0s7UcHVFxAqCBUQKiBUECogVECoIFRAqBCzvhw6g5qy2eMd58nfnUt3ooKrLyBUECogVECoIFRAqIBQQaiAUGGkT8yypnfmc/LO3pXPuX+m2okKrr6AUEGogFABoYJQAaECQgWhAkKF2Os7frftjrOj/Ttpz9hX/O4stBMVXH0BoYJQAaECQgWhAkIFhApCBYQKsdc303f27vi7Tt1/u/I7t+1PdqKCqy8gVBAqIFRAqCBUQKiAUEGogFCBJFvs9T320ZfNoLb9rVPnpZ2o4OoLCBUQKggVECogVBAqIFQQKiBUIPb65oQdwm3f56l54Lb9wE/9rt+9dycquPoCQgWhAkIFhApCBYQKCBWECggVYtY302dis3CGeeVvX7lD+Knf9dRz7t/Z60QFV19AqIBQQaiAUEGogFABoYJQAaECqZz1Tdl+4LaZz7bZ2lP3Fff/dicquPoCQgWhAkIFhApCBYQKCBWECggVYtaXMjvuPY4ZZicquPoCQgWECkIFhAoIFYQKCBUQKggViFnf862cU22brX1qn3Pb33KigqsvIFRAqCBUQKiAUEGogFBBqIBQgRw06zt5t23sIq55zu/+LicquPoCQgWhAkIFhApCBYQKCBWECggVRrp+N8F46ixrynbkrvzOK3f2rvwcJyogVBAqIFRAqCBUQKiAUEGogFBBqECGzfoCTlQQKiBUQKggVECogFBBqIBQQaiAUAGhglABoQJCBaECQgWECkIFhApCBYQKCBWECggVECoIFRAqCBUo9g9xaf5dtDzrvgAAAABJRU5ErkJggg=="><div class="lbl">Child (2–12)</div><div class="num">380022866457456763</div></div>
+        <div class="qrcard"><img alt="Robot Pack QR" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATgAAAE4CAIAAABAHXg9AAABNWlDQ1BJQ0MgUHJvZmlsZQAAeJx9kL1Kw2AUhh9rQRTFQYcODhkcXNT+aH/Apa1YXFuFVqc0TYvYn5Cm6AXo5uDqJi7egOhlKAgO4uAliKCzbxokBann8OZ7ePOSL+dAJIYqGodO13PLpYJRrR0YU+9MqIdlWn2H8aXU90uQfV79Jzeupht239L5IXmuLtcnG+LFVsCnPtcDvvD5xHM88bXP7l65KL4Tr7RGuD7CluP6+TfxVqc9sML/Ztbu7ld0VqUlSvTULdrYrFPhmCNMUYYim+yQJ0lClCBFTu7GUHniemZJU1AX1Vm9z0gptpXO+fsMruzdQPYLJi9Dr34FD+cQew29Zc02fwb3j6EX7tgxXXNoRaVIswmftzBXg4UnmDn8XeyYWY0/sxrs0sViTZTUNAnSP4XNS70FAaPvAAAD+ElEQVR42u3dwXHDMBRDQSjj/lt2WvCBovDF3QLi2M4b6oBhru/3G6Dbn48AhAoIFYQKCBUQKggVECogVBAqIFQQKiBUQKggVECogFBBqIBQAaGCUAGhglABoQJCBaECQgWECkIF1vvc96Ov6zr2Y935P/J2fs6/vC/fuxMVPPoCQgWECkIFhAoIFYQKCBUQKggVSP3WN2Wb2JRta3/5Ob98PhP3tyd/705U8OgLCBUQKggVECogVBAqIFQQKiBUIEO2vhl4b23ba63aDPvenaiAUEGogFABoYJQAaECQgWhAkIFoQKx9SVJ3127OFEBoYJQAaECQgWhAkIFhApCBYQKQgVi60t230m7alc88X5gJyogVECoIFRAqCBUQKiAUEGogFABoUJsffPkljU2ukd+Pk5UQKiAUEGogFABoYJQAaGCUAGhAkKF2Pre5uQt6y/vfdUeuG1XfPL37kQFoQJCBYQKQgWECggVhAoIFYQKCBVIwdbXvayp2QPHfbxOVECogFBBqIBQQaiAUAGhglABoQJChdj6pvZu2wzcu+58716recPsRAWPvoBQQaiAUAGhglABoQJCBaECQoXY+mbq3bY5+E7aVb+zHW+K98BOVPDoCwgVhAoIFRAqCBUQKiBUECogVDjSdd86sf+u1P73ZRNrB+5EBY++gFBBqIBQAaGCUAGhAkIFoQJChdj6Dr+PNwPv0X3rPvmtdwg/+7fhRAWPvoBQQaiAUAGhglABoQJCBaECQoUjfVK/m524U534vto2uhP/Dp2o4NEXECogVBAqIFRAqCBUQKiAUEGoQIZsfVftOSfuQjPwLuKd2+O33vnsRAWhAkIFhApCBYQKCBWECggVECoIFVjqum+5evKec+Ie+K33+u78O7zvfTlRwaMvIFQQKiBUQKggVECogFBBqIBQIe71jU1stm1H27bQbfcw77xneNW9x05U8OgLCBUQKggVECogVBAqIFRAqCBUIC/a+uaYe1mf/Z133se7aqO787X676B2ooJHX0CoIFRAqIBQQaiAUAGhglABoUJsfcm5O962je7Eu4idqODRFxAqIFQQKiBUQKggVECogFBBqEBsfXPKjnfia028a7dte+xEBY++gFBBqIBQAaGCUAGhAkIFoQJCBZKM2Pr237ma+nt02zaxbXcat22Pnajg0RcQKggVECogVBAqIFRAqCBUQKhAkuS6byn67DYyr9gnt21rJ26h++/sdaKCR19AqIBQQaiAUEGogFABoYJQAaEC2b71BZyoIFRAqIBQQaiAUAGhglABoYJQAaECQgWhAkIFhApCBYQKCBWECggVhAoIFRAqCBUQKiBUECogVBAqUOwfU+IZYAK+xeMAAAAASUVORK5CYII="><div class="lbl">Robot Pack</div><div class="num">380021047273335855</div></div>
+      </div>
+      <div class="note">Scan straight off the screen at the main entrance, or show order #632244490. Adult must have a child present to enter (you qualify).</div>
+    </div>
+  </div>
+
+  <div class="panel blue">
+    <h3>✈️ IAH Parking — ecopark2</h3>
+    <div class="ticket">
+      <div class="thead">ecopark2 · Will Clayton</div>
+      <div class="meta"><a href="https://www.google.com/maps/search/?api=1&query=ecopark2%20Will%20Clayton%205021%20Will%20Clayton%20Pkwy%20Houston%20TX%2077032">5021 Will Clayton Pkwy, Houston, TX 77032</a></div>
+      <div class="kv"><b>Confirmation:</b> IAH-WC-22673133 &middot; $38 paid<br>
+        <b>Plate:</b> 3319K75 &middot; <b>In:</b> Thu Aug 6, 1:15 PM &middot; <b>Out:</b> Sat Aug 8, 6:45 PM</div>
+      <div class="qrgrid">
+        <div class="qrcard"><img alt="Parking entry/exit QR" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAAAAACIM/FCAAAACXBIWXMAAA7EAAAOxAGVKw4bAAABxUlEQVR4nO3UQY7bUAxEQd3/0slKwAAKP/rL0qQnqbcyDIpieeHj1z/S8bcPeCqQtkDaAmkLpC2QtkDaAmkLpC2QtkDaAmkLpC2QtkDaAmkLpC2Qtv4zyBH3dX7ac28nCAgIyC4kn9lFffLeczSbAgGJZ87RbAqkGHJcunfYUztBQEBA3oO8uBMEBATkg5deZ3bnQUBAQJ6C7GLX33z+3nM0mwIBiWfO0WwKpBKSNKHW2GQnCAgISA7ZbTpg47DtV76zFeT+K9/ZCnL/le9sbYWs/xLzv99pW7ITBAQEJIdMtOTzxEyAOweBgICArI5Pzl73wPEgICAgAWQ6JgFO3yR7QEBAQHLI9IqpfHL9s4CAgIDcg+w2ofLJfMP5wO1j75yXT4I8G8iNDecDt4+9c14++RLkiIvWfdk5fQYBAQH5HLJ72PWpac/uj/Cn12dTICC7gSxnfgTkuDQdM3HWO6cZEBAQkO+E5GdvHA8CAgLyEGR9/HTqdWYDBQICAjJAkpkctf4mOg4EBARkODIpOXV6apoEAQEB2YX8gEDaAmkLpC2QtkDaAmkLpC2QtkDaAmkLpC2QtkDaAmkLpC2QtkDaAmnrN+cgnBeULc39AAAAAElFTkSuQmCC"><div class="lbl">Entry / exit</div></div>
+      </div>
+      <div class="note">Your <b>license plate (3319K75) scans automatically</b> at the gate. If it doesn't open, scan this QR to enter and exit. Shuttle runs to the terminal — build in time.</div>
+    </div>
+  </div>
+
+  <!-- ===== TRAVEL PLAYBOOK ===== -->
+  <div class="seclabel">🧭 Travel playbook</div>
+
+  <div class="panel">
+    <h3>📍 Important locations <span style="font-weight:400;color:var(--sub);font-size:.82rem">— tap to navigate</span></h3>
+    <ul class="loc">
+      <li>🏨 <a href="https://www.google.com/maps/search/?api=1&query=Kansas%20City%20Marriott%20Downtown">Marriott Downtown</a> <span class="addr">— home base, 200 W 12th St</span></li>
+      <li>🎡 <a href="https://www.google.com/maps/search/?api=1&query=Crown%20Center%20Kansas%20City">Crown Center</a> <span class="addr">— fountain, Kaleidoscope, LEGOLAND, SEA LIFE, Fritz's · 2450 Grand Blvd</span></li>
+      <li>🚉 <a href="https://www.google.com/maps/search/?api=1&query=Union%20Station%20Kansas%20City">Union Station</a> <span class="addr">— Grand Hall, Science City · 30 W Pershing Rd</span></li>
+      <li>🎨 <a href="https://www.google.com/maps/search/?api=1&query=Hallmark%20Kaleidoscope%20Kansas%20City">Hallmark Kaleidoscope</a> <span class="addr">— inside Crown Center</span></li>
+      <li>🚂 <a href="https://www.google.com/maps/search/?api=1&query=Fritz%27s%20Railroad%20Restaurant%20Crown%20Center">Fritz's Railroad Restaurant</a> <span class="addr">— Crown Center, Fri lunch</span></li>
+      <li>🍖 <a href="https://www.google.com/maps/search/?api=1&query=Jack%20Stack%20Freight%20House%20Kansas%20City">Jack Stack Freight House</a> <span class="addr">— Fri dinner · 101 W 22nd St</span></li>
+      <li>💵 <a href="https://www.google.com/maps/search/?api=1&query=Money%20Museum%20Federal%20Reserve%20Kansas%20City">The Money Museum</a> <span class="addr">— Sat option · 1 Memorial Dr</span></li>
+      <li>✈️ <a href="https://www.google.com/maps/search/?api=1&query=Kansas%20City%20International%20Airport%20MCI">MCI Airport</a> <span class="addr">— ~30 min out; leave downtown 12:15 Sat</span></li>
+    </ul>
+  </div>
+
+  <div class="panel red">
+    <h3>⏱️ The one hard stop</h3>
+    <ul>
+      <li><b>Thu arrival:</b> land 4:47 → hotel ~5:45. Evening = fountain + dinner, one anchor.</li>
+      <li><b>Sat departure:</b> leave downtown by <b>12:15 PM</b> for the 2:56 flight. With SEA LIFE done Friday, Saturday's relaxed — one light morning stop, bags in bell storage, go.</li>
+    </ul>
+  </div>
+
+  <div class="panel blue">
+    <h3>🚋 Getting around (free + air-conditioned)</h3>
+    <ul>
+      <li><b>KC Streetcar:</b> free, no tickets, runs Main St every ~10 min — board near the hotel (12th &amp; Main), off at Union Station.</li>
+      <li><b>The Link:</b> indoor A/C skywalk connecting Union Station ⇄ Crown Center — the tunnel route between every anchor. Stroller-friendly.</li>
+      <li><b>Rideshare backup:</b> hotel → Crown Center is ~8 min door-to-door.</li>
+      <li><b>Heat rule:</b> ~95°F — chain streetcar + Link and you stay indoors. Day bag with a change of clothes + towel from hour one (the fountain will soak him).</li>
+    </ul>
+  </div>
+
+  <div class="doctrine">
+    <b>Standing doctrine:</b> one anchor per half-day · pool + nap is load-bearing ·
+    snacks always provisioned · the streetcar counts as an attraction ·
+    <b>arrival + departure days each hold one anchor only.</b>
+  </div>
+
+  <!-- ===== THE DAYS ===== -->
+  <div class="seclabel">📆 Day by day</div>
+
+  <section class="day">
+    <div class="dayhead"><h2>Thursday, Aug 6</h2><span class="tag">Arrival · soft open</span></div>
+    <div class="track">
+      <div class="stop flag">
+        <div class="when mono">4:47 PM · Land MCI → ~5:45 PM hotel</div>
+        <div class="what">Wheels-down reality check ✈️</div>
+        <div class="why">By the time bags + rideshare + check-in are done, it's ~5:45. <b>Tonight is ONE anchor</b> — pick the fountain and let the rest ride.</div>
+      </div>
+      <div class="stop">
+        <div class="when mono">~6:15 PM · Crown Center Square</div>
+        <div class="what">Fountain running 💦 <span class="pill free">free</span></div>
+        <div class="why">Burns off 2 hours of airplane-sitting. Daylight's fine (sunset ~8:20). <b>Pack a change of clothes.</b></div>
+      </div>
+      <div class="stop food">
+        <div class="when mono">Dinner</div>
+        <div class="what">Easy Crown Center dinner <span class="pill food">food</span></div>
+        <div class="why">Keep it low-key — Fritz's stays holstered for tomorrow.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="day">
+    <div class="dayhead"><h2>Friday, Aug 7</h2><span class="tag">The full Dad Day</span></div>
+    <div class="track">
+      <div class="stop flag">
+        <div class="when mono">9:05 AM · Leave hotel</div>
+        <div class="what">Streetcar + The Link → Crown Center 🚋</div>
+        <div class="why">Board southbound at 12th &amp; Main (~9:10), off at Union Station ~9:25, walk The Link to Kaleidoscope, check in ~9:40.</div>
+      </div>
+      <div class="stop">
+        <div class="when mono">9:45 AM · Crown Center</div>
+        <div class="what">Kaleidoscope art session 🎨 <span class="pill free">free</span><span class="pill walk">walk-in</span></div>
+        <div class="why">Hallmark's kids' art studio — ~50 min, he leaves with a bag of his own art. Walk-in for dad + kid; arrive at start, not late.</div>
+      </div>
+      <div class="stop food">
+        <div class="when mono">11:30 AM · Crown Center</div>
+        <div class="what">Fritz's Railroad Restaurant 🚂🍔 <span class="pill food">food</span></div>
+        <div class="why">Burgers <b>delivered by overhead model train</b> + paper engineer hat. Lunch <i>before</i> the 1:00 LEGOLAND slot. Best lunch of his year.</div>
+      </div>
+      <div class="stop book">
+        <div class="when mono">1:00 PM · Crown Center</div>
+        <div class="what">LEGOLAND Discovery Center 🧱 <span class="pill booked">booked 1:00</span></div>
+        <div class="why">Timed entry (Order #632244490). Rides, build zones, 4D cinema — aimed dead-center at his age.</div>
+      </div>
+      <div class="stop book">
+        <div class="when mono">~2:30 PM · right next door</div>
+        <div class="what">SEA LIFE Aquarium 🦈 <span class="pill booked">no booking</span></div>
+        <div class="why">Same combo ticket, next door — do it straight after LEGOLAND while you're here. 180° shark tunnel + touch pools. <b>This is what frees up Saturday.</b></div>
+      </div>
+      <div class="stop">
+        <div class="when mono">~4:00 PM · Hotel</div>
+        <div class="what">Pool + nap protocol 🏊😴</div>
+        <div class="why">Do not skip. This purchase secures the evening.</div>
+      </div>
+      <div class="stop food">
+        <div class="when mono">Evening · Mom rejoins</div>
+        <div class="what">Jack Stack Freight House BBQ 🍖 <span class="pill food">food</span></div>
+        <div class="why">5-min walk from Union Station, very kid-tolerant. Gal's conference wraps in time. <b>Burnt ends are non-negotiable.</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="day">
+    <div class="dayhead"><h2>Saturday, Aug 8</h2><span class="tag">Relaxed · fly 2:56p</span></div>
+    <div class="track">
+      <div class="stop">
+        <div class="when mono">Morning · your pick</div>
+        <div class="what">One light stop 🎈</div>
+        <div class="why">SEA LIFE's already done, so no rush. Easy options: <b>Money Museum</b> (45 min, lift a gold bar, leave with shredded money), Union Station Grand Hall + trains, or just the hotel pool.</div>
+      </div>
+      <div class="stop">
+        <div class="when mono">If time · by Union Station</div>
+        <div class="what">Liberty Memorial lawn photo 📸 <span class="pill free">free</span></div>
+        <div class="why">Best skyline backdrop in the city.</div>
+      </div>
+      <div class="stop flag">
+        <div class="when mono">12:15 PM · HARD STOP</div>
+        <div class="what">Leave downtown for MCI 🚗</div>
+        <div class="why">2:56 flight → at airport ~1:00 (checked bags, small terminal). Checkout 11 AM — bags to bell storage. <b>Wheels-up doesn't wait.</b></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Assembled by the family fleet · conductor hat sold separately 🎩</footer>
+</main>

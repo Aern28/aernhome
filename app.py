@@ -1058,6 +1058,7 @@ NEXUS_SECTIONS = [
     ("/nexus/notes",      "Notes",       "📝", "Pinned scratchpad"),
     ("/nexus/docs",       "Docs",        "📄", "Reference & playbooks"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
+    ("/nexus/travel",     "Travel",      "✈️", "Trip hubs — docs & itineraries"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/inventory",  "Inventory",   "🗃️", "Live listings — visual confirm"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
@@ -1355,6 +1356,54 @@ def nexus_doc(slug):
     doc["html"] = nexus_md.render_markdown(doc["body_md"])
     return render_template("nexus_doc.html", sections=NEXUS_SECTIONS, active="/nexus/docs",
                            doc=doc)
+
+
+# ---------------------------------------------------------------------------
+# Travel hub — folder-per-trip under travel/ (see travel/_template/README.md).
+# Trip pages are self-contained HTML so QR codes render with no network deps;
+# gate scannables must ALSO live in Apple Wallet (Nexus is Tailscale-only).
+# ---------------------------------------------------------------------------
+TRAVEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "travel")
+
+
+def _list_trips():
+    trips = []
+    if os.path.isdir(TRAVEL_DIR):
+        for slug in os.listdir(TRAVEL_DIR):
+            if slug.startswith("_"):
+                continue
+            manifest = os.path.join(TRAVEL_DIR, slug, "trip.json")
+            if not os.path.isfile(manifest):
+                continue
+            try:
+                with open(manifest, encoding="utf-8") as f:
+                    trip = json.load(f)
+            except Exception:
+                continue
+            trip["slug"] = slug
+            trips.append(trip)
+    trips.sort(key=lambda t: t.get("start", ""), reverse=True)
+    return trips
+
+
+@app.route("/nexus/travel")
+def nexus_travel():
+    if not _is_nexus_allowed():
+        abort(404)
+    today = datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
+    return render_template("nexus_travel.html", sections=NEXUS_SECTIONS, active="/nexus/travel",
+                           trips=_list_trips(), today=today)
+
+
+@app.route("/travel/<slug>/")
+@app.route("/travel/<slug>/<path:filename>")
+def travel_page(slug, filename="index.html"):
+    if not _is_nexus_allowed():
+        abort(404)
+    base = os.path.realpath(os.path.join(TRAVEL_DIR, slug))
+    if not (base.startswith(os.path.realpath(TRAVEL_DIR) + os.sep) and os.path.isdir(base)):
+        abort(404)
+    return send_from_directory(base, filename)
 
 
 # Display metadata for feed sources (icon + label). Producers send only a slug;
