@@ -225,7 +225,16 @@ function renderFinanceVerdict(data) {
             : '<li class="text-sm text-gray-400">No verdicts yet.</li>';
     }
 
-    if (asOfEl) asOfEl.textContent = tcgOpsRelativeTime(data.generated_at);
+    if (asOfEl) {
+        // Split freshness: orders auto-import weekly, bank data lands at the
+        // monthly close — show both so a fresh generated_at can't imply the
+        // expense side is current.
+        const nums = data.numbers || {};
+        let asOf = tcgOpsRelativeTime(data.generated_at);
+        if (nums.orders_as_of) asOf += ` · orders thru ${nums.orders_as_of}`;
+        if (nums.bank_as_of) asOf += ` · bank thru ${nums.bank_as_of}`;
+        asOfEl.textContent = asOf;
+    }
 
     if (staleEl) staleEl.classList.toggle('hidden', !data.stale);
 

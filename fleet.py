@@ -43,7 +43,9 @@ CANARY_PATH = os.path.join(DATA_DIR, "canary.json")
 CANARY_STALE_H = 26  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 
 FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
-FINANCE_VERDICT_STALE_DAYS = 35  # finance-check is a monthly loop; give it a few days' slack
+FINANCE_VERDICT_STALE_DAYS = 10  # Weekly Books Publish (Trainer, Sundays) refreshes this; stale now
+                                 # means "automation missed 2+ runs", not "monthly close missed" —
+                                 # a missed monthly close shows via the verdict's bank_as_of field.
 
 WORKSPACE_ALIVE_PATH = "/workspace/.bot_alive"
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
