@@ -227,7 +227,8 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
     ) in cur.fetchall():
         if current is None or buy is None:
             continue
-        plp = ((current - buy) / buy) * 100
+        # buy=0 = zero-basis position (pack pull / free cards): P/L% is undefined
+        plp = ((current - buy) / buy) * 100 if buy else None
         pld_total = (current - buy) * qty
         try:
             opened = dt.date.fromisoformat(buy_date[:10])
@@ -257,8 +258,8 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
                 "name": card,
                 "ref": ref,
                 "cur": fmt_money(current),
-                "plp": f"{plp:+.1f}%",
-                "plp_neg": plp < 0,
+                "plp": f"{plp:+.1f}%" if plp is not None else "—",
+                "plp_neg": plp is not None and plp < 0,
                 "pld": ("-$" if pld_total < 0 else "+$") + f"{abs(pld_total):.2f}",
                 "day": day_n,
                 "total": total or "?",
