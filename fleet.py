@@ -71,6 +71,7 @@ CHECK_META = {
     "price_fresh": ("TCG Prices", "tcg"),
     "disk": ("Disk Space", "infra"),
     "signup_webhook": ("aern-signup Notifications", "infra"),
+    "home_assistant": ("Home Assistant (Pi)", "infra"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -199,6 +200,21 @@ def check_qbittorrent():
         return ("down", f"unreachable: {type(e).__name__}")
 
 
+def check_home_assistant():
+    """Home Assistant on the Raspberry Pi (192.168.1.70:8123). The Pi also
+    serves the whole house's DNS via AdGuard, so if it dies the internet
+    "breaks" for everyone — it was the only fleet node with no monitoring
+    until 2026-08-01. Unauthenticated /manifest.json is enough for liveness;
+    no token needed, so no secret lives in this container."""
+    try:
+        r = requests.get("http://192.168.1.70:8123/manifest.json", timeout=8)
+        if r.status_code < 400:
+            return ("up", f"HTTP {r.status_code}")
+        return ("down", f"HTTP {r.status_code}")
+    except requests.RequestException as e:
+        return ("down", f"unreachable: {type(e).__name__}")
+
+
 def check_trainer_ollama():
     """Trainer's RTX 5080 Ollama endpoint (tailscale serve, tailnet-only) —
     the fleet's inference node; Aernbot's cheap-thought chores prefer it over
@@ -297,6 +313,7 @@ SIMPLE_CHECKS = {
     "price_fresh": check_price_fresh,
     "disk": check_disk,
     "signup_webhook": check_signup_webhook,
+    "home_assistant": check_home_assistant,
 }
 
 
