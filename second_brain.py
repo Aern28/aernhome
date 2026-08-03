@@ -226,8 +226,26 @@ def api_seat_post():
     doc = load_seat()
     updated_by = body.get("updated_by") or doc.get("updated_by") or "unknown"
 
+    # Optimistic concurrency (added 2026-08-03), same contract as /api/agenda:
+    # pass base_updated_at (the updated_at you READ) and a stale write is
+    # rejected with 409 + the current doc instead of silently winning.
+    #
+    # This matters most for the "projects" full-replace branch below, which
+    # will happily drop every project a caller did not know about. Prefer the
+    # "project" (singular) upsert whenever you are changing ONE project -- it
+    # merges by id and cannot clobber a sibling seat's entries at all.
+    base = body.get("base_updated_at")
+    if base and doc.get("updated_at") and doc.get("updated_at") != base:
+        return jsonify({
+            "ok": False,
+            "error": "conflict: seat changed since you read it - merge and retry",
+            "current_updated_at": doc.get("updated_at"),
+            "current_updated_by": doc.get("updated_by"),
+            "current_projects": doc.get("projects"),
+        }), 409
+
     if isinstance(body.get("projects"), list):
-        # Full replace.
+        # Full replace. DANGEROUS: anything absent from the payload is deleted.
         by_id = {p.get("id"): p for p in doc["projects"] if isinstance(p, dict)}
         new_projects = []
         for raw in body["projects"]:
