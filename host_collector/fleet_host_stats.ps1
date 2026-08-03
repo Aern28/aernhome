@@ -197,6 +197,54 @@ function Test-NexusBackup {
 }
 
 # ---------------------------------------------------------------------------
+# Check 2b: phoenix_backup - Phoenix's push into NAS backup-staging
+#
+# Added 2026-08-02 after this push silently stalled for 4 days. Its only trigger
+# was /goodnight; when that went unrun, nothing anywhere noticed. Two traps this
+# check is shaped to avoid:
+#   1. Directory mtime is MEANINGLESS here - it only changes when entries are
+#      added/removed, so projects-phoenix read "Jul 27" while serving stale
+#      content. We read an explicit completion stamp instead.
+#   2. The F:/supersaiyan check below is a FALSE GREEN for this: it only proves
+#      the monthly mirror ran, and a mirror faithfully copies stale data.
+# The stamp is written by phoenix-backup-push.ps1 ONLY on a fully successful run.
+# ---------------------------------------------------------------------------
+
+function Test-PhoenixBackup {
+    $id = "phoenix_backup"
+    $label = "Phoenix Backup Push (NAS)"
+    try {
+        $stamp = "\\192.168.1.118\home\backup-staging\phoenix-last-push.txt"
+
+        # Same fresh-SMB-session dance as Test-NexusBackup: a cached session can
+        # keep this green against a rotated credential.
+        net use "\\192.168.1.118\home" /delete /y 2>$null | Out-Null
+
+        if (-not (Test-Path $stamp)) {
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "No completion stamp at $stamp - push has never succeeded since stamping was added, or the share is unreachable"
+        }
+
+        $ageHours = (New-TimeSpan -Start (Get-Item $stamp).LastWriteTime -End (Get-Date)).TotalHours
+        $rounded = [math]::Round($ageHours, 1)
+
+        # Scheduled daily 22:00 on Phoenix (laptop: StartWhenAvailable catches
+        # missed runs when it wakes), so one skipped day is a warn, two is down.
+        if ($ageHours -lt 30) {
+            return New-CheckResult -Id $id -Label $label -Status "up" -Detail "Last successful push ${rounded}h ago"
+        }
+        elseif ($ageHours -lt 54) {
+            return New-CheckResult -Id $id -Label $label -Status "warn" -Detail "Last successful push ${rounded}h ago (missed a daily run - Phoenix asleep?)"
+        }
+        else {
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "Last successful push ${rounded}h ago - STALLED"
+        }
+    }
+    catch {
+        return New-CheckResult -Id $id -Label $label -Status "unknown" -Detail "Error: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Check 3: supersaiyan_backup - newest backup_log_*.txt on F:\
 # ---------------------------------------------------------------------------
 
@@ -398,6 +446,7 @@ function Test-MattSession {
 $checks = @()
 $checks += Invoke-CheckSafely -Block { Test-TcgAutoprocess } -Id "tcg_autoprocess" -Label "TCG AutoProcess Task"
 $checks += Invoke-CheckSafely -Block { Test-NexusBackup } -Id "nexus_backup" -Label "Nexus Backup (H:)"
+$checks += Invoke-CheckSafely -Block { Test-PhoenixBackup } -Id "phoenix_backup" -Label "Phoenix Backup Push (NAS)"
 $checks += Invoke-CheckSafely -Block { Test-SupersaiyanBackup } -Id "supersaiyan_backup" -Label "Supersaiyan Backup (F:)"
 $checks += Invoke-CheckSafely -Block { Test-ChromeCdp } -Id "chrome_cdp" -Label "Chrome CDP (TCGplayer automation)"
 $checks += Invoke-CheckSafely -Block { Test-DiskC } -Id "disk_c" -Label "Disk Space (C:)"
