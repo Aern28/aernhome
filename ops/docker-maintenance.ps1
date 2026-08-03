@@ -61,18 +61,12 @@ function Wait-Engine([int]$TimeoutSec = 300) {
     $nudged = $false
     while ((Get-Date) -lt $deadline) {
         if (Test-Engine) { return $true }
-        # A plain `docker` call normally wakes the engine on demand. If it hasn't come
-        # back after 60s, explicitly ask Docker Desktop to start it (once).
-        if (-not $nudged -and (Get-Date) -gt $deadline.AddSeconds(-($TimeoutSec - 60))) {
-            $cli = 'C:\Program Files\Docker\Docker\resources\bin\com.docker.cli.exe'
-            $dd  = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
-            if (Test-Path $cli) {
-                Write-Log "engine still down after 60s -- asking Docker Desktop to start it"
-                & $Docker desktop start 2>$null | Out-Null
-            } elseif ((Test-Path $dd) -and -not (Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue)) {
-                Write-Log "engine still down after 60s -- launching Docker Desktop"
-                Start-Process $dd | Out-Null
-            }
+        # Ask Docker Desktop to start on the FIRST failed probe. Starting an already
+        # running Desktop is a no-op, and after a compaction run DD is deliberately
+        # stopped -- waiting out a timer before nudging just extends the outage.
+        if (-not $nudged) {
+            Write-Log "    engine down -- asking Docker Desktop to start"
+            & $Docker desktop start 2>&1 | ForEach-Object { Write-Log ("      " + $_) }
             $nudged = $true
         }
         Start-Sleep -Seconds 5
@@ -87,7 +81,6 @@ $before = Get-RunningContainers
 Write-Log ("pre-state: {0} containers running" -f $before.Count)
 if ($before.Count -eq 0) { Write-Log "WARNING: no containers running before maintenance (engine down already?)" }
 
-$compacted = $false
 $sizeBefore = $null
 $sizeAfter  = $null
 
@@ -142,16 +135,42 @@ try {
                 $sizeBefore = [math]::Round((Get-Item $vhdxPath).Length / 1GB, 2)
                 Write-Log ("[2/4] vhdx = {0} ({1} GB)" -f $vhdxPath, $sizeBefore)
 
-                Write-Log "[3/4] stopping WSL for compaction (stack goes down here)..."
+                # Docker Desktop MUST be stopped first, not just WSL. DD stays resident
+                # and re-launches the WSL VM within ~30s of a bare `wsl --shutdown`, so
+                # diskpart loses the race and fails with "The process cannot access the
+                # file because it is being used by another process." Observed 2026-08-03:
+                # shutdown at 14:32:06, VM back at 14:32:29, diskpart failed at 14:32:38.
+                # This is why the original task never actually compacted anything, quite
+                # apart from it having been pointed at a dead vhdx.
+                Write-Log "[3/4] stopping Docker Desktop for compaction (stack goes down here)..."
+                & $Docker desktop stop 2>&1 | ForEach-Object { Write-Log ("    " + $_) }
+
+                # wait for the engine to actually be gone before touching the vdisk
+                $gone = $false
+                for ($i = 0; $i -lt 24; $i++) {
+                    Start-Sleep -Seconds 5
+                    if (-not (Test-Engine)) { $gone = $true; break }
+                }
+                Write-Log ("    engine down = {0}" -f $gone)
+
                 & wsl.exe --shutdown
                 Start-Sleep -Seconds 8
 
                 $dp = "select vdisk file=`"$vhdxPath`"`r`ncompact vdisk`r`nexit"
-                $dp | & diskpart.exe 2>&1 | ForEach-Object { if ($_ -match '\S') { Write-Log ("    " + $_.Trim()) } }
-                $compacted = $true
+                # diskpart emits a "N percent completed" line continuously; logging every
+                # one buried a 30-line run in ~200 lines of noise. Keep only 100%.
+                $dp | & diskpart.exe 2>&1 | ForEach-Object {
+                    $t = $_.Trim()
+                    if ($t -and ($t -notmatch '^\d+ percent completed' -or $t -match '^100 percent')) {
+                        Write-Log ("    " + $t)
+                    }
+                }
 
                 $sizeAfter = [math]::Round((Get-Item $vhdxPath).Length / 1GB, 2)
                 Write-Log ("    compaction: {0} GB -> {1} GB (saved {2} GB)" -f $sizeBefore, $sizeAfter, [math]::Round($sizeBefore - $sizeAfter, 2))
+
+                Write-Log "    starting Docker Desktop back up..."
+                & $Docker desktop start 2>&1 | ForEach-Object { Write-Log ("    " + $_) }
             }
         }
     }
@@ -205,8 +224,31 @@ finally {
         Write-Log ("    after restart, board reachable = {0}" -f $boardOk)
     }
 
-    if ($stillMissing.Count -gt 0 -or -not $boardOk) {
-        Write-Log ("ALERT: unhealthy end state (missing: {0}; boardOk={1})" -f ($stillMissing -join ', '), $boardOk)
+    # n8n gets its own check: after BOTH stack restarts on 2026-08-03 its published
+    # :5678 came back dead while the container reported healthy, which silently breaks
+    # aern-signup booking notifications (the fleet check calls this out as "bookings are
+    # NOT notifying"). Same port-proxy break as the board, different container, and it
+    # needed a manual `docker restart n8n` both times. Automate what you did by hand.
+    $n8nOk = $false
+    foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
+        try {
+            if ((Invoke-WebRequest -Uri $u -TimeoutSec 15 -UseBasicParsing).StatusCode -eq 200) { $n8nOk = $true; break }
+        } catch { }
+    }
+    if (-not $n8nOk) {
+        Write-Log "    n8n :5678 dead -- restarting n8n."
+        & $Docker restart n8n 2>$null | Out-Null
+        Start-Sleep -Seconds 25
+        foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
+            try {
+                if ((Invoke-WebRequest -Uri $u -TimeoutSec 15 -UseBasicParsing).StatusCode -eq 200) { $n8nOk = $true; break }
+            } catch { }
+        }
+        Write-Log ("    after restart, n8n reachable = {0}" -f $n8nOk)
+    } else { Write-Log "    n8n reachable on :5678." }
+
+    if ($stillMissing.Count -gt 0 -or -not $boardOk -or -not $n8nOk) {
+        Write-Log ("ALERT: unhealthy end state (missing: {0}; boardOk={1}; n8nOk={2})" -f ($stillMissing -join ', '), $boardOk, $n8nOk)
         Write-Log "=== Docker Maintenance END (FAILED) ==="
         exit 3
     }
