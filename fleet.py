@@ -64,6 +64,7 @@ SIGNAL_ALERT_TO = os.environ.get("SIGNAL_ALERT_TO", "")
 CHECK_META = {
     "relay_alive": ("Aernbot Relay", "aernbot"),
     "signal_cli": ("Signal CLI", "aernbot"),
+    "scan_runner": ("Aernbot scan-runner", "aernbot"),
     "containers": ("Containers", "infra"),
     "qbittorrent": ("qBittorrent (NAS)", "infra"),
     "trainer_ollama": ("Trainer Ollama (5080)", "infra"),
@@ -215,6 +216,40 @@ def check_home_assistant():
         return ("down", f"unreachable: {type(e).__name__}")
 
 
+def check_scan_runner():
+    """Aernbot scan-runner LIVENESS — is the scheduler still cycling?
+
+    Ported from Uptime Kuma's push monitor when Kuma was retired 2026-08-03.
+    Worth keeping because it catches a failure `check_containers` structurally
+    cannot: scan-runner can sit there "running" with a wedged scheduler, and a
+    container-status check calls that healthy.
+
+    Kuma had this beat and it worked -- but zero of its six monitors were wired
+    to a notification provider, so it observed failures and told nobody. Here it
+    rides the board's existing Signal alerting.
+
+    Beat = log lines tagged [SOURCE:scheduler]. The scan loop emits Starting/
+    Complete pairs continuously, so an hour of silence means wedged.
+    """
+    if not DOCKER_AVAILABLE:
+        return ("unknown", "docker library not available")
+    try:
+        client = docker.from_env()
+        c = client.containers.get("scan-runner")
+        if c.status != "running":
+            return ("down", f"container {c.status}")
+        raw = c.logs(since=int(time.time()) - 3600, tail=400)
+        text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+        beats = [ln for ln in text.splitlines() if "[SOURCE:scheduler]" in ln]
+        if not beats:
+            return ("down", "no scheduler activity in 60m — wedged?")
+        if len(beats) < 2:
+            return ("warn", f"only {len(beats)} scheduler event in 60m")
+        return ("up", f"scheduler alive ({len(beats)} events/60m)")
+    except Exception as e:
+        return ("unknown", f"{type(e).__name__}")
+
+
 def check_trainer_ollama():
     """Trainer's RTX 5080 Ollama endpoint (tailscale serve, tailnet-only) —
     the fleet's inference node; Aernbot's cheap-thought chores prefer it over
@@ -307,6 +342,7 @@ SIMPLE_CHECKS = {
     "relay_alive": check_relay_alive,
     "containers": check_containers,
     "signal_cli": check_signal_cli,
+    "scan_runner": check_scan_runner,
     "qbittorrent": check_qbittorrent,
     "trainer_ollama": check_trainer_ollama,
     "mirror_fresh": check_mirror_fresh,
