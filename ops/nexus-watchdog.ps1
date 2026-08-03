@@ -58,6 +58,47 @@ function Test-Published {
   catch { return $false }
 }
 
+# --- n8n published-port healer --------------------------------------------------
+# Same Docker port-proxy failure class as the board, different container: after a WSL
+# VM restart, n8n's published :5678 comes back dead while the container itself reports
+# healthy. That silently breaks aern-signup booking notifications -- the fleet check
+# spells it out as "bookings are NOT notifying". It happened THREE times on 2026-08-03
+# alone (two stack restarts plus a VM bounce), needing a manual `docker restart n8n`
+# each time. VM restarts also happen outside any maintenance window (one at 12:47 on
+# 8/03 with no identified trigger), so this belongs here in the q5min loop rather than
+# only in docker-maintenance.ps1.
+$N8nContainer = 'n8n'
+$N8nStateFile = Join-Path $LogDir 'nexus-watchdog-n8n.json'
+
+function Test-N8n {
+  foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
+    try { if ((Invoke-WebRequest -Uri $u -TimeoutSec $ProbeSec -UseBasicParsing).StatusCode -eq 200) { return $true } }
+    catch { }
+  }
+  return $false
+}
+
+function Repair-N8n {
+  if (Test-N8n) { return }
+  # own cooldown, tracked separately from the board's, so one can't starve the other
+  $last = $null
+  if (Test-Path $N8nStateFile) {
+    try { $last = (Get-Content $N8nStateFile -Raw | ConvertFrom-Json).last_restart } catch { }
+  }
+  if ($last) {
+    $since = (Get-Date) - [datetime]$last
+    if ($since.TotalMinutes -lt $CooldownMin) {
+      Write-Log ("n8n :5678 down, SKIP restart: last n8n restart {0:N1} min ago (< {1} min cooldown)" -f $since.TotalMinutes, $CooldownMin)
+      return
+    }
+  }
+  Write-Log "n8n :5678 dead (port-proxy break) -- restarting $N8nContainer..."
+  & $Docker restart $N8nContainer 2>$null | Out-Null
+  [pscustomobject]@{ last_restart = (Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -Path $N8nStateFile
+  Start-Sleep -Seconds 20
+  Write-Log ("n8n reachable after restart = " + (Test-N8n))
+}
+
 # A terminating error MUST reach the log. This watchdog died invisibly for a week
 # because an unhandled throw exits 1 while writing nothing anywhere, so the log read
 # "PROBE FAILED" then silence and the state file still said healthy.
@@ -69,6 +110,8 @@ $state = Get-State
 if (Test-Published) {
   if ($state.status -ne 'healthy') { Write-Log "OK: Nexus reachable (recovered from '$($state.status)')" }
   Set-State 'healthy' $state.last_restart
+  # The board being fine says nothing about n8n's published port -- check it separately.
+  Repair-N8n
   exit 0
 }
 
@@ -91,6 +134,9 @@ if ($LASTEXITCODE -ne 0 -or $running -notmatch 'true') {
   Set-State 'container-down' $state.last_restart
   exit 2
 }
+
+# Engine is alive (the inspect above succeeded), so an n8n restart is meaningful here.
+Repair-N8n
 
 # --- ask the app from inside the container ---
 $py = 'import urllib.request,sys' + "`n" +
