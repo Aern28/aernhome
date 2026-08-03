@@ -482,6 +482,29 @@ def api_agenda_post():
         return jsonify({"ok": False, "error": "content (non-empty markdown string) is required"}), 400
 
     doc = load_agenda()
+    current = doc.get(which)
+
+    # Optimistic concurrency (added 2026-08-03). This endpoint was pure
+    # last-writer-wins on the WHOLE document, so two seats writing in the same
+    # window silently clobbered each other. It happened for real on 8/03:
+    # phoenix-claude wrote at 15:17 CDT without the afternoon's work, then
+    # trainer-claude wrote at 17:25 over the top -- neither seat ever saw a
+    # conflict, and the losing content simply vanished.
+    #
+    # Callers that pass base_updated_at (the updated_at they READ) get a 409
+    # plus the current document, so they can merge and retry instead of
+    # overwriting blind. Omitting the field preserves the old behaviour, so
+    # nothing that already posts here breaks.
+    base = body.get("base_updated_at")
+    if base and current and current.get("updated_at") != base:
+        return jsonify({
+            "ok": False,
+            "error": "conflict: agenda changed since you read it - merge and retry",
+            "current_updated_at": current.get("updated_at"),
+            "current_updated_by": current.get("updated_by"),
+            "current_content": current.get("content"),
+        }), 409
+
     doc[which] = {
         "content": content,
         "updated_at": _now_iso(),
