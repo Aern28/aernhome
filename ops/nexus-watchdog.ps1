@@ -31,6 +31,12 @@ $StateFile   = Join-Path $LogDir 'nexus-watchdog-state.json'
 $CooldownMin = 15
 $ProbeSec    = 8
 
+# docker.exe resolved EXPLICITLY: Task Scheduler's PATH lacks Docker's bin dir, so a
+# bare "docker" throws CommandNotFoundException under ErrorActionPreference='Stop' and
+# killed this watchdog silently from 2026-07-27 to 2026-08-03. Never trust PATH here.
+$Docker = (Get-Command docker -ErrorAction SilentlyContinue).Source
+if (-not $Docker) { $Docker = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe' }
+
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
 function Write-Log([string]$msg) {
@@ -51,6 +57,11 @@ function Test-Published {
   try { Invoke-RestMethod -Uri $Published -TimeoutSec $ProbeSec | Out-Null; return $true }
   catch { return $false }
 }
+
+# A terminating error MUST reach the log. This watchdog died invisibly for a week
+# because an unhandled throw exits 1 while writing nothing anywhere, so the log read
+# "PROBE FAILED" then silence and the state file still said healthy.
+trap { Write-Log ("FATAL: " + $PSItem.Exception.Message); exit 9 }
 
 $state = Get-State
 
@@ -74,7 +85,7 @@ if ($state.last_restart) {
 }
 
 # --- 2. is the container even running? ---
-$running = (& docker inspect -f '{{.State.Running}}' $Container 2>$null)
+$running = (& $Docker inspect -f '{{.State.Running}}' $Container 2>$null)
 if ($LASTEXITCODE -ne 0 -or $running -notmatch 'true') {
   Write-Log "ALERT: container '$Container' not running (state='$running'). Real outage -- NOT auto-restarting; needs a look."
   Set-State 'container-down' $state.last_restart
@@ -84,9 +95,14 @@ if ($LASTEXITCODE -ne 0 -or $running -notmatch 'true') {
 # --- ask the app from inside the container ---
 $py = 'import urllib.request,sys' + "`n" +
       'try:' + "`n" +
-      '  sys.exit(0) if urllib.request.urlopen("' + $InsideUrl + '",timeout=5).status==200 else sys.exit(1)' + "`n" +
+      '  sys.exit(0 if urllib.request.urlopen(''' + $InsideUrl + ''',timeout=5).status==200 else 1)' + "`n" +
       'except Exception: sys.exit(1)'
-& docker exec $Container python -c $py 2>$null
+# SINGLE quotes in the Python above are load-bearing: PowerShell strips embedded double
+# quotes when passing an argument to a native exe, so the double-quoted form reached
+# python as urlopen(http://...) -> SyntaxError -> exit 1 on EVERY run. $insideOk was
+# therefore permanently false, and every proxy break would have been misreported as
+# "app is DOWN inside the container too" instead of self-healing quietly. Fixed 2026-08-03.
+& $Docker exec $Container python -c $py 2>$null
 $insideOk = ($LASTEXITCODE -eq 0)
 
 if ($insideOk) {
@@ -96,7 +112,7 @@ if ($insideOk) {
 }
 
 # --- 3. restart (rebuilds the port-proxy) ---
-& docker restart $Container 2>$null | Out-Null
+& $Docker restart $Container 2>$null | Out-Null
 $now = (Get-Date).ToString('o')
 Start-Sleep -Seconds 10
 
