@@ -42,7 +42,15 @@ if (-not $Docker) { $Docker = 'C:\Program Files\Docker\Docker\resources\bin\dock
 if (-not (Test-Path $Docker)) { Write-Log "FATAL: docker.exe not found at '$Docker'"; exit 9 }
 
 # A terminating error must reach the log, not vanish into a non-zero exit code.
-trap { Write-Log ("FATAL: " + $PSItem.Exception.Message); exit 9 }
+trap {
+    Write-Log ("FATAL: " + $PSItem.Exception.Message)
+    # `exit` here can bypass the finally block, so restore the paused tasks directly.
+    # Leaving Nexus Watchdog disabled would remove the fleet's only self-healer.
+    foreach ($t in @('Nexus Watchdog', 'docker-memory-watchdog')) {
+        try { Enable-ScheduledTask -TaskName $t -ErrorAction Stop | Out-Null; Write-Log ("    re-enabled task: " + $t) } catch { }
+    }
+    exit 9
+}
 
 function Test-Engine {
     & $Docker info --format '{{.ServerVersion}}' 2>$null | Out-Null
@@ -81,6 +89,8 @@ $before = Get-RunningContainers
 Write-Log ("pre-state: {0} containers running" -f $before.Count)
 if ($before.Count -eq 0) { Write-Log "WARNING: no containers running before maintenance (engine down already?)" }
 
+# Tasks paused for the compaction window; re-enabled unconditionally in `finally`.
+$PausedTasks = @('Nexus Watchdog', 'docker-memory-watchdog')
 $sizeBefore = $null
 $sizeAfter  = $null
 
@@ -142,6 +152,16 @@ try {
                 # shutdown at 14:32:06, VM back at 14:32:29, diskpart failed at 14:32:38.
                 # This is why the original task never actually compacted anything, quite
                 # apart from it having been pointed at a dead vhdx.
+                # Pause the two tasks that shell out to `docker` during the window. With
+                # Desktop fully stopped a docker call should just fail rather than revive
+                # the VM, but this run was only ever PROVEN with them paused, and the
+                # failure mode (diskpart losing the vdisk) is the exact one being fixed.
+                # Deterministic beats probably. Re-enabled unconditionally in `finally`.
+                foreach ($t in $PausedTasks) {
+                    try { Disable-ScheduledTask -TaskName $t -ErrorAction Stop | Out-Null; Write-Log ("    paused task: " + $t) }
+                    catch { Write-Log ("    could not pause task '" + $t + "': " + $PSItem.Exception.Message) }
+                }
+
                 Write-Log "[3/4] stopping Docker Desktop for compaction (stack goes down here)..."
                 & $Docker desktop stop 2>&1 | ForEach-Object { Write-Log ("    " + $_) }
 
@@ -176,6 +196,17 @@ try {
     }
 }
 finally {
+    # Re-enable FIRST, before anything that could itself fail -- leaving the Nexus
+    # watchdog disabled would silently remove the fleet's only self-healer.
+    foreach ($t in $PausedTasks) {
+        try {
+            if ((Get-ScheduledTask -TaskName $t -ErrorAction Stop).State -eq 'Disabled') {
+                Enable-ScheduledTask -TaskName $t -ErrorAction Stop | Out-Null
+                Write-Log ("    re-enabled task: " + $t)
+            }
+        } catch { Write-Log ("ALERT: could not re-enable task '" + $t + "': " + $PSItem.Exception.Message) }
+    }
+
     # --- 4. ALWAYS recover, even if the above threw ------------------------------
     Write-Log "[4/4] recovery: waiting for the Docker engine..."
     if (-not (Wait-Engine -TimeoutSec 300)) {
