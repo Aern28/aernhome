@@ -99,16 +99,39 @@ try {
 
         if (-not $SkipCompact) {
             # --- 2. locate the vhdx BEFORE stopping anything ----------------------
+            # Resolved from the REGISTERED WSL distro, not a hardcoded guess list.
+            # The old guess list matched 'G:\Docker\wsl\disk\docker_data.vhdx' -- a stale
+            # 23.8 GB leftover last written 2026-02-24 -- while the live disk was the
+            # 55.7 GB one under the CustomWslDistroDir. So every Sunday this stopped the
+            # whole fleet to compact a DEAD file. Pick by "actually being written to".
             $vhdxPath = $null
-            foreach ($p in @(
-                'G:\Docker\wsl\disk\docker_data.vhdx',
-                "$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx",
-                "$env:LOCALAPPDATA\Docker\wsl\data\ext4.vhdx")) {
-                if (Test-Path $p) { $vhdxPath = $p; break }
+            $cands = New-Object System.Collections.Generic.List[string]
+            Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction SilentlyContinue | ForEach-Object {
+                $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+                if ($props.DistributionName -match 'docker') {
+                    $bp = $props.BasePath -replace '^\\\\\?\\', ''
+                    $parent = Split-Path $bp -Parent
+                    $cands.Add((Join-Path $parent 'disk\docker_data.vhdx'))
+                    $cands.Add((Join-Path $bp 'docker_data.vhdx'))
+                    $cands.Add((Join-Path $bp 'ext4.vhdx'))
+                }
             }
-            if (-not $vhdxPath) {
-                $vhdxPath = (Get-ChildItem "$env:LOCALAPPDATA\Docker" -Recurse -Filter 'docker_data.vhdx' -ErrorAction SilentlyContinue |
-                             Select-Object -First 1).FullName
+            foreach ($p in @("$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx",
+                             "$env:LOCALAPPDATA\Docker\wsl\data\ext4.vhdx")) { $cands.Add($p) }
+
+            $live = $cands | Where-Object { $_ -and (Test-Path $_) } |
+                    Get-Item -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+            if ($live) {
+                $ageH = ((Get-Date) - $live.LastWriteTime).TotalHours
+                if ($ageH -gt 24) {
+                    # Refuse to take an outage for a file nothing is writing to.
+                    Write-Log ("SKIP compaction: newest candidate '{0}' was last written {1:N1}h ago -- that is not the live disk. Stack left running." -f $live.FullName, $ageH)
+                } else {
+                    $vhdxPath = $live.FullName
+                    Write-Log ("    resolved live vhdx: {0} (written {1:N1}h ago)" -f $vhdxPath, $ageH)
+                }
             }
 
             if (-not $vhdxPath -or -not (Test-Path $vhdxPath)) {
