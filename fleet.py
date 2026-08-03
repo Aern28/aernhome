@@ -228,8 +228,14 @@ def check_scan_runner():
     to a notification provider, so it observed failures and told nobody. Here it
     rides the board's existing Signal alerting.
 
-    Beat = log lines tagged [SOURCE:scheduler]. The scan loop emits Starting/
-    Complete pairs continuously, so an hour of silence means wedged.
+    Beat = log lines tagged [SOURCE:scheduler].
+
+    WINDOW: the scan loop cycles roughly every 65 minutes, so the quiet gap
+    BETWEEN cycles legitimately exceeds an hour. This shipped with a 60-minute
+    window on 2026-08-03 and false-alarmed within the hour (last beat 20:00:28,
+    next 21:04:12 — a normal gap). 2h clears the real cadence with headroom;
+    anything tighter alerts once per cycle forever, which trains you to ignore
+    the board. Re-check this if the scan schedule ever changes.
     """
     if not DOCKER_AVAILABLE:
         return ("unknown", "docker library not available")
@@ -238,14 +244,15 @@ def check_scan_runner():
         c = client.containers.get("scan-runner")
         if c.status != "running":
             return ("down", f"container {c.status}")
-        raw = c.logs(since=int(time.time()) - 3600, tail=400)
+        window_s = 7200  # 2h — see WINDOW note above; cycle is ~65m
+        raw = c.logs(since=int(time.time()) - window_s, tail=600)
         text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
         beats = [ln for ln in text.splitlines() if "[SOURCE:scheduler]" in ln]
         if not beats:
-            return ("down", "no scheduler activity in 60m — wedged?")
+            return ("down", "no scheduler activity in 2h — wedged?")
         if len(beats) < 2:
-            return ("warn", f"only {len(beats)} scheduler event in 60m")
-        return ("up", f"scheduler alive ({len(beats)} events/60m)")
+            return ("warn", f"only {len(beats)} scheduler event in 2h")
+        return ("up", f"scheduler alive ({len(beats)} events/2h)")
     except Exception as e:
         return ("unknown", f"{type(e).__name__}")
 
