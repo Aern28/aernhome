@@ -81,6 +81,23 @@ _STATUS_RANK = {"up": 0, "unknown": 1, "warn": 2, "down": 3}
 _stop_event = threading.Event()
 
 
+def _to_central_str(iso_str):
+    """'2026-08-03T20:17:51+00:00' -> '2026-08-03 15:17 CDT'. None if unparseable.
+
+    Companion for every UTC timestamp this API emits. Storage stays UTC; this is
+    purely so a reader cannot mistake it for wall-clock time.
+    """
+    if not iso_str or not isinstance(iso_str, str):
+        return None
+    try:
+        when = dt.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=dt.timezone.utc)
+        return when.astimezone(CENTRAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+    except ValueError:
+        return None
+
+
 # ── Individual checks (each returns (status, detail); never raises) ──────────
 def check_relay_alive():
     """mtime of /workspace/.bot_alive, touched ~every 30s by the relay bot."""
@@ -885,10 +902,24 @@ def api_fleet():
         for cid, entry in checks_state.items()
     ]
     checks_out.sort(key=lambda c: (c["group"], c["label"]))
+    # `_local` companions: stored time is UTC (correct), but every Claude seat
+    # reads this raw JSON and misreads bare UTC as wall-clock. Happened twice on
+    # 2026-08-03/04 -- alert times were narrated as local while being UTC, and an
+    # agenda stamp of "20:17" was read as 8pm when it was 15:17 CDT. The browser
+    # UI was never affected (it renders relative time). Additive only.
+    alerts_out = []
+    for a in state.get("recent_alerts", [])[-20:]:
+        if isinstance(a, dict) and a.get("ts"):
+            local = _to_central_str(a["ts"])
+            alerts_out.append({**a, "ts_local": local} if local else a)
+        else:
+            alerts_out.append(a)
+    gen = state.get("generated_at")
     return jsonify({
-        "generated_at": state.get("generated_at"),
+        "generated_at": gen,
+        "generated_at_local": _to_central_str(gen),
         "checks": checks_out,
-        "recent_alerts": state.get("recent_alerts", [])[-20:],
+        "recent_alerts": alerts_out,
     })
 
 

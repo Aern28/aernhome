@@ -80,6 +80,48 @@ def _now_iso():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
+# Stored timestamps are UTC ISO, which is correct for storage and a trap for
+# readers. On 2026-08-03/04 BOTH a seat and Aern misread an agenda `updated_at`
+# of "20:17" as 8pm wall-clock; it was 15:17 CDT. The seat then reported alert
+# times in UTC while narrating them as local. The browser UI never had this
+# problem (it renders relative time), so the trap is specific to anything
+# reading the RAW JSON -- i.e. every Claude seat.
+#
+# Fix: ship a companion human-readable field next to each UTC one. Additive, so
+# nothing that already parses `updated_at` breaks.
+_CENTRAL = None
+try:
+    from zoneinfo import ZoneInfo as _ZoneInfo
+    _CENTRAL = _ZoneInfo("America/Chicago")
+except Exception:  # pragma: no cover - zoneinfo/tzdata unavailable
+    _CENTRAL = None
+
+
+def _local_str(iso_str):
+    """'2026-08-03T20:17:51+00:00' -> '2026-08-03 15:17 CDT'. None on bad input."""
+    if not iso_str or not isinstance(iso_str, str) or _CENTRAL is None:
+        return None
+    try:
+        when = dt.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=dt.timezone.utc)
+        return when.astimezone(_CENTRAL).strftime("%Y-%m-%d %H:%M %Z")
+    except ValueError:
+        return None
+
+
+def _with_local(entry, *fields):
+    """Return a copy of `entry` with `<field>_local` added for each field present."""
+    if not isinstance(entry, dict):
+        return entry
+    out = dict(entry)
+    for f in fields:
+        local = _local_str(entry.get(f))
+        if local:
+            out[f + "_local"] = local
+    return out
+
+
 # ── Generic atomic JSON load/save (mirrors fleet.py's load_state/save_state_atomic) ─
 def _load_json(path, default):
     try:
@@ -216,7 +258,7 @@ def _clean_project(raw, existing=None):
 def api_seat_get():
     if not _is_nexus_allowed():
         abort(404)
-    return jsonify(load_seat())
+    return jsonify(_with_local(load_seat(), "updated_at"))
 
 
 @sb_bp.route("/api/seat", methods=["POST"])
@@ -484,8 +526,8 @@ def api_agenda_get():
     doc = load_agenda()
     which = request.args.get("which")
     if which in VALID_AGENDA_WHICH:
-        return jsonify({which: doc[which]})
-    return jsonify(doc)
+        return jsonify({which: _with_local(doc[which], "updated_at")})
+    return jsonify({k: _with_local(v, "updated_at") for k, v in doc.items()})
 
 
 @sb_bp.route("/api/agenda", methods=["POST"])
