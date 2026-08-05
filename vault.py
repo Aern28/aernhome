@@ -1,36 +1,35 @@
 """
-vault.py — read-only browser for the Obsidian vault mounted at VAULT_DIR.
+vault.py — read-only browser for markdown trees mounted into the container.
 
-The vault (Aern's personal Obsidian repo) is bind-mounted read-only into the
-container (default /vault, overridable via the VAULT_DIR env var — see
-docker-compose.yml). This module never writes anything; it lists what's on
-disk and renders .md files through the exact same markdown -> bleach
-pipeline the Docs section uses (nexus_md.render_markdown), so the
-sanitization guarantees are identical.
+Originally a single-vault module (Aern's personal Obsidian repo at /vault);
+generalized 2026-08-05 for the vault/fleet-docs split into a blueprint
+FACTORY so the identical browse/render pipeline serves two roots:
 
-Two pages:
-  GET /nexus/vault              — folder tree + case-insensitive name filter (client-side JS)
-  GET /nexus/vault/<relpath>    — a single rendered note, wikilinks resolved
+  vault_bp     GET /nexus/vault[/...]      VAULT_DIR      (default /vault)
+  fleetdocs_bp GET /nexus/fleetdocs[/...]  FLEETDOCS_DIR  (default /fleetdocs)
+
+Both are bind-mounted read-only (see docker-compose.yml). This module never
+writes anything; it lists what's on disk and renders .md files through the
+exact same markdown -> bleach pipeline the Docs section uses
+(nexus_md.render_markdown), so the sanitization guarantees are identical.
 
 Wikilinks: Obsidian's [[Note]] / [[Note|label]] / [[Note#Heading]] syntax is
 rewritten to real links (or muted plain text if unresolved) BEFORE the body
 reaches nexus_md.render_markdown — see _convert_wikilinks(). Resolution is a
-case-insensitive filename match anywhere in the vault, matching only the
-final path segment of the link target (Obsidian links are usually just a
-bare note name, but a few authors write `Folder/Note` — either way we match
-by filename, per the same "closest sibling" simplicity as ledger.py).
+case-insensitive filename match anywhere in the SAME tree (the two roots do
+not cross-resolve; post-split exactly one link crosses the boundary and it
+degrades to muted text, which is the designed behavior for unresolved links).
 
 Security: same Tailscale-only CF-header gate as every other /nexus/* route
 (kept as a local copy, not imported from app.py, for the same reason
 ledger.py keeps its own — app.py imports this module, so this module
 importing app back would be circular). Path traversal is hardened in
 _resolve_note_path(): the requested path is realpath'd and required to stay
-under VAULT_DIR's realpath before anything is opened, and only .md files are
+under the root's realpath before anything is opened, and only .md files are
 ever served.
 
-Degrade-never-crash: a missing/unmounted vault dir renders a friendly empty
-state instead of erroring; an unreadable file 404s instead of leaking a
-traceback.
+Degrade-never-crash: a missing/unmounted dir renders a friendly empty state
+instead of erroring; an unreadable file 404s instead of leaking a traceback.
 """
 
 import os
@@ -43,9 +42,8 @@ from markupsafe import escape
 
 import nexus_md
 
-vault_bp = Blueprint("vault", __name__)
-
 VAULT_DIR = os.environ.get("VAULT_DIR", "/vault")
+FLEETDOCS_DIR = os.environ.get("FLEETDOCS_DIR", "/fleetdocs")
 
 _TITLE_LINE_RE = re.compile(r"^\s*title\s*:\s*(.+?)\s*$", re.IGNORECASE)
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
@@ -59,9 +57,9 @@ def _is_nexus_allowed():
 
 
 # ── Filesystem helpers ─────────────────────────────────────────────────────
-def _vault_root():
-    """realpath of VAULT_DIR, or None if it doesn't exist / isn't a dir."""
-    root = os.path.realpath(VAULT_DIR)
+def _tree_root(root_dir):
+    """realpath of root_dir, or None if it doesn't exist / isn't a dir."""
+    root = os.path.realpath(root_dir)
     return root if os.path.isdir(root) else None
 
 
@@ -81,9 +79,10 @@ def _iter_md_files(vault_root):
 
 
 def recent_notes(n=5):
-    """Most recently modified notes, for the Nexus home widget. Degrades to []
-    on any failure — a missing vault must never break the home page."""
-    root = _vault_root()
+    """Most recently modified notes in the PERSONAL vault, for the Nexus home
+    widget. Degrades to [] on any failure — a missing vault must never break
+    the home page."""
+    root = _tree_root(VAULT_DIR)
     if not root:
         return []
     try:
@@ -157,11 +156,11 @@ def _build_tree(vault_root):
     return convert(root)
 
 
-def _resolve_note_path(relpath):
+def _resolve_note_path(root_dir, relpath):
     """Turn a URL relpath into a safe absolute filesystem path, or None if
-    it fails any check: no vault mounted, escapes VAULT_DIR, isn't a .md
+    it fails any check: no tree mounted, escapes root_dir, isn't a .md
     file, or doesn't exist. Never raises."""
-    vault_root = _vault_root()
+    vault_root = _tree_root(root_dir)
     if vault_root is None:
         return None
     if not relpath or os.path.isabs(relpath) or relpath.startswith(("/", "\\")):
@@ -213,7 +212,7 @@ def _parse_frontmatter(raw):
     return title, body
 
 
-def _convert_wikilinks(body_md, index):
+def _convert_wikilinks(body_md, index, base_url):
     """Rewrite [[Target]] / [[Target|Label]] / [[Target#Heading|Label]] to
     real <a> links (resolved) or muted <span> text (unresolved) BEFORE the
     body reaches markdown rendering. Resolution matches the final path
@@ -235,68 +234,91 @@ def _convert_wikilinks(body_md, index):
 
         rel = index.get(name.lower()) if name else None
         if rel:
-            return f'<a href="/nexus/vault/{quote(rel)}">{escape(label)}</a>'
+            return f'<a href="{base_url}/{quote(rel)}">{escape(label)}</a>'
         return f'<span class="text-gray-500 italic">{escape(label)}</span>'
 
     return _WIKILINK_RE.sub(repl, body_md)
 
 
-# ── Pages (Tailscale-only, like every /nexus/* route) ──────────────────────
-@vault_bp.route("/nexus/vault")
-def nexus_vault_index():
-    if not _is_nexus_allowed():
-        abort(404)
+# ── Blueprint factory (Tailscale-only, like every /nexus/* route) ──────────
+def make_tree_blueprint(bp_name, base_url, root_dir, label, icon, blurb):
+    """Build a read-only markdown-tree browser blueprint. Called twice below
+    — once for the personal vault, once for fleet-docs. Route endpoints are
+    namespaced by bp_name, so registering both on one app is safe."""
+    bp = Blueprint(bp_name, __name__)
 
-    vault_root = _vault_root()
-    tree = _build_tree(vault_root) if vault_root is not None else None
+    @bp.route(base_url)
+    def tree_index():
+        if not _is_nexus_allowed():
+            abort(404)
 
-    return render_template(
-        "nexus_vault.html",
-        sections=current_app.config.get("NEXUS_SECTIONS", []),
-        active="/nexus/vault",
-        vault_missing=(vault_root is None),
-        tree=tree,
-    )
+        vault_root = _tree_root(root_dir)
+        tree = _build_tree(vault_root) if vault_root is not None else None
+
+        return render_template(
+            "nexus_vault.html",
+            sections=current_app.config.get("NEXUS_SECTIONS", []),
+            active=base_url,
+            base_url=base_url,
+            label=label,
+            icon=icon,
+            blurb=blurb,
+            vault_missing=(vault_root is None),
+            tree=tree,
+        )
+
+    @bp.route(f"{base_url}/<path:relpath>")
+    def tree_note(relpath):
+        if not _is_nexus_allowed():
+            abort(404)
+
+        abspath = _resolve_note_path(root_dir, relpath)
+        if abspath is None:
+            abort(404)
+
+        try:
+            with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+                raw = f.read()
+        except OSError:
+            abort(404)
+
+        title, body_md = _parse_frontmatter(raw)
+
+        vault_root = _tree_root(root_dir)
+        index = _build_wikilink_index(vault_root) if vault_root else {}
+        body_md = _convert_wikilinks(body_md, index, base_url)
+        html = nexus_md.render_markdown(body_md)
+
+        display_relpath = relpath.replace("\\", "/")
+        crumbs = [c for c in display_relpath.split("/") if c]
+        fallback_title = os.path.splitext(crumbs[-1])[0] if crumbs else display_relpath
+
+        try:
+            mtime = datetime.fromtimestamp(os.path.getmtime(abspath)).strftime("%Y-%m-%d %H:%M")
+        except OSError:
+            mtime = None
+
+        return render_template(
+            "nexus_vault_note.html",
+            sections=current_app.config.get("NEXUS_SECTIONS", []),
+            active=base_url,
+            base_url=base_url,
+            label=label,
+            icon=icon,
+            title=title or fallback_title,
+            html=html,
+            relpath=display_relpath,
+            crumbs=crumbs,
+            mtime=mtime,
+        )
+
+    return bp
 
 
-@vault_bp.route("/nexus/vault/<path:relpath>")
-def nexus_vault_note(relpath):
-    if not _is_nexus_allowed():
-        abort(404)
+vault_bp = make_tree_blueprint(
+    "vault", "/nexus/vault", VAULT_DIR, "Vault", "🗄️",
+    "Read-only mirror of the Obsidian vault — browse the source notes.")
 
-    abspath = _resolve_note_path(relpath)
-    if abspath is None:
-        abort(404)
-
-    try:
-        with open(abspath, "r", encoding="utf-8", errors="replace") as f:
-            raw = f.read()
-    except OSError:
-        abort(404)
-
-    title, body_md = _parse_frontmatter(raw)
-
-    vault_root = _vault_root()
-    index = _build_wikilink_index(vault_root) if vault_root else {}
-    body_md = _convert_wikilinks(body_md, index)
-    html = nexus_md.render_markdown(body_md)
-
-    display_relpath = relpath.replace("\\", "/")
-    crumbs = [c for c in display_relpath.split("/") if c]
-    fallback_title = os.path.splitext(crumbs[-1])[0] if crumbs else display_relpath
-
-    try:
-        mtime = datetime.fromtimestamp(os.path.getmtime(abspath)).strftime("%Y-%m-%d %H:%M")
-    except OSError:
-        mtime = None
-
-    return render_template(
-        "nexus_vault_note.html",
-        sections=current_app.config.get("NEXUS_SECTIONS", []),
-        active="/nexus/vault",
-        title=title or fallback_title,
-        html=html,
-        relpath=display_relpath,
-        crumbs=crumbs,
-        mtime=mtime,
-    )
+fleetdocs_bp = make_tree_blueprint(
+    "fleetdocs", "/nexus/fleetdocs", FLEETDOCS_DIR, "Fleet Docs", "🗂️",
+    "Read-only mirror of the fleet-docs repo — machine-written fleet knowledge.")

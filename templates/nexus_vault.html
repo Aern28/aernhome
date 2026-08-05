@@ -1,5 +1,5 @@
 {% extends "nexus_base.html" %}
-{% block nexus_title %}Vault{% endblock %}
+{% block nexus_title %}{{ label }}{% endblock %}
 
 {% macro render_nodes(nodes) %}
 <ul class="space-y-1">
@@ -11,7 +11,7 @@
             {{ render_nodes(node.children) }}
         </div>
         {% else %}
-        <a href="/nexus/vault/{{ node.relpath }}" data-vault-name="{{ node.name|lower }}"
+        <a href="{{ base_url }}/{{ node.relpath }}" data-vault-name="{{ node.name|lower }}"
            class="vault-file flex items-center justify-between gap-3 px-2 py-1 rounded-md hover:bg-dark-bg/40 text-gray-300 hover:text-white transition-colors">
             <span class="truncate">📄 {{ node.name }}</span>
             <span class="text-[11px] text-gray-500 shrink-0">{{ node.mtime }}</span>
@@ -26,8 +26,8 @@
 <div class="max-w-3xl mx-auto">
     <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
-            <h2 class="text-2xl font-bold text-white mb-1">🗄️ Vault</h2>
-            <p class="text-sm text-gray-400">Read-only mirror of the Obsidian vault — browse the source notes.</p>
+            <h2 class="text-2xl font-bold text-white mb-1">{{ icon }} {{ label }}</h2>
+            <p class="text-sm text-gray-400">{{ blurb }}</p>
         </div>
         {% if tree %}
         <input type="text" id="vault-filter" placeholder="filter by name…" autocomplete="off"

@@ -75,6 +75,7 @@ app.register_blueprint(second_brain.sb_bp)
 app.register_blueprint(fleet_facts.facts_bp)
 app.register_blueprint(ledger.ledger_bp)
 app.register_blueprint(vault.vault_bp)
+app.register_blueprint(vault.fleetdocs_bp)
 
 
 import ipaddress
@@ -1067,6 +1068,7 @@ NEXUS_SECTIONS = [
     ("/nexus/queue",      "Queue",       "📮", "You ↔ the fleet"),
     ("/nexus/ledger",     "Ledger",      "📔", "The year, written down"),
     ("/nexus/vault",      "Vault",       "🗄️", "The Obsidian source, read-only"),
+    ("/nexus/fleetdocs",  "Fleet Docs",  "🗂️", "Machine-written fleet knowledge, read-only"),
 ]
 
 # Blueprints (second_brain, ledger) render nexus pages outside app.py and pull
