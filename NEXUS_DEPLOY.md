@@ -105,3 +105,77 @@ Note: n8n itself (the automation running these flows) is flagged
 `"deprecated": true` in `services.json` — it's barely used day-to-day and is
 a longer-term retirement candidate once Phase 4 completes and any other
 n8n-only flows are migrated or dropped.
+
+---
+
+## The seat-board write contract (`/api/seat`)
+
+*Added 2026-08-06 at Ashaman's request (queue `aa1feb37`): it had to reverse-engineer all of this
+from `second_brain.py` because none of it was written down. The seat is the fleet's cross-machine
+state — every seat reads it first — so a caller that gets this wrong can silently delete another
+machine's work.*
+
+### Read
+
+```
+GET http://100.110.245.37:5555/api/seat     # tailnet; on the home LAN 192.168.1.141:5555 also works
+```
+Returns `{updated_at, updated_at_local, updated_by, projects:[...]}`. **Every UTC timestamp ships a
+`_local` companion** (`2026-08-03 15:17 CDT`) — read those; both a seat and Aern once misread `20:17`
+as 8pm when it was 15:17.
+
+### Write — two branches, and only one is safe by default
+
+```jsonc
+POST /api/seat   Content-Type: application/json
+{ "updated_by": "<seat>-claude",          // YOUR seat, never a copy-pasted one
+  "base_updated_at": "<the updated_at you READ>",
+  "project":  { ... } }                   // ✅ singular = UPSERT by id
+```
+
+| branch | behaviour | when |
+|---|---|---|
+| `project` (singular) | **Upsert by `id`.** Merges into the existing record; cannot touch sibling entries. | **Default. Use this.** |
+| `projects` (plural) | **FULL REPLACE — anything absent from your payload is DELETED.** | Only for a deliberate whole-board rewrite, and only with `base_updated_at`. |
+
+**Optimistic concurrency:** send `base_updated_at` (the `updated_at` from your GET). If the board
+moved since you read it you get **409** plus `current_updated_at` / `current_updated_by` /
+`current_projects` — merge and retry rather than clobbering. Omit it and you silently win, which is
+how two seats overwrote each other on 2026-08-03.
+
+**Upserts are PATCH-style.** `_clean_project()` fills any field you omit from the existing record, so
+`{"id":"foo","status":"done"}` flips status and leaves title/detail/next_step/links intact. You do not
+need to round-trip the whole object.
+
+### Project schema
+
+`id` · `title` · `status` · `detail` · `next_step` · `blocked_on` · `links[]`
+
+- `status` ∈ **`active` | `parked` | `done`** — an invalid value silently falls back to the existing
+  status (or `active`), so a typo looks like it worked. Spell it right.
+- `id` — omit it and one is generated from the title plus a random suffix, which creates a duplicate
+  lane instead of updating yours. **Always send the id you mean.**
+- `blocked_on` — `"aern"` when it needs the human; `null` otherwise.
+- `links` — `[{label, ref}]`, ref being a path/commit/URL.
+
+### Naming convention
+
+`updated_by` is `<host>-claude`: `trainer-claude`, `phoenix-claude`. Non-seat writers use their own
+identity (`claude-code@ashaman`, `phoenix-mover-scan`, `fable@trainer`) — useful for telling a human
+seat's write from a scanner's.
+
+### Housekeeping
+
+```
+POST /api/seat/prune   {"updated_by":"<seat>-claude"}    # physically removes every status:"done" entry
+```
+Closing a lane is `status:"done"`; **prune** is the separate, deliberate step that removes them. Keep
+recently-closed entries visible for a while — they are the record of what just happened — then prune.
+
+### Two rules that are not in the code
+
+1. **Write back on closure.** When Aern completes something an entry was waiting on, updating that
+   entry is *part of* the task, same turn. Otherwise another seat reads a stale board and confidently
+   reports finished work as blocked (this happened 2026-08-05).
+2. **Never fossilise a volatile number** in a `next_step` ("expect $27.11"). Write "whatever the source
+   says, with a date" — a stale expectation becomes a false instruction to the next reader.
