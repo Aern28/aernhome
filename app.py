@@ -1067,7 +1067,6 @@ NEXUS_SECTIONS = [
     ("/nexus/aern",       "For Aern",    "🎯", "Everything waiting on you"),
     ("/nexus/queue",      "Queue",       "📮", "You ↔ the fleet"),
     ("/nexus/ledger",     "Ledger",      "📔", "The year, written down"),
-    ("/nexus/vault",      "Vault",       "🗄️", "The Obsidian source, read-only"),
     ("/nexus/fleetdocs",  "Fleet Docs",  "🗂️", "Machine-written fleet knowledge, read-only"),
 ]
 

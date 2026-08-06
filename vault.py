@@ -42,7 +42,6 @@ from markupsafe import escape
 
 import nexus_md
 
-VAULT_DIR = os.environ.get("VAULT_DIR", "/vault")
 FLEETDOCS_DIR = os.environ.get("FLEETDOCS_DIR", "/fleetdocs")
 
 _TITLE_LINE_RE = re.compile(r"^\s*title\s*:\s*(.+?)\s*$", re.IGNORECASE)
@@ -79,10 +78,11 @@ def _iter_md_files(vault_root):
 
 
 def recent_notes(n=5):
-    """Most recently modified notes in the PERSONAL vault, for the Nexus home
-    widget. Degrades to [] on any failure — a missing vault must never break
+    """Most recently modified notes in fleet-docs, for the Nexus home widget.
+    (Pointed at the personal vault until the 2026-08-06 split retired that
+    mount.) Degrades to [] on any failure — a missing tree must never break
     the home page."""
-    root = _tree_root(VAULT_DIR)
+    root = _tree_root(FLEETDOCS_DIR)
     if not root:
         return []
     try:
@@ -315,10 +315,24 @@ def make_tree_blueprint(bp_name, base_url, root_dir, label, icon, blurb):
     return bp
 
 
-vault_bp = make_tree_blueprint(
-    "vault", "/nexus/vault", VAULT_DIR, "Vault", "🗄️",
-    "Read-only mirror of the Obsidian vault — browse the source notes.")
-
 fleetdocs_bp = make_tree_blueprint(
     "fleetdocs", "/nexus/fleetdocs", FLEETDOCS_DIR, "Fleet Docs", "🗂️",
     "Read-only mirror of the fleet-docs repo — machine-written fleet knowledge.")
+
+
+# /nexus/vault retired at Phase 2 of the vault/fleet-docs split (2026-08-06):
+# the personal Obsidian vault is Sync-only now and no longer mounted here.
+# Old bookmarks and stale links redirect to the successor tree.
+vault_bp = Blueprint("vault", __name__)
+
+
+@vault_bp.route("/nexus/vault")
+def vault_redirect_index():
+    from flask import redirect
+    return redirect("/nexus/fleetdocs", code=302)
+
+
+@vault_bp.route("/nexus/vault/<path:relpath>")
+def vault_redirect_note(relpath):
+    from flask import redirect
+    return redirect(f"/nexus/fleetdocs/{quote(relpath)}", code=302)

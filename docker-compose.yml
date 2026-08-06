@@ -25,12 +25,9 @@ services:
       - G:/ollama:/host_g:ro
       - claude-workspace:/workspace:ro
       - C:/tcg-inventory:/tcg:ro
-      # Obsidian vault, read-only — browsed at /nexus/vault (Ashaman's checkout;
-      # Aernbot pushes to it, so this stays current without any sync step)
-      - C:/projects/obivault:/vault:ro
-      # fleet-docs, read-only — browsed at /nexus/fleetdocs. Phase 1 of the
-      # vault/fleet-docs split (2026-08-05, see fleet-docs MIGRATION.md):
-      # both trees render during the soak; /vault retires at Phase 2.
+      # fleet-docs, read-only — browsed at /nexus/fleetdocs (the vault mount
+      # retired at Phase 2 of the vault/fleet-docs split, 2026-08-06 — the
+      # personal Obsidian vault is Sync-only now; see fleet-docs MIGRATION.md)
       - C:/projects/fleet-docs:/fleetdocs:ro
     security_opt:
       - no-new-privileges:true
