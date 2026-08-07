@@ -888,6 +888,45 @@ def get_system_stats():
     return stats
 
 
+# ── Doodle Pop reverse proxy (2026-08-07) ───────────────────────────────────
+# Aern soak-tests Doodle Pop (toddler coloring PWA) on the doodle-pop container,
+# port 8788, http-only, tailnet-only. Safari refuses bare-IP http and force-
+# upgrades to https, so it was unreachable from a hotel even over Tailscale.
+# Proxying it UNDER nexus lets it inherit nexus's already-working tailnet URL:
+#   http://100.110.245.37:5555/doodle/
+# The app uses RELATIVE asset paths, so injecting <base href="/doodle/"> into
+# the HTML makes every asset resolve under the subpath. Tailnet-gated, same as
+# the rest of the nexus.
+DOODLE_UPSTREAM = os.getenv("DOODLE_UPSTREAM", "http://host.docker.internal:8788")
+
+
+@app.route("/doodle")
+def doodle_root_redirect():
+    return redirect("/doodle/", code=302)
+
+
+@app.route("/doodle/", defaults={"sub": ""})
+@app.route("/doodle/<path:sub>")
+def doodle_proxy(sub):
+    if not _is_nexus_allowed():
+        abort(404)
+    try:
+        r = requests.get(f"{DOODLE_UPSTREAM}/{sub}", timeout=HTTP_TIMEOUT,
+                         allow_redirects=False)
+    except requests.RequestException as e:
+        return Response(f"Doodle Pop upstream unreachable: {e}", status=502)
+    ctype = r.headers.get("Content-Type", "application/octet-stream")
+    body = r.content
+    # Inject <base> so the PWA's relative asset paths resolve under /doodle/.
+    if "text/html" in ctype and b"<base" not in body:
+        body = body.replace(b"<head>", b'<head><base href="/doodle/">', 1)
+    resp = Response(body, status=r.status_code, mimetype=ctype.split(";")[0])
+    # Service worker needs a broadened scope header to control the subpath.
+    if sub.endswith("sw.js") or "javascript" in ctype and "sw" in sub:
+        resp.headers["Service-Worker-Allowed"] = "/doodle/"
+    return resp
+
+
 @app.route("/robots.txt")
 def robots_txt():
     return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
