@@ -68,7 +68,10 @@ def _iter_md_files(vault_root):
     slashes regardless of platform, sorted for deterministic first-match
     wikilink resolution."""
     for dirpath, dirnames, filenames in os.walk(vault_root):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        # "_archive" is retired content kept in git for the seats; hiding it here
+        # keeps it out of the browse tree, recents, and wikilink resolution
+        # (links into it degrade to muted text — the designed unresolved state).
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d != "_archive")
         for name in sorted(filenames):
             if name.startswith(".") or not name.lower().endswith(".md"):
                 continue
