@@ -2,6 +2,44 @@
 {% block nexus_title %}House{% endblock %}
 
 {% block nexus_content %}
+<!-- Restock list (feeds the TRMNL Restock plugin via trmnl_push.py) -->
+<section class="mb-8">
+    <div class="flex items-baseline justify-between mb-2">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide">Restock <span class="text-gray-500 font-normal">· {{ restock.count }} open</span></h2>
+        <span class="text-[11px] text-gray-500">also: "add paper towels" / "got paper towels" to any seat, or <code>restock.ps1</code></span>
+    </div>
+    <form data-nx-form="restock" class="bg-dark-card border border-dark-border rounded-lg p-3 flex flex-wrap gap-2 items-center">
+        <input name="item" required placeholder="Add an item…" autocomplete="off"
+               class="flex-1 min-w-[10rem] bg-dark-bg border border-dark-border rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+        <select name="category" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200">
+            {% for c in restock.categories %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-md px-4 py-2">Add</button>
+        <span data-nx-err class="text-xs text-red-400 self-center"></span>
+    </form>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+        {% for c in restock.categories %}
+        <div class="bg-dark-card border border-dark-border rounded-lg p-3">
+            <div class="text-xs uppercase tracking-wide text-gray-400 mb-2">{{ c.label }} <span class="text-gray-600">{{ c.count }}</span></div>
+            {% if c.items %}
+            <ul class="space-y-1">
+                {% for r in c.items %}
+                <li data-row class="flex items-center gap-2">
+                    <button data-nx-action="restock-done" data-id="{{ r.id }}" title="Got it"
+                            class="shrink-0 w-4 h-4 rounded border border-gray-500 hover:border-emerald-400 hover:bg-emerald-500/20"></button>
+                    <span class="text-sm text-gray-200 truncate" title="added {{ r.created_at }}{% if r.added_by %} by {{ r.added_by }}{% endif %}">{{ r.item }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-xs text-gray-600">stocked</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-2">Maintenance</h2>
 <!-- Add maintenance -->
 <section class="mb-6">
     <form data-nx-form="maintenance" class="bg-dark-card border border-dark-border rounded-lg p-4 grid grid-cols-1 sm:grid-cols-6 gap-2">

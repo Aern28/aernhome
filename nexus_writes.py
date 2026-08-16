@@ -235,6 +235,63 @@ def complete_maintenance(maint_id):
     return task_name
 
 
+# ── Restock (household restock list; feeds /nexus/house + the TRMNL Restock plugin) ──
+RESTOCK_CATEGORIES = ("house", "rowan", "jace", "business")
+
+
+def add_restock(item, category="house", added_by=None):
+    """Add an item to the restock list. Re-adding an item that is already open is a
+    no-op (returns the existing id); re-adding a cleared item reopens it. Idempotent
+    on purpose: 'add paper towels' said twice must not make two rows."""
+    item = (item or "").strip()
+    if not item:
+        raise ValueError("empty item")
+    category = (category or "house").strip().lower()
+    if category not in RESTOCK_CATEGORIES:
+        category = "house"
+    with closing(_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT id, done FROM restock WHERE lower(item) = lower(?) AND category = ? ORDER BY id DESC LIMIT 1",
+            (item, category)).fetchone()
+        if row and not row["done"]:
+            return row["id"]
+        if row and row["done"]:
+            conn.execute("UPDATE restock SET done = 0, done_at = NULL, added_by = ?, "
+                         "created_at = CURRENT_TIMESTAMP WHERE id = ?", (added_by, row["id"]))
+            return row["id"]
+        cur = conn.execute(
+            "INSERT INTO restock (item, category, added_by) VALUES (?, ?, ?)",
+            (item, category, added_by))
+        return cur.lastrowid
+
+
+def list_restock(include_done=False):
+    try:
+        with closing(_conn()) as conn, conn:
+            q = "SELECT id, item, category, added_by, created_at, done, done_at FROM restock"
+            if not include_done:
+                q += " WHERE done = 0"
+            q += " ORDER BY category, id DESC"
+            return [dict(r) for r in conn.execute(q).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def restock_done(restock_id=None, item=None):
+    """Clear an item by id, or by (case-insensitive) name across categories.
+    Returns the number of rows cleared."""
+    with closing(_conn()) as conn, conn:
+        if restock_id is not None:
+            cur = conn.execute("UPDATE restock SET done = 1, done_at = CURRENT_TIMESTAMP "
+                               "WHERE id = ? AND done = 0", (int(restock_id),))
+        elif item:
+            cur = conn.execute("UPDATE restock SET done = 1, done_at = CURRENT_TIMESTAMP "
+                               "WHERE lower(item) = lower(?) AND done = 0", (item.strip(),))
+        else:
+            raise ValueError("id or item required")
+        return cur.rowcount
+
+
 # ── Books (book_status; seeded by nexus_books_import.py) ──────────────────────
 _BOOK_ORDER = "CASE status WHEN 'reading' THEN 0 WHEN 'to-read' THEN 1 ELSE 2 END"
 

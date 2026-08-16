@@ -63,6 +63,13 @@ document.addEventListener("DOMContentLoaded", () => {
       else t.disabled = false;
     }
 
+    else if (action === "restock-done") {
+      t.disabled = true;
+      const res = await nexusPost(`/api/nexus/restock/${t.dataset.id}/done`, {});
+      if (res.ok) { const row = t.closest("[data-row]"); if (row) row.remove(); }
+      else t.disabled = false;
+    }
+
     else if (action === "goal-status") {
       const res = await nexusPost(`/api/nexus/goal/${t.dataset.id}/status`, { status: t.dataset.status });
       if (res.ok) location.reload();
@@ -207,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
       form.querySelectorAll("[name]").forEach((el) => {
         if (el.value !== "") body[el.name] = el.value;
       });
-      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note", doc: "/api/nexus/doc" };
+      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", restock: "/api/nexus/restock", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note", doc: "/api/nexus/doc" };
       const res = await nexusPost(urls[kind], body);
       if (res.ok && kind === "doc" && res.slug) location.href = `/nexus/docs/${res.slug}`;
       else if (res.ok) location.reload();

@@ -10,6 +10,7 @@ Pushes and cadences (mirroring the retired n8n schedules):
     dashboard  q15m   /api/stats + /api/health  -> Aern Dashboard plugin
     tcg        q30m   /api/tcg-stats             -> TCG Business plugin
     season     q6h    /api/season                -> 72 Seasons plugin
+    restock    q15m*  /api/restock               -> Restock plugin (*only when the list changed; 6h keepalive)
 
 Usage (inside the aernhome-dashboard container; host task runs `all` q15m):
     python trmnl_push.py all            # cadence-gated via /data/trmnl_push_state.json
@@ -37,8 +38,11 @@ PLUGINS = {
     "dashboard": os.environ.get("TRMNL_DASHBOARD_UUID", "f99dc11e-b6fd-4abf-ab82-3cf15cd43269"),
     "tcg": os.environ.get("TRMNL_TCG_UUID", "577f5cb4-134e-4bf8-a786-6f546dd278a3"),
     "season": os.environ.get("TRMNL_SEASON_UUID", "365320df-e1d2-4829-8e25-f8ad5aaff04a"),
+    "restock": os.environ.get("TRMNL_RESTOCK_UUID", "83299411-75c1-4b5f-bec9-c5e440e214ff"),
 }
-CADENCE_S = {"dashboard": 15 * 60, "tcg": 30 * 60, "season": 6 * 3600}
+CADENCE_S = {"dashboard": 15 * 60, "tcg": 30 * 60, "season": 6 * 3600, "restock": 15 * 60}
+# restock only re-pushes when its content changed (or every RESTOCK_HEARTBEAT_S as a keepalive)
+RESTOCK_HEARTBEAT_S = 6 * 3600
 # a task fires q15m; allow ~2 min of jitter so a 15m cadence isn't skipped every other run
 SLACK_S = 120
 
@@ -103,7 +107,22 @@ def build_season():
     return {"merge_variables": mv}
 
 
-BUILDERS = {"dashboard": build_dashboard, "tcg": build_tcg, "season": build_season}
+def build_restock():
+    """/api/restock -> compact merge vars: cats[{k,l,n,items[]}], count, upd, stamp.
+    Keeps under TRMNL's 2 kB webhook cap by trimming to 12 items per category."""
+    d = _get("/api/restock")
+    cats = []
+    for c in d.get("categories", []):
+        names = [i["item"] for i in c.get("items", [])]
+        cats.append({"k": c["key"], "l": c["label"], "n": len(names), "items": names[:12],
+                     "more": max(0, len(names) - 12)})
+    now = datetime.datetime.now(CT)
+    return {"merge_variables": {"cats": cats, "count": d.get("count", 0),
+                                "upd": now.strftime("%a %I:%M %p").replace(" 0", " "),
+                                "empty": d.get("count", 0) == 0}}
+
+
+BUILDERS = {"dashboard": build_dashboard, "tcg": build_tcg, "season": build_season, "restock": build_restock}
 
 
 # --- push + state ------------------------------------------------------------
@@ -157,10 +176,21 @@ def main(argv):
             continue
         try:
             payload = BUILDERS[t]()
+            if t == "restock" and not force:
+                # content-gated: identical list + heartbeat not due -> skip (saves webhook quota)
+                sig = json.dumps({k: v for k, v in payload["merge_variables"].items() if k != "upd"}, sort_keys=True)
+                prev = (st.get(t) or {})
+                if prev.get("sig") == sig and (now - last) < RESTOCK_HEARTBEAT_S:
+                    print(f"{stamp} {t}: skip (unchanged; heartbeat in {int((RESTOCK_HEARTBEAT_S - (now - last)) // 60)}m)")
+                    continue
+                st.setdefault(t, {})["sig"] = sig
             ok, note = push(t, payload, dry_run=dry)
             print(f"{stamp} {t}: {note}")
             if ok and not dry:
+                keep_sig = (st.get(t) or {}).get("sig")
                 st[t] = {"last_ok_ts": now, "last_ok": stamp, "bytes": len(json.dumps(payload))}
+                if keep_sig:
+                    st[t]["sig"] = keep_sig
         except Exception as e:  # keep going; one dead endpoint must not block the others
             rc = 1
             print(f"{stamp} {t}: FAILED {type(e).__name__}: {e}")

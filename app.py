@@ -491,6 +491,20 @@ def init_nexus_db():
         )
     """)
 
+    # Restock — household restock list (Aern 8/14: capture at point-of-need, glance on
+    # the TRMNL). Rows are never deleted; done=1 keeps history for "how often do we buy X".
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS restock (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'house',   -- house|rowan|jace|business
+            added_by TEXT,                             -- who/which seat captured it
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            done INTEGER DEFAULT 0,
+            done_at TIMESTAMP
+        )
+    """)
+
     # Book status — writable status layer; seeded from Calibre + Obsidian (Phase 3),
     # canonical for reading/read going forward.
     cur.execute("""
@@ -1160,7 +1174,8 @@ def nexus_house():
     if not _is_nexus_allowed():
         abort(404)
     return render_template("nexus_house.html", sections=NEXUS_SECTIONS, active="/nexus/house",
-                           items=ns_writes.list_maintenance())
+                           items=ns_writes.list_maintenance(),
+                           restock=_restock_payload())
 
 
 @app.route("/nexus/tcg")
@@ -1608,6 +1623,84 @@ def api_nexus_maint_done(mid):
     todoist_closed = todoist_bridge.close_by_content(
         todoist_bridge.MAINT_PREFIX + task_name)
     return jsonify({"ok": True, "todoist_closed": todoist_closed})
+
+
+# ── Restock ───────────────────────────────────────────────────────────────────
+RESTOCK_LABELS = (("house", "House"), ("rowan", "Rowan"), ("jace", "Jace"), ("business", "Business"))
+
+
+def _restock_payload():
+    items = ns_writes.list_restock()
+    cats = []
+    for key, label in RESTOCK_LABELS:
+        rows = [r for r in items if r["category"] == key]
+        cats.append({"key": key, "label": label, "count": len(rows),
+                     "items": [{"id": r["id"], "item": r["item"], "added_by": r["added_by"],
+                                "created_at": r["created_at"]} for r in rows]})
+    return {"count": len(items), "categories": cats,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+
+@app.route("/api/restock", methods=["GET", "POST"])
+def api_restock():
+    """Fleet-facing restock API (Tailscale/LAN or unlock cookie — same gate as /api/queue).
+    GET  -> {count, categories:[{key,label,count,items:[...]}], updated_at}
+    POST {item, category?, added_by?}            -> add (idempotent)
+    POST {done: <id> | done_item: "<name>"}       -> clear
+    POST {text: "add paper towels [to rowan]"} / {text: "got paper towels"} -> verb form
+    """
+    if not _is_internal_request():
+        return jsonify({"status": "ok"})
+    if request.method == "GET":
+        return jsonify(_restock_payload())
+    body = request.get_json(silent=True) or {}
+    who = body.get("added_by") or body.get("created_by") or "nexus"
+    try:
+        if body.get("text"):
+            verb, _, rest = body["text"].strip().partition(" ")
+            verb = verb.lower()
+            rest = rest.strip()
+            if verb in ("add", "need", "restock", "low"):
+                cat = "house"
+                for c in ns_writes.RESTOCK_CATEGORIES:
+                    for tail in (" to " + c, " for " + c, " (" + c + ")"):
+                        if rest.lower().endswith(tail):
+                            cat = c
+                            rest = rest[: -len(tail)].strip()
+                if not rest:
+                    return jsonify({"ok": False, "error": "nothing to add"}), 400
+                rid = ns_writes.add_restock(rest, cat, who)
+                return jsonify({"ok": True, "id": rid, "item": rest, "category": cat})
+            if verb in ("got", "done", "bought", "clear", "have"):
+                n = ns_writes.restock_done(item=rest)
+                return jsonify({"ok": n > 0, "cleared": n, "item": rest})
+            return jsonify({"ok": False, "error": "verb must be add/need/low or got/done/bought"}), 400
+        if body.get("item"):
+            rid = ns_writes.add_restock(body["item"], body.get("category", "house"), who)
+            return jsonify({"ok": True, "id": rid})
+        if body.get("done") is not None:
+            return jsonify({"ok": True, "cleared": ns_writes.restock_done(restock_id=body["done"])})
+        if body.get("done_item"):
+            return jsonify({"ok": True, "cleared": ns_writes.restock_done(item=body["done_item"])})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": False, "error": "item / done / done_item / text required"}), 400
+
+
+@app.route("/api/nexus/restock", methods=["POST"])
+def api_nexus_restock_create():
+    body = _nexus_json()
+    try:
+        rid = ns_writes.add_restock(body.get("item", ""), body.get("category", "house"), "nexus")
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": rid})
+
+
+@app.route("/api/nexus/restock/<int:rid>/done", methods=["POST"])
+def api_nexus_restock_done(rid):
+    _nexus_json()
+    return jsonify({"ok": True, "cleared": ns_writes.restock_done(restock_id=rid)})
 
 
 @app.route("/api/nexus/todoist/<task_id>/close", methods=["POST"])
