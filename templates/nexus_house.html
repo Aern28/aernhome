@@ -21,9 +21,9 @@
         {% for c in restock.categories %}
         <div class="bg-dark-card border border-dark-border rounded-lg p-3">
             <div class="text-xs uppercase tracking-wide text-gray-400 mb-2">{{ c.label }} <span class="text-gray-600">{{ c.count }}</span></div>
-            {% if c.items %}
+            {% if c['items'] %}
             <ul class="space-y-1">
-                {% for r in c.items %}
+                {% for r in c['items'] %}
                 <li data-row class="flex items-center gap-2">
                     <button data-nx-action="restock-done" data-id="{{ r.id }}" title="Got it"
                             class="shrink-0 w-4 h-4 rounded border border-gray-500 hover:border-emerald-400 hover:bg-emerald-500/20"></button>
