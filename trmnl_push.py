@@ -34,7 +34,7 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 STATE = os.path.join(DATA_DIR, "trmnl_push_state.json")
 
 PLUGINS = {
-    "dashboard": os.environ.get("TRMNL_DASHBOARD_UUID", "b62c1fd7-544d-4cd1-90c0-7f2a239d0758"),
+    "dashboard": os.environ.get("TRMNL_DASHBOARD_UUID", "f99dc11e-b6fd-4abf-ab82-3cf15cd43269"),
     "tcg": os.environ.get("TRMNL_TCG_UUID", "577f5cb4-134e-4bf8-a786-6f546dd278a3"),
     "season": os.environ.get("TRMNL_SEASON_UUID", "365320df-e1d2-4829-8e25-f8ad5aaff04a"),
 }
