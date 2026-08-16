@@ -240,7 +240,7 @@ DEFAULT_SERVICES = [
         "check_type": "http",
         "docker_container": "uptime-kuma",
         "icon_emoji": "📊",
-        "enabled": 1,
+        "enabled": 0,  # RETIRED 2026-08-03 (push monitors ported into fleet.py); board entry disabled 2026-08-16
     },
     {
         "name": "home-assistant",

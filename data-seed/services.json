@@ -82,7 +82,7 @@
       "check_type": "http",
       "docker_container": "uptime-kuma",
       "icon_emoji": "📊",
-      "enabled": 1
+      "enabled": 0
     },
     {
       "name": "home-assistant",

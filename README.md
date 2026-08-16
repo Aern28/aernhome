@@ -4,7 +4,7 @@ Self-hosted home services dashboard for monitoring and managing Docker services,
 
 ## Features
 
-- **Service Monitoring**: Real-time health checks defined in `/data/services.json` — n8n, Jellyfin, qBittorrent, Discord relay, Cloudflare Tunnel, Uptime Kuma, Home Assistant, and more
+- **Service Monitoring**: Real-time health checks defined in `/data/services.json` — n8n, Jellyfin, qBittorrent, Discord relay, Cloudflare Tunnel, Home Assistant, and more (Uptime Kuma retired 2026-08-03)
 - **System Stats**: Docker container counts, disk usage, CPU, and RAM monitoring
 - **Embedded Apps**: Meal planner with drag-and-drop interface
 - **Auto-refresh**: Dashboard updates every 30 seconds
