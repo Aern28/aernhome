@@ -40,7 +40,9 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 HOST_STATS_PATH = os.path.join(DATA_DIR, "host_stats.json")
 CANARY_PATH = os.path.join(DATA_DIR, "canary.json")
-CANARY_STALE_H = 26  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
+CANARY_STALE_H = 26
+POSTAGE_PATH = os.path.join(DATA_DIR, "postage.json")
+POSTAGE_STALE_H = 3  # Trainer postage-check.py pushes every 30 min  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 
 FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
 FINANCE_VERDICT_STALE_DAYS = 10  # Weekly Books Publish (Trainer, Sundays) refreshes this; stale now
@@ -464,6 +466,35 @@ def check_canary():
     return out or [("canary_error", "Selector Canary", "tcg", "unknown", "no valid checks reported")]
 
 
+def check_postage():
+    """Fan out /data/postage.json's "checks" list into fleet checks (group "tcg", ids prefixed
+    postage_). Written every 30 min by Trainer's C:/tools/postage-check.py (Aern 8/19: good-morning /
+    goodnight should screen LetterTrack + Pirate Ship automatically) - it reads Ashaman's inventory.db
+    order lifecycle and NAS finance.db postage bookings, both of which only Trainer can reach together.
+    Same dead-man's-switch shape as check_canary().
+    """
+    try:
+        age_h = (time.time() - os.path.getmtime(POSTAGE_PATH)) / 3600
+    except OSError:
+        return [("postage_missing", "Postage Screen", "tcg", "unknown", "postage.json not found - Trainer postage-check not yet run")]
+    if age_h > POSTAGE_STALE_H:
+        return [("postage_stale", "Postage Screen", "tcg", "warn", f"postage.json is {age_h:.1f}h old (Trainer postage-check task stale)")]
+    try:
+        with open(POSTAGE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return [("postage_error", "Postage Screen", "tcg", "unknown", f"read error: {e}"[:200])]
+    items = data.get("checks") if isinstance(data, dict) else None
+    if not isinstance(items, list) or not items:
+        return [("postage_error", "Postage Screen", "tcg", "unknown", "no checks reported")]
+    out = []
+    for c in items:
+        if not isinstance(c, dict) or not c.get("id"):
+            continue
+        out.append((f"postage_{c['id']}", c.get("label", c["id"]), "tcg", c.get("status", "unknown"), c.get("detail", "")))
+    return out or [("postage_error", "Postage Screen", "tcg", "unknown", "no valid checks reported")]
+
+
 def run_all_checks():
     """Run every check, each wrapped so one crash can't take down the rest.
     Returns {id: {"label", "group", "status", "detail"}}."""
@@ -489,6 +520,13 @@ def run_all_checks():
     except Exception as e:
         canary_items = [("canary_error", "Selector Canary", "tcg", "unknown", f"check crashed: {e}"[:200])]
     for cid, label, group, status, detail in canary_items:
+        results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
+
+    try:
+        postage_items = check_postage()
+    except Exception as e:
+        postage_items = [("postage_error", "Postage Screen", "tcg", "unknown", f"check crashed: {e}"[:200])]
+    for cid, label, group, status, detail in postage_items:
         results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
 
     return results
