@@ -44,6 +44,8 @@ CANARY_STALE_H = 26
 POSTAGE_PATH = os.path.join(DATA_DIR, "postage.json")
 POSTAGE_STALE_H = 3  # Trainer postage-check.py pushes every 30 min  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 CENSUS_PATH = os.path.join(DATA_DIR, "fleet-census.json")
+SPECSURF_PATH = os.path.join(DATA_DIR, "spec-surfacing.json")
+SPECSURF_STALE_H = 30  # Trainer task 'Spec Surfacing Check' runs daily
 CENSUS_STALE_D = 9  # Trainer task 'Fleet Census' runs weekly (Sun 05:00); 9d = one missed run
 
 FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
