@@ -43,6 +43,8 @@ CANARY_PATH = os.path.join(DATA_DIR, "canary.json")
 CANARY_STALE_H = 26
 POSTAGE_PATH = os.path.join(DATA_DIR, "postage.json")
 POSTAGE_STALE_H = 3  # Trainer postage-check.py pushes every 30 min  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
+CENSUS_PATH = os.path.join(DATA_DIR, "fleet-census.json")
+CENSUS_STALE_D = 9  # Trainer task 'Fleet Census' runs weekly (Sun 05:00); 9d = one missed run
 
 FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
 FINANCE_VERDICT_STALE_DAYS = 10  # Weekly Books Publish (Trainer, Sundays) refreshes this; stale now
@@ -466,6 +468,38 @@ def check_canary():
     return out or [("canary_error", "Selector Canary", "tcg", "unknown", "no valid checks reported")]
 
 
+def check_census():
+    """Surface the weekly fleet census (Trainer task 'Fleet Census', Sun 05:00, repo
+    Aern28/fleet-discovery-audit) so good-morning reads it. A census nobody reads is
+    the failure mode the project was built to avoid, and pushing the file without
+    wiring it here would have recreated exactly that.
+
+    Reports the headline counts plus anything the census flagged as worth acting on.
+    Same dead-man's-switch shape as check_postage().
+    """
+    try:
+        age_d = (time.time() - os.path.getmtime(CENSUS_PATH)) / 86400
+    except OSError:
+        return [("census_missing", "Fleet Census", "fleet", "unknown",
+                 "fleet-census.json not found - Trainer 'Fleet Census' task not yet run")]
+    if age_d > CENSUS_STALE_D:
+        return [("census_stale", "Fleet Census", "fleet", "warn",
+                 f"census is {age_d:.0f}d old - Trainer 'Fleet Census' task (Sun 05:00) has missed a run")]
+    try:
+        with open(CENSUS_PATH, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return [("census_error", "Fleet Census", "fleet", "unknown", f"read error: {e}"[:200])]
+    c = d.get("counts") or {}
+    hosts = d.get("hosts") or {}
+    flags = [x for x in (d.get("flags") or []) if x]
+    head = (f"{len(hosts)} hosts | {c.get('infrastructure', 0)} infrastructure | "
+            f"{c.get('dormant', 0)} dormant | census {age_d:.0f}d old")
+    if flags:
+        return [("census", "Fleet Census", "fleet", "warn", head + " | " + "; ".join(flags[:3]))]
+    return [("census", "Fleet Census", "fleet", "up", head + " | nothing flagged")]
+
+
 def check_postage():
     """Fan out /data/postage.json's "checks" list into fleet checks (group "tcg", ids prefixed
     postage_). Written every 30 min by Trainer's C:/tools/postage-check.py (Aern 8/19: good-morning /
@@ -527,6 +561,15 @@ def run_all_checks():
     except Exception as e:
         postage_items = [("postage_error", "Postage Screen", "tcg", "unknown", f"check crashed: {e}"[:200])]
     for cid, label, group, status, detail in postage_items:
+        results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
+
+    # Kept in its OWN try: sharing one with postage meant a census crash would
+    # silently blank the postage checks too.
+    try:
+        census_items = check_census()
+    except Exception as e:
+        census_items = [("census_error", "Fleet Census", "fleet", "unknown", f"check crashed: {e}"[:200])]
+    for cid, label, group, status, detail in census_items:
         results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
 
     return results
