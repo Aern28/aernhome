@@ -157,6 +157,7 @@ function sbRenderQueueItem(item, resolvable) {
                     <span>${sbRelativeTime(item.created_at)}</span>
                 </div>
                 ${item.source ? `<div class="mt-1">${sbRenderSource(item.source)}</div>` : ''}
+                ${item.resolution_note ? `<div class="mt-2 pl-2 border-l-2 border-dark-border text-[11px] text-gray-400 whitespace-pre-wrap break-words">${sbEscapeHtml(item.resolution_note)}</div>` : ''}
             </div>
             ${resolvable ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="shrink-0 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">Resolve</button>` : ''}
         </div>

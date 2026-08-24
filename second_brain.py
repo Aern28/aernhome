@@ -423,18 +423,34 @@ def api_queue_post():
 @sb_bp.route("/api/queue/resolve", methods=["POST"])
 @_serialized
 def api_queue_resolve():
+    """Resolve a queue item, optionally recording WHY it closed.
+
+    The `note` field used to be accepted and silently discarded (fixed 2026-08-24).
+    CLAUDE.md has documented the contract as {id, note} for every seat in the fleet,
+    so every "resolved with a note" until now threw its reasoning away and still
+    returned ok:true — leaving a graveyard of closed items with no explanation.
+    Stored as `resolution_note`; the resolved column on /nexus/queue renders it.
+
+    Also now returns the item, matching /reopen and /tag. Returning a bare {ok:true}
+    is what made the silent discard invisible to callers checking the response.
+    """
     body = _sb_json()
     item_id = body.get("id")
     if not item_id:
         return jsonify({"ok": False, "error": "id is required"}), 400
+    note = (body.get("note") or "").strip()
 
     doc = load_queue()
-    found = False
+    found = None
     for item in doc["items"]:
         if item.get("id") == item_id:
             item["status"] = "done"
             item["resolved_at"] = _now_iso()
-            found = True
+            # Only set when supplied: re-resolving after a reopen must not wipe an
+            # existing note just because this caller had nothing to add.
+            if note:
+                item["resolution_note"] = note
+            found = item
             # Close the Todoist twin (best-effort, never blocks the resolve)
             try:
                 import todoist_bridge
@@ -455,7 +471,7 @@ def api_queue_resolve():
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "item": found})
 
 
 @sb_bp.route("/api/queue/reopen", methods=["POST"])
