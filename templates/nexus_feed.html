@@ -8,6 +8,7 @@
     'optcg':       'border-amber-500',
     'optcg-video': 'border-red-500',
     'twitter':     'border-sky-500',
+    'x-feed':      'border-emerald-500',
     'resp':        'border-rose-500'
 } %}
 
@@ -44,5 +45,8 @@
         {% endif %}
     </section>
     {% endfor %}
+    {% if retired %}
+    <p class="text-xs text-gray-500 px-1">Retired (silent &gt;30d): {{ retired | join(' · ') }}</p>
+    {% endif %}
 </div>
 {% endblock %}

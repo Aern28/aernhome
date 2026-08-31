@@ -121,6 +121,46 @@ def _restock_items():
     return items
 
 
+NOTEBOOK_PATH = os.environ.get(
+    "NOTEBOOK_PATH", "/workspace/obivault/Aernbot/Notebook.md")
+
+
+def notebook_entries(limit=5):
+    """Live pull of Aernbot Notebook entries off the read-only workspace mount.
+    Replaces the push producer that died with the 7/12 relay rebuild - a pull
+    can't go stale. Header shape: '## 2026-08-30 18:34 · topic · Title'."""
+    try:
+        text = open(NOTEBOOK_PATH, encoding="utf-8").read()
+    except OSError:
+        return []
+    out = []
+    parts = re.split(r"^## ", text, flags=re.M)[1:]
+    for p in parts:
+        lines = p.split("\n")
+        m = re.match(r"([\d-]+ [\d:]+)\s*·\s*([^·]+)·\s*(.+)", lines[0])
+        if not m:
+            continue
+        ts, topic, title = m.group(1), m.group(2).strip(), m.group(3).strip()
+        body = "\n".join(l for l in lines[1:] if l.strip())[:400]
+        out.append({"title": title, "body": body, "created_at": ts,
+                    "tag": topic, "url": None})
+    out.sort(key=lambda e: e["created_at"], reverse=True)
+    return out[:limit]
+
+
+def recent_items(limit=5):
+    """Newest captured x-feed items in nexus_feed card shape."""
+    items = sorted(_load(), key=_ts, reverse=True)[:limit]
+    out = []
+    for i in items:
+        first = next((l for l in (i.get("body") or "").split("\n") if l.strip()), "")
+        out.append({"title": (i.get("handle") or "") or f"[{i.get('stream','')}]",
+                    "body": (i.get("body") or "")[:400],
+                    "created_at": _ts(i).strftime("%Y-%m-%d %H:%M"),
+                    "tag": i.get("stream"), "url": i.get("link")})
+    return out
+
+
 def render_rss(limit=200):
     items = sorted(_load(), key=_ts, reverse=True)[:limit]
     items = _collapse(items) + _restock_items()

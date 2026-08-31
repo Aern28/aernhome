@@ -8,7 +8,7 @@ import json
 import time
 import sqlite3
 from email.utils import formatdate
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, jsonify, Response, send_from_directory, abort, request, make_response, redirect
 import requests
@@ -1508,14 +1508,33 @@ def nexus_feed():
         abort(404)
     by_source = ns_writes.feed_sources(per_source=5)
     counts = ns_writes.feed_source_counts()
-    # Every KNOWN source in declared order (even empty), then any unknown source
-    # that has posted — so a silent digest shows as "no recent items", not absent.
     order = list(FEED_SOURCE_META.keys())
     sources = order + [s for s in by_source if s not in set(order)]
-    cards = [{"meta": _feed_meta(s), "entries": by_source.get(s, []),
-              "total": counts.get(s, 0)} for s in sources]
+    # 8/31 rework (Aern: "it went stale and I stopped using it"): aernbot is now
+    # a LIVE pull from Notebook.md (the push producer died with the 7/12 relay
+    # rebuild); x-feed renders from its own store; push sources silent >30d are
+    # folded into a retired-line instead of sitting as frozen cards.
+    cards, retired = [], []
+    cards.append({"meta": {"slug": "aernbot", "icon": "🤖",
+                           "label": "Aernbot Notebook"},
+                  "entries": xfeed.notebook_entries(5), "total": 0})
+    cards.append({"meta": {"slug": "x-feed", "icon": "📰",
+                           "label": "X-Feed (follows · algo · restocks)"},
+                  "entries": xfeed.recent_items(5), "total": 0})
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    for s in sources:
+        if s == "aernbot":
+            continue  # live card above
+        entries = by_source.get(s, [])
+        newest = entries[0].get("created_at", "") if entries else ""
+        label = _feed_meta(s)["label"]
+        if not newest or newest[:10] < cutoff:
+            retired.append(f"{label} (last {newest[:10] or 'never'})")
+            continue
+        cards.append({"meta": _feed_meta(s), "entries": entries,
+                      "total": counts.get(s, 0)})
     return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
-                           cards=cards)
+                           cards=cards, retired=retired)
 
 
 @app.route("/nexus/feed/<source>")
