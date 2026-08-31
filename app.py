@@ -1095,6 +1095,28 @@ def _start_podcast_feed_writer():
 _start_podcast_feed_writer()
 
 
+# --- X feed (x-feed lane) ----------------------------------------------------
+# Trainer's x_capture.py POSTs captured items; Aern's RSS reader pulls feed.xml
+# over Tailscale. Streams + burst-collapse live in xfeed.py; project doc in
+# Trainer C:\projects\x-feed\project.md.
+import xfeed
+
+
+@app.route("/feed.xml")
+def x_feed_xml():
+    return Response(xfeed.render_rss(), mimetype="application/rss+xml")
+
+
+@app.route("/api/feed", methods=["POST"])
+def api_feed_add():
+    body = request.get_json(force=True, silent=True) or {}
+    items = body.get("items") or []
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "items must be a list"}), 400
+    added = xfeed.add_items(items)
+    return jsonify({"ok": True, "added": added})
+
+
 @app.route("/projects")
 def projects():
     """Projects overview page"""
