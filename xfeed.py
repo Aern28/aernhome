@@ -133,7 +133,10 @@ def render_rss(limit=200):
         h = html.escape(i.get("handle") or "")
         stream = i.get("stream", "follows")
         n = i.get("digest_n")
-        first = (i.get("body") or "").split("\n")[0][:90]
+        first = next((l for l in (i.get("body") or "").split("\n")
+                      if l.strip() and not re.fullmatch(
+                          r"·|\d+[smh]|[A-Z][a-z]{2} \d{1,2}(, \d{4})?",
+                          l.strip())), "")[:90]
         if n:
             title = html.escape(f"[{stream}] {h} - {n} posts")
         elif h:
