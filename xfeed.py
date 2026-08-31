@@ -108,8 +108,12 @@ def _restock_items():
                 t = re.search(rf"<{name}>(.*?)</{name}>", seg, re.S)
                 return html.unescape(re.sub(r"<!\[CDATA\[(.*?)\]\]>", r"\1",
                                             t.group(1), flags=re.S)).strip() if t else ""
-            items.append({"handle": "[restock]", "link": tag("link") or tag("guid"),
-                          "ts": tag("pubDate"), "body": tag("title"),
+            title = tag("title")
+            # infra watches (scraper feeds) are not restocks - keep shops/Bandai
+            if re.search(r"egman|limitless", title, re.I):
+                continue
+            items.append({"handle": "", "link": tag("link") or tag("guid"),
+                          "ts": tag("pubDate"), "body": title,
                           "media": [], "stream": "restock", "rfc_date": tag("pubDate")})
     except Exception:
         items = _cd_cache["items"]  # keep last good on failure
@@ -126,12 +130,16 @@ def render_rss(limit=200):
            "<link>http://100.110.245.37:5555/feed.xml</link>",
            "<description>old twitter: curated profiles + algo picks + restocks</description>"]
     for i in items:
-        h = html.escape(i.get("handle", "?"))
+        h = html.escape(i.get("handle") or "")
         stream = i.get("stream", "follows")
         n = i.get("digest_n")
         first = (i.get("body") or "").split("\n")[0][:90]
-        title = html.escape(
-            f"[{stream}] {h} - {n} posts" if n else f"[{stream}] {h}: {first}")
+        if n:
+            title = html.escape(f"[{stream}] {h} - {n} posts")
+        elif h:
+            title = html.escape(f"[{stream}] {h}: {first}")
+        else:
+            title = html.escape(f"[{stream}] {first}")
         body_html = html.escape(i.get("body", "")).replace("\n", "<br/>")
         for m in (i.get("media") or [])[:8]:
             body_html += f'<br/><img src="{html.escape(m)}"/>'
