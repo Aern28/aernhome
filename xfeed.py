@@ -28,6 +28,27 @@ BURST_WINDOW_S = 2 * 3600
 _cd_cache = {"ts": 0.0, "items": []}
 
 
+_LITTER = re.compile(
+    r"^(·|\d+[smh]|[A-Z][a-z]{2} \d{1,2}(, \d{4})?|\d[\d.,]*[KM]?)$")
+
+
+def _clean_body(body):
+    """Strip X UI litter that survives inner_text capture: '·' separators,
+    bare relative times/dates, bare engagement counts. Applied at render time
+    so items captured before cleaner passes still display well."""
+    out, prev_blank = [], False
+    for l in (body or "").split("\n"):
+        s = l.strip()
+        if _LITTER.fullmatch(s):
+            continue
+        blank = not s
+        if blank and prev_blank:
+            continue
+        prev_blank = blank
+        out.append(l)
+    return "\n".join(out).strip()
+
+
 def _load():
     if not os.path.exists(ITEMS_PATH):
         return []
@@ -80,7 +101,8 @@ def _collapse(items):
         run = items[i:j + 1]
         if len(run) > BURST_N:
             bodies = "\n\n".join(
-                f"({_ts(x).strftime('%H:%M')}) {x.get('body','')}" for x in run)
+                f"({_ts(x).strftime('%H:%M')}) {_clean_body(x.get('body',''))}"
+                for x in run)
             media = [m for x in run for m in (x.get("media") or [])]
             out.append({"handle": h, "link": run[0].get("link"),
                         "ts": run[0].get("ts"), "body": bodies, "media": media,
@@ -153,9 +175,9 @@ def recent_items(limit=5):
     items = sorted(_load(), key=_ts, reverse=True)[:limit]
     out = []
     for i in items:
-        first = next((l for l in (i.get("body") or "").split("\n") if l.strip()), "")
+        body = _clean_body(i.get("body", ""))
         out.append({"title": (i.get("handle") or "") or f"[{i.get('stream','')}]",
-                    "body": (i.get("body") or "")[:400],
+                    "body": body[:400],
                     "created_at": _ts(i).strftime("%Y-%m-%d %H:%M"),
                     "tag": i.get("stream"), "url": i.get("link")})
     return out
@@ -173,10 +195,10 @@ def render_rss(limit=200):
         h = html.escape(i.get("handle") or "")
         stream = i.get("stream", "follows")
         n = i.get("digest_n")
-        first = next((l for l in (i.get("body") or "").split("\n")
-                      if l.strip() and not re.fullmatch(
-                          r"·|\d+[smh]|[A-Z][a-z]{2} \d{1,2}(, \d{4})?",
-                          l.strip())), "")[:90]
+        body = _clean_body(i.get("body", "")) if not n else i.get("body", "")
+        if not n:
+            i = dict(i, body=body)
+        first = next((l for l in body.split("\n") if l.strip()), "")[:90]
         if n:
             title = html.escape(f"[{stream}] {h} - {n} posts")
         elif h:
