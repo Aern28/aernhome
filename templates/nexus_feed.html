@@ -12,6 +12,10 @@
 } %}
 
 <div class="space-y-4 max-w-3xl">
+    <div class="bg-dark-card border border-dark-border rounded-lg px-4 py-3 flex items-center justify-between">
+        <span class="text-sm text-gray-300">📰 X-feed — old Twitter as RSS (follows + algo picks + restocks)</span>
+        <a href="/feed.xml" class="text-xs font-medium text-blue-400 hover:text-blue-300">feed.xml →</a>
+    </div>
     {% for card in cards %}
     <section class="bg-dark-card border border-dark-border rounded-lg overflow-hidden border-l-4 {{ accents.get(card.meta.slug, 'border-slate-500') }}">
         <div class="flex items-center justify-between px-4 py-3 border-b border-dark-border">
