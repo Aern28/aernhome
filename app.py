@@ -1137,6 +1137,7 @@ NEXUS_SECTIONS = [
     ("/nexus/travel",     "Travel",      "✈️", "Trip hubs — docs & itineraries"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/inventory",  "Inventory",   "🗃️", "Live listings — visual confirm"),
+    ("/nexus/signals",    "Signals",     "📊", "Daily movers · egman delta · riftbound"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
     ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
     ("/nexus/aern",       "For Aern",    "🎯", "Everything waiting on you"),
@@ -1208,6 +1209,18 @@ def nexus_tcg():
     return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
                            tcg=ns.tcg_alerts(), biz=ns.tcg_business(),
                            direct=ns.direct_progress())
+
+
+@app.route("/nexus/signals")
+def nexus_signals():
+    """Daily TCG signal reports (movers / egman delta / riftbound momentum) with
+    HELD badges joined from the inventory mirror — replaces the daily queue
+    digests (Aern 9/02: queue keeps only position-movers + confirmed signals)."""
+    if not _is_nexus_allowed():
+        abort(404)
+    import nexus_signals as sig
+    return render_template("nexus_signals.html", sections=NEXUS_SECTIONS,
+                           active="/nexus/signals", **sig.load())
 
 
 @app.route("/nexus/inventory")

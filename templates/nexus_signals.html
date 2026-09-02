@@ -1,0 +1,77 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Signals{% endblock %}
+
+{% block nexus_content %}
+<div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <p class="text-sm text-gray-400">Daily TCG signals — movers · egman delta · riftbound. Reports ride the hourly mirror from Phoenix; <span class="text-emerald-400 font-semibold">HELD</span> = live inventory has copies.</p>
+    <p class="text-xs text-gray-400">{{ movers.date or '—' }}</p>
+</div>
+
+{% if not reports_present %}
+<div class="bg-red-900/50 border border-red-700/50 text-red-300 rounded-lg px-4 py-3 mb-4">
+    ⚠ No reports found in the /tcg mirror yet — first sync lands with the next hourly mirror push from Phoenix.
+</div>
+{% endif %}
+
+{% macro mover_table(rows, up) %}
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+    <thead>
+        <tr class="text-xs uppercase tracking-wide text-gray-400 border-b border-dark-border">
+            <th class="text-right py-2 pr-3">Δ7d</th>
+            <th class="text-left py-2 pr-3">Card</th>
+            <th class="text-left py-2 pr-3">Set</th>
+            <th class="text-right py-2 pr-3">Now</th>
+            <th class="text-right py-2 pr-3">7d ago</th>
+            <th class="text-left py-2">Flags</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+        <tr class="border-b border-dark-border {% if 'HELD' in r.flags %}bg-emerald-900/50{% endif %}">
+            <td class="text-right py-2 pr-3 font-mono font-semibold {% if up %}text-emerald-400{% else %}text-red-300{% endif %}">{{ r.pct }}</td>
+            <td class="py-2 pr-3 text-white">{{ r.card }}</td>
+            <td class="py-2 pr-3 text-gray-400">{{ r.set }}</td>
+            <td class="text-right py-2 pr-3 font-mono text-white">${{ r.cur }}</td>
+            <td class="text-right py-2 pr-3 font-mono text-gray-400">${{ r.ago }}</td>
+            <td class="py-2">
+                {% for f in r.flags %}
+                <span class="text-xs font-semibold {% if f == 'HELD' %}text-emerald-300{% elif f == 'POS' %}text-amber-300{% elif f.startswith('META') %}text-amber-400{% else %}text-gray-400{% endif %}">{{ f }}</span>
+                {% endfor %}
+            </td>
+        </tr>
+    {% endfor %}
+    {% if not rows %}<tr><td colspan="6" class="py-3 text-gray-400">No rows in today's report.</td></tr>{% endif %}
+    </tbody>
+</table>
+</div>
+{% endmacro %}
+
+<section class="bg-dark-card border border-dark-border rounded-lg p-4 mb-4">
+    <h3 class="text-sm font-semibold text-white mb-2">📈 Gainers <span class="text-xs font-normal text-gray-400">({{ movers_file or 'no report' }})</span></h3>
+    {{ mover_table(movers.gainers, true) }}
+</section>
+
+<section class="bg-dark-card border border-dark-border rounded-lg p-4 mb-4">
+    <h3 class="text-sm font-semibold text-white mb-2">📉 Drops</h3>
+    {{ mover_table(movers.drops, false) }}
+</section>
+
+<section class="mb-4">
+    <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden" open>
+        <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-white">
+            🏆 Egman Delta <span class="text-xs font-normal text-gray-400">({{ delta_file or 'no report' }}) — doctrine: 1st sighting = watchlist · CONFIRMED repeat = signal · release-window = sell into hype</span>
+        </summary>
+        <pre class="px-4 pb-4 pt-3 border-t border-dark-border text-xs text-gray-300 whitespace-pre-wrap break-words">{{ delta_text|urlize|safe if delta_text else 'No delta report yet.' }}</pre>
+    </details>
+</section>
+
+<section class="mb-4">
+    <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+        <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-white">
+            🌀 Riftbound Momentum <span class="text-xs font-normal text-gray-400">({{ momentum_file or 'no report' }})</span>
+        </summary>
+        <pre class="px-4 pb-4 pt-3 border-t border-dark-border text-xs text-gray-300 whitespace-pre-wrap break-words">{{ momentum_text|urlize|safe if momentum_text else 'No momentum report yet.' }}</pre>
+    </details>
+</section>
+{% endblock %}
