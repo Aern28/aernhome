@@ -23,6 +23,23 @@ docker compose build aernhome
 docker compose up -d
 ```
 
+**Bridge when a rebuild isn't possible right now** (2026-09-02, BYOS + Keep sync
+deps): the container's image layer is writable, so packages can be hot-installed
+and they survive `docker restart` — but NOT a recreate (`docker compose up -d`
+after a compose change) and NOT a rebuild-less `--force-recreate`. Order matters:
+
+```powershell
+cd C:\projects\aernhome
+git pull
+docker compose up -d                      # recreate first (picks up compose changes, e.g. the :5556 port)
+docker exec aernhome-dashboard pip install --no-cache-dir -r /app/requirements.txt
+docker restart aernhome-dashboard
+```
+
+The fleet check `byos_deps` goes **down** the moment the bridge is lost, so a
+silent regression is impossible; run the real `docker compose build aernhome`
+from the console whenever convenient and the bridge stops mattering.
+
 **Dev host**: NenTera (laptop) is currently down for an SSD replacement
 (expected back ~2026-07-08) — Trainer (desktop) is the dev host in the
 meantime. Once NenTera is restored, either machine can develop from; either

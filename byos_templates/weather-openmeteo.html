@@ -1,0 +1,330 @@
+<!-- TRMNL Weather Plugin v3 — Open-Meteo
+     Polling URL: https://api.open-meteo.com/v1/forecast?latitude=29.76&longitude=-95.36&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America/Chicago&forecast_days=3
+     Polling Verb: GET
+     Polling Headers: (none needed)
+     Resolution: 800x480 (TRMNL OG)
+
+     WMO Weather Codes:
+       0 = Clear sky
+       1 = Mainly clear, 2 = Partly cloudy, 3 = Overcast
+       45,48 = Fog
+       51,53,55 = Drizzle (light/moderate/dense)
+       61,63,65 = Rain (slight/moderate/heavy)
+       71,73,75 = Snow
+       80,81,82 = Rain showers
+       85,86 = Snow showers
+       95 = Thunderstorm
+       96,99 = Thunderstorm with hail
+-->
+
+{% assign code = current.weather_code | plus: 0 %}
+{% assign temp = current.temperature_2m | round %}
+{% assign feels = current.apparent_temperature | round %}
+{% assign humidity = current.relative_humidity_2m %}
+{% assign wind = current.wind_speed_10m | round %}
+{% assign uv = current.uv_index | round %}
+{% assign winddir = current.wind_direction_10m | plus: 0 %}
+
+<!-- Wind direction degrees to compass -->
+{% if winddir >= 338 or winddir < 23 %}{% assign compass = "N" %}
+{% elsif winddir < 68 %}{% assign compass = "NE" %}
+{% elsif winddir < 113 %}{% assign compass = "E" %}
+{% elsif winddir < 158 %}{% assign compass = "SE" %}
+{% elsif winddir < 203 %}{% assign compass = "S" %}
+{% elsif winddir < 248 %}{% assign compass = "SW" %}
+{% elsif winddir < 293 %}{% assign compass = "W" %}
+{% else %}{% assign compass = "NW" %}
+{% endif %}
+
+<!-- Weather description from WMO code -->
+{% if code == 0 %}{% assign desc = "Clear Sky" %}
+{% elsif code == 1 %}{% assign desc = "Mainly Clear" %}
+{% elsif code == 2 %}{% assign desc = "Partly Cloudy" %}
+{% elsif code == 3 %}{% assign desc = "Overcast" %}
+{% elsif code == 45 or code == 48 %}{% assign desc = "Foggy" %}
+{% elsif code == 51 %}{% assign desc = "Light Drizzle" %}
+{% elsif code == 53 %}{% assign desc = "Drizzle" %}
+{% elsif code == 55 %}{% assign desc = "Heavy Drizzle" %}
+{% elsif code == 61 %}{% assign desc = "Light Rain" %}
+{% elsif code == 63 %}{% assign desc = "Rain" %}
+{% elsif code == 65 %}{% assign desc = "Heavy Rain" %}
+{% elsif code == 71 or code == 73 or code == 75 %}{% assign desc = "Snow" %}
+{% elsif code == 80 %}{% assign desc = "Light Showers" %}
+{% elsif code == 81 %}{% assign desc = "Showers" %}
+{% elsif code == 82 %}{% assign desc = "Heavy Showers" %}
+{% elsif code == 85 or code == 86 %}{% assign desc = "Snow Showers" %}
+{% elsif code == 95 %}{% assign desc = "Thunderstorm" %}
+{% elsif code == 96 or code == 99 %}{% assign desc = "Thunderstorm + Hail" %}
+{% else %}{% assign desc = "Unknown" %}
+{% endif %}
+
+<!-- Hourly slots: noon=index 12, evening=index 18, night=index 21 -->
+{% assign noon_temp = hourly.temperature_2m[12] | round %}
+{% assign noon_rain = hourly.precipitation_probability[12] %}
+{% assign noon_code = hourly.weather_code[12] | plus: 0 %}
+{% if noon_code == 0 or noon_code == 1 %}{% assign noon_desc = "Clear" %}
+{% elsif noon_code == 2 %}{% assign noon_desc = "Partly Cloudy" %}
+{% elsif noon_code == 3 %}{% assign noon_desc = "Overcast" %}
+{% elsif noon_code == 45 or noon_code == 48 %}{% assign noon_desc = "Foggy" %}
+{% elsif noon_code >= 51 and noon_code <= 55 %}{% assign noon_desc = "Drizzle" %}
+{% elsif noon_code >= 61 and noon_code <= 65 %}{% assign noon_desc = "Rain" %}
+{% elsif noon_code >= 80 and noon_code <= 82 %}{% assign noon_desc = "Showers" %}
+{% elsif noon_code >= 95 %}{% assign noon_desc = "Thunderstorm" %}
+{% else %}{% assign noon_desc = "Mixed" %}
+{% endif %}
+
+{% assign eve_temp = hourly.temperature_2m[18] | round %}
+{% assign eve_rain = hourly.precipitation_probability[18] %}
+{% assign eve_code = hourly.weather_code[18] | plus: 0 %}
+{% if eve_code == 0 or eve_code == 1 %}{% assign eve_desc = "Clear" %}
+{% elsif eve_code == 2 %}{% assign eve_desc = "Partly Cloudy" %}
+{% elsif eve_code == 3 %}{% assign eve_desc = "Overcast" %}
+{% elsif eve_code == 45 or eve_code == 48 %}{% assign eve_desc = "Foggy" %}
+{% elsif eve_code >= 51 and eve_code <= 55 %}{% assign eve_desc = "Drizzle" %}
+{% elsif eve_code >= 61 and eve_code <= 65 %}{% assign eve_desc = "Rain" %}
+{% elsif eve_code >= 80 and eve_code <= 82 %}{% assign eve_desc = "Showers" %}
+{% elsif eve_code >= 95 %}{% assign eve_desc = "Thunderstorm" %}
+{% else %}{% assign eve_desc = "Mixed" %}
+{% endif %}
+
+{% assign night_temp = hourly.temperature_2m[21] | round %}
+{% assign night_rain = hourly.precipitation_probability[21] %}
+{% assign night_code = hourly.weather_code[21] | plus: 0 %}
+{% if night_code == 0 or night_code == 1 %}{% assign night_desc = "Clear" %}
+{% elsif night_code == 2 %}{% assign night_desc = "Partly Cloudy" %}
+{% elsif night_code == 3 %}{% assign night_desc = "Overcast" %}
+{% elsif night_code == 45 or night_code == 48 %}{% assign night_desc = "Foggy" %}
+{% elsif night_code >= 51 and night_code <= 55 %}{% assign night_desc = "Drizzle" %}
+{% elsif night_code >= 61 and night_code <= 65 %}{% assign night_desc = "Rain" %}
+{% elsif night_code >= 80 and night_code <= 82 %}{% assign night_desc = "Showers" %}
+{% elsif night_code >= 95 %}{% assign night_desc = "Thunderstorm" %}
+{% else %}{% assign night_desc = "Mixed" %}
+{% endif %}
+
+<!-- Peak rain chance per day (check key hours: 6,9,12,15,18,21) -->
+<!-- Day 0 = indices 0-23, Day 1 = 24-47, Day 2 = 48-71 -->
+{% assign rain_today = 0 %}
+{% assign r = hourly.precipitation_probability[6] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[9] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[12] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[15] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[18] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[21] | plus: 0 %}{% if r > rain_today %}{% assign rain_today = r %}{% endif %}
+
+{% assign rain_tomorrow = 0 %}
+{% assign r = hourly.precipitation_probability[30] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[33] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[36] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[39] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[42] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[45] | plus: 0 %}{% if r > rain_tomorrow %}{% assign rain_tomorrow = r %}{% endif %}
+
+{% assign rain_dayafter = 0 %}
+{% assign r = hourly.precipitation_probability[54] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[57] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[60] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[63] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[66] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+{% assign r = hourly.precipitation_probability[69] | plus: 0 %}{% if r > rain_dayafter %}{% assign rain_dayafter = r %}{% endif %}
+
+<!-- Daily hi/lo -->
+{% assign today_hi = daily.temperature_2m_max[0] | round %}
+{% assign today_lo = daily.temperature_2m_min[0] | round %}
+{% assign tom_hi = daily.temperature_2m_max[1] | round %}
+{% assign tom_lo = daily.temperature_2m_min[1] | round %}
+{% assign da_hi = daily.temperature_2m_max[2] | round %}
+{% assign da_lo = daily.temperature_2m_min[2] | round %}
+
+<!-- Sunrise/sunset — strip date prefix (format: "2026-03-09T07:37") -->
+{% assign sunrise_raw = daily.sunrise[0] %}
+{% assign sunset_raw = daily.sunset[0] %}
+{% assign sunrise = sunrise_raw | split: "T" | last %}
+{% assign sunset = sunset_raw | split: "T" | last %}
+
+<!-- Day names for forecast strip -->
+{% assign tom_date = daily.time[1] %}
+{% assign da_date = daily.time[2] %}
+
+<!-- Vibe line by WMO code -->
+{% if code == 0 %}
+  {% assign vibe = "Vitamin D on tap." %}
+{% elsif code == 1 or code == 2 %}
+  {% assign vibe = "Partly cloudy, fully vibing." %}
+{% elsif code == 3 %}
+  {% assign vibe = "The sky is thinking about it." %}
+{% elsif code == 45 or code == 48 %}
+  {% assign vibe = "Silent Hill vibes. Stay sharp." %}
+{% elsif code == 51 or code == 53 or code == 55 %}
+  {% assign vibe = "Light drizzle. Hair is gonna love it." %}
+{% elsif code == 61 or code == 63 or code == 80 or code == 81 %}
+  {% assign vibe = "Umbrella weather. Or just commit." %}
+{% elsif code == 65 or code == 82 %}
+  {% assign vibe = "It is POURING. Stay inside." %}
+{% elsif code == 95 or code == 96 or code == 99 %}
+  {% assign vibe = "Houston thunderstorm energy." %}
+{% elsif code == 71 or code == 73 or code == 75 or code == 85 or code == 86 %}
+  {% assign vibe = "Snow in Houston? Check the calendar." %}
+{% else %}
+  {% assign vibe = "Check outside. It is doing something." %}
+{% endif %}
+
+<!-- Houston override: feels > 100 -->
+{% if feels > 100 %}
+  {% assign vibe = "Houston is Houstoning. Stay hydrated." %}
+{% endif %}
+
+<div class="view view--full">
+  <div style="height: 100%; padding: 16px 24px; display: flex; flex-direction: column; font-family: monospace;">
+
+    <!-- HEADER -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <span style="font-size: 16px; font-weight: 700; letter-spacing: 2px;">HOUSTON</span>
+      <span style="font-size: 13px; color: #555;">Rise {{ sunrise }} / Set {{ sunset }}</span>
+    </div>
+    <div style="border-top: 2px solid #000; margin: 6px 0 12px 0;"></div>
+
+    <!-- MAIN: ASCII Art + Current Conditions -->
+    <div style="display: flex; flex: 1; align-items: center; gap: 24px;">
+
+      <!-- ASCII Weather Art -->
+      <div style="flex-shrink: 0;">
+{% if code == 0 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+    \   /
+     .-.
+  -- (   ) --
+     `-'
+    /   \
+</pre>
+{% elsif code == 1 or code == 2 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+   \  /
+ _ /"".-.
+   \_(   ).
+   /(___(__)
+</pre>
+{% elsif code == 3 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .--.
+  .-(    ).
+ (___.__)__)
+</pre>
+{% elsif code == 45 or code == 48 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+ _ - _ - _ -
+  _ - _ - _
+ _ - _ - _ -
+</pre>
+{% elsif code == 95 or code == 96 or code == 99 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .-.
+    (   ).
+   (___(__)
+   _/' _/'
+    ' ' '
+</pre>
+{% elsif code == 51 or code == 53 or code == 55 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .-.
+    (   ).
+   (___(__)
+    '   '
+   '   '
+</pre>
+{% elsif code == 61 or code == 63 or code == 65 or code == 80 or code == 81 or code == 82 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .-.
+    (   ).
+   (___(__)
+   ' ' ' '
+  ' ' ' '
+</pre>
+{% elsif code == 71 or code == 73 or code == 75 or code == 85 or code == 86 %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .-.
+    (   ).
+   (___(__)
+    *  *  *
+   *  *  *
+</pre>
+{% else %}
+<pre style="font-size: 16px; line-height: 1.3; margin: 0;">
+     .-.
+    (   ).
+   (___(__)
+</pre>
+{% endif %}
+      </div>
+
+      <!-- Current Conditions -->
+      <div style="flex: 1;">
+        <div style="font-size: 72px; font-weight: 700; line-height: 1; letter-spacing: -2px;">
+          {{ temp }}°
+        </div>
+        <div style="font-size: 20px; margin-top: 4px;">
+          {{ desc }}
+        </div>
+        <div style="font-size: 15px; color: #555; margin-top: 2px;">
+          Feels {{ feels }}°
+        </div>
+        <div style="display: flex; gap: 20px; margin-top: 10px; font-size: 14px; color: #444;">
+          <span>H {{ humidity }}%</span>
+          <span>W {{ wind }}mph {{ compass }}</span>
+          <span>UV {{ uv }}</span>
+        </div>
+
+        <!-- Time of Day -->
+        <div style="margin-top: 14px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; flex-direction: column; gap: 3px; font-size: 13px;">
+          <div style="display: flex; align-items: baseline;">
+            <span style="width: 52px; font-weight: 700; color: #000;">NOON</span>
+            <span style="width: 42px;">{{ noon_temp }}°</span>
+            <span style="width: 58px; color: #555;">Rain {{ noon_rain }}%</span>
+            <span style="color: #666; margin-left: 8px;">{{ noon_desc }}</span>
+          </div>
+          <div style="display: flex; align-items: baseline;">
+            <span style="width: 52px; font-weight: 700; color: #000;">EVE</span>
+            <span style="width: 42px;">{{ eve_temp }}°</span>
+            <span style="width: 58px; color: #555;">Rain {{ eve_rain }}%</span>
+            <span style="color: #666; margin-left: 8px;">{{ eve_desc }}</span>
+          </div>
+          <div style="display: flex; align-items: baseline;">
+            <span style="width: 52px; font-weight: 700; color: #000;">NIGHT</span>
+            <span style="width: 42px;">{{ night_temp }}°</span>
+            <span style="width: 58px; color: #555;">Rain {{ night_rain }}%</span>
+            <span style="color: #666; margin-left: 8px;">{{ night_desc }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIBE LINE -->
+    <div style="font-size: 15px; font-style: italic; color: #444; padding: 6px 0;">
+      "{{ vibe }}"
+    </div>
+
+    <div style="border-top: 2px solid #000; margin: 4px 0 8px 0;"></div>
+
+    <!-- FORECAST STRIP -->
+    <div style="display: flex;">
+      <!-- Today -->
+      <div style="flex: 1; background: #000; color: #fff; padding: 8px 14px; border-radius: 4px 0 0 4px;">
+        <div style="font-size: 13px; font-weight: 700;">TODAY</div>
+        <div style="font-size: 22px; font-weight: 700;">{{ today_hi }}°<span style="color: #aaa; font-weight: 400;">/{{ today_lo }}°</span></div>
+        <div style="font-size: 12px; color: #ccc;">Rain {{ rain_today }}%</div>
+      </div>
+      <!-- Tomorrow -->
+      <div style="flex: 1; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 8px 14px;">
+        <div style="font-size: 13px; font-weight: 700;">{{ tom_date | date: "%a" | upcase }}</div>
+        <div style="font-size: 22px; font-weight: 700;">{{ tom_hi }}°<span style="color: #666; font-weight: 400;">/{{ tom_lo }}°</span></div>
+        <div style="font-size: 12px; color: #666;">Rain {{ rain_tomorrow }}%</div>
+      </div>
+      <!-- Day After -->
+      <div style="flex: 1; border: 2px solid #000; border-left: 0; padding: 8px 14px; border-radius: 0 4px 4px 0;">
+        <div style="font-size: 13px; font-weight: 700;">{{ da_date | date: "%a" | upcase }}</div>
+        <div style="font-size: 22px; font-weight: 700;">{{ da_hi }}°<span style="color: #666; font-weight: 400;">/{{ da_lo }}°</span></div>
+        <div style="font-size: 12px; color: #666;">Rain {{ rain_dayafter }}%</div>
+      </div>
+    </div>
+
+  </div>
+</div>

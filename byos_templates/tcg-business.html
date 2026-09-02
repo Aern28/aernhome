@@ -1,0 +1,104 @@
+<!-- TRMNL TCG Business v1
+     Strategy: Webhook (n8n pushes every 30 min)
+     Payload: tcg_plugin_data.py merges inventory.db (movers/positions/to-ship/prices) + tcg-sales.db (sales)
+     Variables: sr,sn,sa,sd, mvu[],mvd, pos[], tsn,tsv, pf,pfa, dt  (iv/is + wln/wll trimmed 2026-06-06, build-queue #2)
+     Resolution: 800x480 (TRMNL OG)
+-->
+
+<div class="view view--full">
+  <div style="height:100%; padding:16px 24px; display:flex; flex-direction:column; font-family:monospace;">
+
+    <!-- HEADER -->
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span style="font-size:16px; font-weight:700; letter-spacing:2px;">TCG BUSINESS</span>
+      <span style="font-size:13px; color:#555;">{{ dt }}</span>
+    </div>
+    <div style="border-top:2px solid #000; margin:6px 0 10px 0;"></div>
+
+    <!-- MAIN 2-COLUMN -->
+    <div style="display:flex; flex:1; gap:16px;">
+
+      <!-- LEFT COLUMN -->
+      <div style="flex:1; display:flex; flex-direction:column;">
+
+        <!-- SALES -->
+        <div style="font-size:11px; font-weight:700; letter-spacing:1px; color:#555; margin-bottom:4px;">SALES (7d)</div>
+        {% if sn and sn != 0 %}
+          <div style="font-size:22px; font-weight:700; line-height:1;">{{ sr }} <span style="font-size:14px; color:#555; font-weight:400;">/ {{ sn }} orders</span></div>
+          <div style="font-size:12px; color:#555; margin-top:2px;">Avg {{ sa }}</div>
+          {% if sd %}
+            <div style="font-size:12px; margin-top:2px;">{{ sd }} vs prev 7d</div>
+          {% endif %}
+        {% else %}
+          <div style="font-size:14px; color:#888;">$0 · 0 orders · awaiting first sale</div>
+        {% endif %}
+
+        <!-- META MOVERS (market-wide, repurposed from held-inventory) -->
+        <div style="font-size:11px; font-weight:700; letter-spacing:1px; color:#555; margin-top:14px; margin-bottom:4px;">REPRICE · OP MOVERS (24h)</div>
+        {% if mvu and mvu.size > 0 %}
+          {% for m in mvu %}
+          <div style="display:flex; align-items:center; gap:6px; font-size:12px; padding:1px 0;">
+            <span style="width:10px; font-weight:700;">↑</span>
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.n }}</span>
+            <span style="font-weight:700; width:46px; text-align:right;">{{ m.d }}</span>
+            <span style="width:48px; text-align:right; color:#555;">{{ m.p }}</span>
+          </div>
+          {% endfor %}
+          {% if mvd %}
+          <div style="display:flex; align-items:center; gap:6px; font-size:12px; padding:1px 0;">
+            <span style="width:10px; font-weight:700;">↓</span>
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ mvd.n }}</span>
+            <span style="font-weight:700; width:46px; text-align:right;">{{ mvd.d }}</span>
+            <span style="width:48px; text-align:right; color:#555;">{{ mvd.p }}</span>
+          </div>
+          {% endif %}
+        {% else %}
+          <div style="font-size:12px; color:#888;">— no significant moves</div>
+        {% endif %}
+
+      </div>
+
+      <!-- VERTICAL DIVIDER -->
+      <div style="width:1px; background:#aaa;"></div>
+
+      <!-- RIGHT COLUMN -->
+      <div style="width:280px; display:flex; flex-direction:column;">
+
+        <!-- POSITIONS -->
+        <div style="font-size:11px; font-weight:700; letter-spacing:1px; color:#555; margin-bottom:4px;">OPEN POSITIONS</div>
+        {% if pos and pos.size > 0 %}
+          {% for p in pos %}
+          <div style="border:1px solid #aaa; border-radius:3px; padding:5px 8px; margin-bottom:6px;">
+            <div style="font-size:12px; font-weight:700;">{{ p.name }}</div>
+            <div style="font-size:11px; color:#555;">{{ p.ref }}</div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:3px;">
+              <span style="font-size:15px; font-weight:700;">{{ p.cur }}</span>
+              <span style="font-size:13px; font-weight:700;{% if p.plp_neg %} color:#000;{% endif %}">{{ p.plp }}</span>
+              <span style="font-size:12px; color:#555;">{{ p.pld }}</span>
+            </div>
+            <div style="font-size:10px; color:#666; margin-top:2px;">Day {{ p.day }}/{{ p.total }} · Stop {{ p.stop }}</div>
+            {% if p.cat %}<div style="font-size:10px; color:#666;">Catalyst: {{ p.cat }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="font-size:12px; color:#888;">No open positions</div>
+        {% endif %}
+
+        <!-- TO SHIP -->
+        <div style="font-size:11px; font-weight:700; letter-spacing:1px; color:#555; margin-top:8px; margin-bottom:4px;">TO SHIP</div>
+        {% if tsn and tsn != 0 %}
+          <div style="font-size:14px;"><span style="font-weight:700;">{{ tsn }}</span> orders · {{ tsv }}</div>
+        {% else %}
+          <div style="font-size:12px; color:#888;">— none pending</div>
+        {% endif %}
+
+        <!-- LAST UPDATED -->
+        <div style="margin-top:auto; font-size:11px; color:#666; text-align:right;">
+          Prices: {{ pf }} <span style="color:#999;">({{ pfa }})</span>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>

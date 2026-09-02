@@ -76,6 +76,13 @@ app.register_blueprint(fleet_facts.facts_bp)
 app.register_blueprint(ledger.ledger_bp)
 app.register_blueprint(vault.vault_bp)
 app.register_blueprint(vault.fleetdocs_bp)
+# BYOS (2026-09-02): the TRMNL on the wall talks to Nexus instead of trmnl.com. The
+# control surface (/api/wall, /byos/screen, /byos/preview) rides Nexus proper; the
+# device surface is ALSO registered here for Tailscale-side testing, but the device
+# itself reaches it on the LAN-bound :5556 listener started in __main__ (see byos.py).
+import byos
+app.register_blueprint(byos.nexus_bp)
+app.register_blueprint(byos.device_bp)
 
 
 import ipaddress
@@ -2241,6 +2248,13 @@ if __name__ == "__main__":
     init_db()
     init_nexus_db()
     fleet.start_sentinel()
+    # TRMNL device listener — separate port so the LAN-facing surface is ONLY the
+    # device API + images; Nexus proper stays Tailscale-bound (compose publishes 5556
+    # on the LAN IP, 5555 on the Tailscale IP).
+    try:
+        byos.start_device_listener()
+    except Exception as e:  # missing deps etc. — the fleet check byos_deps says why
+        print(f"byos device listener not started: {e}")
     # Serve with waitress (production WSGI) instead of the Werkzeug dev server:
     # real HTTP keep-alive — no fresh TCP handshake per asset over Tailscale DERP —
     # plus a proper threaded server. Bind 0.0.0.0 inside the container; the compose

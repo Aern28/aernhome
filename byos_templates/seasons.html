@@ -1,0 +1,86 @@
+<!-- TRMNL 72 Seasons Plugin — 七十二候
+     Polling URL: https://aern.dev/api/season
+     Polling Verb: GET
+     Resolution: 800x480 (TRMNL OG)
+-->
+
+<div class="view view--full">
+  <div style="height: 100%; padding: 24px 32px; display: flex; flex-direction: column; font-family: monospace;">
+
+    <!-- HEADER -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <span style="font-size: 14px; font-weight: 700; letter-spacing: 2px;">七十二候</span>
+      <span style="font-size: 13px; color: #555;">{{ data.start }} — {{ data.end }}</span>
+    </div>
+    <div style="border-top: 2px solid #000; margin: 6px 0 0 0;"></div>
+
+    <!-- MAIN -->
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 8px;">
+
+      <!-- Season icon -->
+      {% if data.season == "Spring" %}
+      <pre style="font-size: 14px; line-height: 1.2; margin: 0; color: #444;">
+  _/)
+ //
+/(_
+ \\
+  \)
+      </pre>
+      {% elsif data.season == "Summer" %}
+      <pre style="font-size: 14px; line-height: 1.2; margin: 0; color: #444;">
+    \   /
+     .-.
+  -- (   ) --
+     `-'
+    /   \
+      </pre>
+      {% elsif data.season == "Autumn" %}
+      <pre style="font-size: 14px; line-height: 1.2; margin: 0; color: #444;">
+     _
+    / \_.
+   /     \
+  /  ^  ^ \
+ /___/ \___\
+      </pre>
+      {% else %}
+      <pre style="font-size: 14px; line-height: 1.2; margin: 0; color: #444;">
+  *    *
+    *   *  *
+ *    *
+   *  *   *
+  *     *
+      </pre>
+      {% endif %}
+
+      <!-- Kanji -->
+      <div style="font-size: 72px; font-weight: 700; line-height: 1; letter-spacing: 4px; margin: 8px 0 4px 0;">
+        {{ data.kanji }}
+      </div>
+
+      <!-- English -->
+      <div style="font-size: 22px; font-weight: 400; letter-spacing: 1px;">
+        {{ data.english }}
+      </div>
+
+      <!-- Romaji -->
+      <div style="font-size: 15px; color: #555; font-style: italic;">
+        {{ data.romaji }}
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div style="border-top: 2px solid #000; margin: 0 0 8px 0;"></div>
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <div style="font-size: 13px;">
+        <span style="font-weight: 700;">{{ data.solar_term_english }}</span>
+        <span style="color: #555;"> · {{ data.solar_term }}</span>
+        <span style="color: #888;"> · pentad {{ data.pentad }}/3</span>
+      </div>
+      <div style="font-size: 13px; color: #555;">
+        #{{ data.number }}/{{ data.total }} · {{ data.season }}
+      </div>
+    </div>
+
+  </div>
+</div>

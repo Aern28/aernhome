@@ -1,0 +1,46 @@
+<!-- Nexus BYOS — Household Restock (2026-09-02)
+     Rendered by byos.py from trmnl_push.build_restock() merge vars (same keys as the
+     trmnl.com Restock plugin): cats[{k,l,n,items[],more}], count, upd, empty
+     Resolution: 800x480 (TRMNL OG). Four columns: house | rowan | jace | business.
+-->
+<div class="view view--full">
+<div style="height:100%; padding:14px 20px; font-family:monospace; display:flex; flex-direction:column;">
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <span style="font-size:16px; font-weight:700; letter-spacing:2px;">RESTOCK</span>
+    <span style="font-size:12px; color:#555;">{{ count }} open · {{ upd }}</span>
+  </div>
+  <div style="border-top:2px solid #000; margin:6px 0 8px 0;"></div>
+
+  {% if count == 0 %}
+  <div style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+    <div style="font-size:30px; font-weight:700;">ALL STOCKED</div>
+    <div style="font-size:13px; color:#555; margin-top:8px;">say "add ___" to Aernbot · or tell Google</div>
+  </div>
+  {% else %}
+  <div style="display:flex; flex:1; gap:12px; min-height:0;">
+    {% for c in cats %}
+    <div style="flex:1; display:flex; flex-direction:column; min-width:0;{% if forloop.index > 1 %} border-left:1px solid #aaa; padding-left:12px;{% endif %}">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+        <span style="font-size:12px; font-weight:700; letter-spacing:1px;">{{ c.l | upcase }}</span>
+        <span style="font-size:11px; color:#555;">{{ c.n }}</span>
+      </div>
+      {% if c.n == 0 %}
+      <div style="font-size:11px; color:#999;">—</div>
+      {% endif %}
+      {% for it in c.items %}
+      <div style="font-size:14px; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&#9633; {{ it }}</div>
+      {% endfor %}
+      {% if c.more > 0 %}
+      <div style="font-size:11px; color:#555; margin-top:2px;">+{{ c.more }} more</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div style="border-top:1px solid #aaa; margin-top:8px; padding-top:4px; font-size:10px; color:#777; display:flex; justify-content:space-between;">
+    <span>Keep "Grocery List" ⇄ Nexus · "got ___" clears</span><span>nexus/house</span>
+  </div>
+</div>
+</div>

@@ -14,6 +14,11 @@ services:
       # practice (restart:unless-stopped recovers if the bind ever loses the race).
       - "100.110.245.37:5555:5555"   # Tailscale — browser access via http://ashaman:5555
       - "127.0.0.1:5555:5555"        # host-local debugging
+      # BYOS device listener (byos.py, 2026-09-02): the TRMNL is Wi-Fi-only, so this ONE
+      # port is published on the LAN IP. It serves only /api/setup, /api/display,
+      # /api/log and the rendered images — no Nexus write APIs. Nexus itself stays off
+      # the LAN exactly as above.
+      - "192.168.1.141:5556:5556"    # LAN — the TRMNL's "Custom Server" = http://192.168.1.141:5556
     volumes:
       # Live code overlay — /app comes from the repo checkout, not the baked image.
       # Deploys are now `git pull` + `docker restart aernhome-dashboard`; NO rebuild

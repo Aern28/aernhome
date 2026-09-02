@@ -79,6 +79,9 @@ CHECK_META = {
     "disk": ("Disk Space", "infra"),
     "signup_webhook": ("aern-signup Notifications", "infra"),
     "home_assistant": ("Home Assistant (Pi)", "infra"),
+    "keep_sync": ("Keep ⇄ Restock sync", "infra"),
+    "byos_device": ("TRMNL (BYOS)", "infra"),
+    "byos_deps": ("BYOS/Keep deps", "infra"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -368,6 +371,83 @@ def check_disk():
     return (worst, "; ".join(parts))
 
 
+KEEP_SYNC_STAMP = os.path.join(DATA_DIR, "keep_sync_last.json")
+KEEP_SYNC_STALE_H = 1.0   # host task "Keep Sync" runs q15m
+BYOS_STATE = os.path.join(DATA_DIR, "byos", "state.json")
+BYOS_SILENT_H = 2.0       # battery idle polls every 15 min; 2h silent = dead battery / lost Wi-Fi
+
+
+def check_keep_sync():
+    """Dead-man's switch for keep_sync.py (Google Keep "Grocery List" <-> Nexus restock,
+    2026-09-02). The script stamps /data/keep_sync_last.json every run, ok or not; a
+    stale stamp means the host task died, ok=false means Keep auth/network failed."""
+    try:
+        age_h = (time.time() - os.path.getmtime(KEEP_SYNC_STAMP)) / 3600
+        with open(KEEP_SYNC_STAMP, "r", encoding="utf-8") as f:
+            st = json.load(f)
+    except OSError:
+        return ("unknown", "no stamp yet - keep_sync.py has not run")
+    except json.JSONDecodeError as e:
+        return ("unknown", f"stamp unreadable: {e}"[:200])
+    if age_h > KEEP_SYNC_STALE_H:
+        return ("warn", f"last run {age_h:.1f}h ago (host task 'Keep Sync' stale)")
+    if not st.get("ok"):
+        return ("warn", f"last run failed: {st.get('error')}"[:200])
+    c = st.get("counts") or {}
+    return ("up", f"{st.get('open')} open · synced {_to_central_str(st.get('at'))} · "
+                  f"{sum(c.values())} change(s) last run")
+
+
+def check_byos_device():
+    """The TRMNL on the wall, once it points at Nexus (byos.py). Reads the device
+    registry: last poll time, battery voltage, what's on screen, last render error."""
+    try:
+        with open(BYOS_STATE, "r", encoding="utf-8") as f:
+            st = json.load(f)
+    except OSError:
+        return ("unknown", "no device paired yet (byos state missing)")
+    except json.JSONDecodeError as e:
+        return ("unknown", f"state unreadable: {e}"[:200])
+    devs = st.get("devices") or {}
+    if not devs:
+        return ("unknown", "no device paired yet")
+    mac, d = max(devs.items(), key=lambda kv: kv[1].get("last_seen") or "")
+    try:
+        seen = dt.datetime.fromisoformat(d["last_seen"])
+        age_h = (dt.datetime.now(seen.tzinfo) - seen).total_seconds() / 3600
+    except (KeyError, ValueError, TypeError):
+        return ("unknown", f"{d.get('friendly_id')}: never polled")
+    volts = (d.get("volts") or [None])[-1]
+    ld = st.get("last_display") or {}
+    detail = (f"{d.get('friendly_id')} polled {age_h * 60:.0f}m ago · {volts} V · fw {d.get('fw')} · "
+              f"showing {ld.get('screen')}{' (pinned)' if ld.get('pinned') else ''}")
+    if age_h > BYOS_SILENT_H:
+        return ("warn", f"silent {age_h:.1f}h — battery dead or off Wi-Fi · " + detail)
+    if ld.get("error"):
+        return ("warn", f"render error: {ld['error']}"[:120] + " · " + detail)
+    if isinstance(volts, (int, float)) and volts < 3.4:
+        return ("warn", "battery low · " + detail)
+    return ("up", detail)
+
+
+def check_byos_deps():
+    """The BYOS renderer + Keep sync need packages that are in requirements.txt but only
+    reach the container via an image rebuild (console-only on Ashaman) or a
+    `docker exec pip install` bridge. A recreate without a rebuild silently drops the
+    bridge — this check is what makes that loud."""
+    missing = []
+    for mod, pkg in (("PIL", "Pillow"), ("liquid", "python-liquid"), ("websocket", "websocket-client"),
+                     ("gkeepapi", "gkeepapi"), ("gpsoauth", "gpsoauth")):
+        try:
+            __import__(mod)
+        except Exception:
+            missing.append(pkg)
+    if missing:
+        return ("down", "missing in container: " + ", ".join(missing) +
+                " — docker compose build (console) or docker exec aernhome-dashboard pip install <pkgs>")
+    return ("up", "Pillow, python-liquid, websocket-client, gkeepapi, gpsoauth importable")
+
+
 SIMPLE_CHECKS = {
     "relay_alive": check_relay_alive,
     "containers": check_containers,
@@ -380,6 +460,9 @@ SIMPLE_CHECKS = {
     "disk": check_disk,
     "signup_webhook": check_signup_webhook,
     "home_assistant": check_home_assistant,
+    "keep_sync": check_keep_sync,
+    "byos_device": check_byos_device,
+    "byos_deps": check_byos_deps,
 }
 
 

@@ -9,3 +9,10 @@ google-api-python-client==2.137.0
 google-auth==2.32.0
 waitress>=3.0.0
 Flask-Compress>=1.14
+# BYOS renderer (byos.py): screenshot -> 1-bit; Liquid = the TRMNL plugin markups run unchanged
+Pillow>=10.0
+python-liquid>=2.0
+websocket-client>=1.8
+# Keep <-> restock join (keep_sync.py); pinned to the versions the token was minted with
+gkeepapi==0.17.1
+gpsoauth==2.0.0
