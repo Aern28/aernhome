@@ -532,8 +532,15 @@ def check_census():
     flags = [x for x in (d.get("flags") or []) if x]
     head = (f"{len(hosts)} hosts | {c.get('infrastructure', 0)} infrastructure | "
             f"{c.get('dormant', 0)} dormant | census {age_d:.0f}d old")
+    # Routine census flags (dirty repos, https remotes, depth caps) are SEAT
+    # chores, not Aern's -- a warn here lands in the For-Aern "Needs you" lane
+    # via _needs_from_fleet(), and the chronic depth-cap flag made that card
+    # permanent (Aern 9/02: "nothingburger unless there's something I can do").
+    # Status stays "up" with the flags in detail (visible on /nexus/fleet +
+    # good-morning); warn is reserved for missing/stale/error above, where the
+    # census pipeline itself needs a human.
     if flags:
-        return [("census", "Fleet Census", "fleet", "warn", head + " | " + "; ".join(flags[:3]))]
+        return [("census", "Fleet Census", "fleet", "up", head + " | " + "; ".join(flags[:3]))]
     return [("census", "Fleet Census", "fleet", "up", head + " | nothing flagged")]
 
 
