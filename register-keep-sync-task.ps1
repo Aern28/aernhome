@@ -16,7 +16,7 @@ $cmd  = "docker exec aernhome-dashboard python /app/keep_sync.py >> `"$log`" 2>&
 
 $action  = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c $cmd"
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-           -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration ([TimeSpan]::MaxValue)
+           -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)  # PS 5.1 rejects [TimeSpan]::MaxValue (0x80041318)
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
             -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 

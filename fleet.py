@@ -436,6 +436,10 @@ def check_byos_deps():
     `docker exec pip install` bridge. A recreate without a rebuild silently drops the
     bridge — this check is what makes that loud."""
     missing = []
+    # a pip bridge applied while Nexus is running stayed "missing" until a restart
+    # (2026-09-02) — the import system caches site-packages listings; drop them first
+    import importlib
+    importlib.invalidate_caches()
     for mod, pkg in (("PIL", "Pillow"), ("liquid", "python-liquid"), ("websocket", "websocket-client"),
                      ("gkeepapi", "gkeepapi"), ("gpsoauth", "gpsoauth")):
         try:
