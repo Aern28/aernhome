@@ -33,20 +33,53 @@ def _newest(prefix):
     return paths[-1] if paths else None
 
 
-def _held_numbers():
+def _held_numbers(con):
     """Set of card numbers with live inventory qty>0, from the hourly mirror."""
     try:
-        con = sqlite3.connect(INV_DB)
         rows = con.execute(
             "SELECT DISTINCT p.number FROM inventory i JOIN products p ON i.product_id = p.id "
             "WHERE i.quantity > 0 AND p.number IS NOT NULL AND p.number != ''").fetchall()
-        con.close()
         return {r[0] for r in rows}
     except sqlite3.Error:
         return set()
 
 
-def _parse_movers(path, held):
+def _product_link(con, number, card, set_name):
+    """(tcgplayer_url, image_url) for a mover row, best-effort. The report's card
+    text is '<number> <products.name> [*Foil*]', so stripping the number token and
+    the *Foil* marker usually recovers the exact products.name; fall back through
+    looser matches rather than showing nothing."""
+    clean = card
+    if number and clean.startswith(number):
+        clean = clean[len(number):].strip()
+    clean = re.sub(r"\s*\*Foil\*\s*$", "", clean).strip()
+    tries = []
+    if clean:
+        tries.append(("name = ? AND set_name = ?", (clean, set_name)))
+        tries.append(("name = ?", (clean,)))
+    # MTG-style bare collector numbers ('26 Elven Chorus') aren't caught by _NUM;
+    # retry with a leading integer token stripped.
+    bare = re.sub(r"^\d+[a-z]?\s+", "", clean)
+    if bare != clean:
+        tries.append(("name = ? AND set_name = ?", (bare, set_name)))
+        tries.append(("name = ?", (bare,)))
+    if number:
+        tries.append(("number = ? AND set_name = ?", (number, set_name)))
+        tries.append(("number = ?", (number,)))
+    try:
+        for where, params in tries:
+            row = con.execute(
+                f"SELECT tcgplayer_id, image_url FROM products WHERE {where} LIMIT 1",
+                params).fetchone()
+            if row and row[0]:
+                url = f"https://www.tcgplayer.com/product/{row[0]}"
+                return url, (row[1] or None)
+    except sqlite3.Error:
+        pass
+    return None, None
+
+
+def _parse_movers(path, held, con):
     """Return {'date': .., 'gainers': [...], 'drops': [...]} row dicts."""
     out = {"date": "", "gainers": [], "drops": []}
     if not path:
@@ -73,10 +106,11 @@ def _parse_movers(path, held):
         row_flags = [f for f in flags.split() if f]
         if number and number in held:
             row_flags.insert(0, "HELD")
+        url, img = _product_link(con, number, card, set_name) if con else (None, None)
         out[bucket].append({
             "pct": pct, "pct_val": float(pct.replace("%", "").replace(",", "")),
             "card": card, "set": set_name, "cur": cur, "ago": ago,
-            "flags": row_flags, "number": number,
+            "flags": row_flags, "number": number, "url": url, "img": img,
         })
     return out
 
@@ -90,11 +124,17 @@ def _read_text(path, cap=20000):
 
 
 def load():
-    held = _held_numbers()
+    try:
+        con = sqlite3.connect(INV_DB)
+    except sqlite3.Error:
+        con = None
+    held = _held_numbers(con) if con else set()
     movers_path = _newest("movers_")
     delta_path = _newest("egman_delta_")
     momentum_path = _newest("meta_momentum_")
-    movers = _parse_movers(movers_path, held)
+    movers = _parse_movers(movers_path, held, con)
+    if con:
+        con.close()
     return {
         "movers": movers,
         "movers_file": os.path.basename(movers_path) if movers_path else None,
