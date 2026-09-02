@@ -136,8 +136,8 @@ def _note_error(st, where, err):
 
 # ── templates + data ───────────────────────────────────────────────────────────
 SHELL = """<!doctype html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="https://usetrmnl.com/css/latest/plugins.css">
-<script src="https://usetrmnl.com/js/latest/plugins.js"></script>
+<link rel="stylesheet" href="https://trmnl.com/css/latest/plugins.css">
+<script src="https://trmnl.com/js/latest/plugins.js"></script>
 <style>html,body{margin:0;padding:0;width:800px;height:480px;overflow:hidden;background:#fff;color:#000}
 .screen{width:800px;height:480px;overflow:hidden}</style></head>
 <body class="environment trmnl"><div class="screen">%s</div></body></html>"""
