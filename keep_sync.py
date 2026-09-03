@@ -77,6 +77,21 @@ def categorize(text):
     return t, "house"
 
 
+LABELS = {"house": "House", "rowan": "Rowan", "jace": "Jace", "business": "Business"}
+
+
+def keep_text_for(row, n_open):
+    """What a Nexus row is called in Keep. Pet rows always carry '(Rowan)' / '(Jace)'
+    (Aern 2026-09-02: 'separate Jace and Rowan' — 'dry food' exists under both), and so
+    does any name that collides across categories. categorize() reads the same tag on
+    the way back, so the tag doubles as the routing."""
+    name, cat = row["item"], row["category"]
+    collides = any(_norm(r["item"]) == _norm(name) and r["category"] != cat for r in n_open.values())
+    if cat in ("rowan", "jace") or collides:
+        return f"{name} ({LABELS.get(cat, cat)})"
+    return name
+
+
 # --- Nexus side -------------------------------------------------------------
 class Nexus:
     """Thin client over /api/restock (the same gate + verbs Aernbot's restock.py uses)."""
@@ -148,6 +163,15 @@ class KeepList:
                 self._dirty = True
                 return
 
+    def set_text(self, keep_id, text):
+        if self.dry_run:
+            return
+        for it in self.node.items:
+            if it.id == keep_id:
+                it.text = text
+                self._dirty = True
+                return
+
     def commit(self):
         if self._dirty and not self.dry_run:
             self.keep.sync()
@@ -191,7 +215,7 @@ def reconcile(nexus, keep, state, log):
     n_open = nexus.open_items()                       # id -> row
     k_items = keep.items()                            # keep_id -> item
     counts = {"keep_to_nexus": 0, "nexus_to_keep": 0, "cleared_nexus": 0, "ticked_keep": 0,
-              "reopened": 0, "matched": 0}
+              "reopened": 0, "matched": 0, "renamed": 0}
     by_nexus = {v["nexus_id"]: k for k, v in links.items() if v.get("nexus_id") is not None}
     n_open_by_name = {}
     for row in n_open.values():
@@ -236,8 +260,20 @@ def reconcile(nexus, keep, state, log):
                     n_is_open = True
                 counts["reopened"] += 1
             link["keep_checked"] = k["checked"]
+        # keep the Keep line labelled the way Nexus knows it — but only if he hasn't
+        # edited the text himself since we last saw it
+        if (n_is_open and nid in n_open and not k["checked"]
+                and _norm(k["text"]) == _norm(link.get("text") or "")):
+            want = keep_text_for(n_open[nid], n_open)
+            if _norm(want) != _norm(k["text"]):
+                log(f"renamed in Keep: {k['text']!r} -> {want!r}")
+                keep.set_text(keep_id, want)
+                k["text"] = want
+                link["text"] = want
+                counts["renamed"] += 1
+        # link["text"] is the last text WE wrote/linked, never his edit — that is what
+        # makes "he changed it" detectable (and respected) on every later run
         link["nexus_open"] = n_is_open
-        link["text"] = k["text"]
 
     # 2) Keep items with no link: unchecked -> into Nexus (match by name first)
     for keep_id, k in k_items.items():
@@ -253,6 +289,12 @@ def reconcile(nexus, keep, state, log):
             log(f"Keep -> Nexus: {text!r} -> {cat}")
             nid = nexus.add(text, cat)
             counts["keep_to_nexus"] += 1
+        want = keep_text_for({"item": text, "category": cat}, n_open)
+        if _norm(want) != _norm(k["text"]):
+            log(f"renamed in Keep: {k['text']!r} -> {want!r}")
+            keep.set_text(keep_id, want)
+            k["text"] = want
+            counts["renamed"] += 1
         links[keep_id] = {"nexus_id": nid, "nexus_open": True, "keep_checked": False, "text": k["text"]}
         if nid is not None:
             by_nexus[nid] = keep_id
@@ -261,11 +303,12 @@ def reconcile(nexus, keep, state, log):
     for nid, row in n_open.items():
         if nid in by_nexus:
             continue
-        log(f"Nexus -> Keep: {row['item']!r}")
-        keep_id = keep.add(row["item"])
+        text = keep_text_for(row, n_open)
+        log(f"Nexus -> Keep: {text!r}")
+        keep_id = keep.add(text)
         counts["nexus_to_keep"] += 1
         if keep_id is not None:
-            links[keep_id] = {"nexus_id": nid, "nexus_open": True, "keep_checked": False, "text": row["item"]}
+            links[keep_id] = {"nexus_id": nid, "nexus_open": True, "keep_checked": False, "text": text}
             by_nexus[nid] = keep_id
 
     keep.commit()
@@ -305,7 +348,7 @@ def main(argv):
         changes = sum(c.values())
         print(f"keep_sync ok{' (dry-run)' if dry_run else ''}: {changes} change(s) "
               f"[keep->nexus {c['keep_to_nexus']}, nexus->keep {c['nexus_to_keep']}, cleared {c['cleared_nexus']}, "
-              f"ticked {c['ticked_keep']}, reopened {c['reopened']}, matched {c['matched']}] · {stamp['open']} open")
+              f"ticked {c['ticked_keep']}, reopened {c['reopened']}, matched {c['matched']}, renamed {c.get('renamed', 0)}] · {stamp['open']} open")
         return 0
     print(f"keep_sync FAILED: {stamp['error']}")
     return 1
