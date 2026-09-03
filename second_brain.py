@@ -381,10 +381,21 @@ def api_queue_post():
     if priority not in VALID_PRIORITY:
         priority = 2
 
+    # Optional supersession key (Aern 9/02: "let the signal queue resolve
+    # themselves"). Daily snapshot posts — MOVERS, EGMAN DELTA — are never
+    # "done", only replaced by tomorrow's; /nexus/signals is their durable view.
+    # A new item carrying a key auto-resolves every OPEN item in the same dir
+    # with the same key. No TTL on purpose: a day the producer skips leaves the
+    # last snapshot open, which is the right signal (stale ≠ resolved). Items
+    # without a key (position-movers, domain requests, seat handoffs) are real
+    # to-dos and keep needing a human/seat resolve.
+    key = (body.get("key") or "").strip()[:64] or None
+
     item = {
         "id": _short_id(),
         "dir": direction,
         "text": text,
+        "key": key,
         # Optional triage lane for the For-Aern page: "read" items collapse into
         # the pinned "Read & done" group; everything else is the priority lane.
         "effort": body.get("effort") if body.get("effort") in ("read", "quick", "hands-on") else None,
@@ -411,13 +422,30 @@ def api_queue_post():
             item["todoist_id"] = None
 
     doc = load_queue()
+    superseded = []
+    if key:
+        now = _now_iso()
+        for old in doc["items"]:
+            if (old.get("status") == "open" and old.get("dir") == direction
+                    and old.get("key") == key):
+                old["status"] = "done"
+                old["resolved_at"] = now
+                old["resolution_note"] = f"superseded by {item['id']}"
+                superseded.append(old["id"])
+                # to_aern twins ride Todoist; close them like a manual resolve would
+                try:
+                    import todoist_bridge
+                    if old.get("todoist_id"):
+                        todoist_bridge.close_task(old["todoist_id"])
+                except Exception:
+                    pass
     doc["items"].append(item)
     try:
         save_queue_atomic(doc)
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
-    return jsonify({"ok": True, "id": item["id"], "item": item})
+    return jsonify({"ok": True, "id": item["id"], "item": item, "superseded": superseded})
 
 
 @sb_bp.route("/api/queue/resolve", methods=["POST"])
