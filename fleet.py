@@ -76,6 +76,7 @@ CHECK_META = {
     "trainer_ollama": ("Trainer Ollama (5080)", "infra"),
     "mirror_fresh": ("TCG Mirror", "tcg"),
     "price_fresh": ("TCG Prices", "tcg"),
+    "daily_chain": ("TCG Daily Chain (07:00)", "tcg"),
     "disk": ("Disk Space", "infra"),
     "signup_webhook": ("aern-signup Notifications", "infra"),
     "home_assistant": ("Home Assistant (Pi)", "infra"),
@@ -177,6 +178,55 @@ def check_mirror_fresh():
     if age_h > 26:
         return ("warn", f"{age_h:.1f}h old")
     return ("up", f"{age_h:.1f}h old")
+
+
+def check_daily_chain():
+    """Did the 07:00 TCG chain actually land today?
+
+    Added 2026-09-04, after the canon cutover moved the chain onto Ashaman.
+    check_price_fresh() only warns at >2 DAYS stale, so a single missed 07:00 run
+    reads as "up" and Aern would not hear about it until two mornings later. This
+    check closes that window: prices.date is a DATE, so a successful run leaves
+    MAX(date) == today.
+
+    Timezone-safe by construction: we compare UTC dates and only assert the run
+    "should" have landed after 14:00 UTC (09:00 CDT / 08:00 CST), which is
+    comfortably past the 07:00 local trigger without needing tzdata in the image.
+    """
+    if not os.path.exists(TCG_DB_PATH):
+        return ("unknown", "inventory.db not found")
+    uri = f"file:{TCG_DB_PATH}?mode=ro&immutable=1&nolock=1"
+    con = None
+    try:
+        con = sqlite3.connect(uri, uri=True, timeout=5)
+        row = con.execute("SELECT MAX(date) FROM prices").fetchone()
+    except sqlite3.Error as e:
+        return ("unknown", f"query failed: {e}"[:200])
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except sqlite3.Error:
+                pass
+
+    last = row[0] if row else None
+    if not last:
+        return ("unknown", "no price rows")
+    try:
+        last_d = dt.date.fromisoformat(str(last)[:10])
+    except ValueError:
+        return ("unknown", f"unparseable date: {last}")
+
+    now = dt.datetime.now(dt.timezone.utc)
+    days_behind = (now.date() - last_d).days
+    if days_behind <= 0:
+        return ("up", f"today's 07:00 chain landed (prices dated {last_d})")
+    if now.hour < 14:
+        return ("up", f"chain not due yet today (prices dated {last_d})")
+    if days_behind == 1:
+        return ("warn", f"07:00 chain did NOT land - prices still dated {last_d}; "
+                        f"kick: Start-ScheduledTask -TaskName 'TCG Inventory - Daily Price Fetch'")
+    return ("down", f"07:00 chain has not landed in {days_behind}d - prices dated {last_d}")
 
 
 def check_price_fresh():
@@ -461,6 +511,7 @@ SIMPLE_CHECKS = {
     "trainer_ollama": check_trainer_ollama,
     "mirror_fresh": check_mirror_fresh,
     "price_fresh": check_price_fresh,
+    "daily_chain": check_daily_chain,
     "disk": check_disk,
     "signup_webhook": check_signup_webhook,
     "home_assistant": check_home_assistant,
