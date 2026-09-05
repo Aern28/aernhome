@@ -122,6 +122,24 @@ def check_relay_alive():
     return ("down", f"heartbeat {int(age)}s ago")
 
 
+# Containers deliberately stopped by Aern - NOT failures.  leaves a
+# container  while its restart policy is still , which is
+# exactly the shape check_containers() treats as a crash loop, so a paused service
+# would show red in every briefing and train us to ignore the check.
+# Remove an entry when the service is meant to run again.
+INTENTIONALLY_STOPPED = {
+    # Containers Aern deliberately stopped - NOT failures. "docker stop" leaves a
+    # container "exited" while its restart policy is still "unless-stopped", which
+    # is exactly the shape this check treats as a crash loop, so a paused service
+    # would show red in every briefing and train us to ignore the check.
+    # Remove an entry when the service is meant to run again.
+    #
+    # 2026-09-03: paused to test whether Aern misses the Pokemon restock alerts.
+    # Personal lane, not business. See seat entry "changedetection-pause".
+    "changedetection",
+}
+
+
 def check_containers():
     """Crash-loop detector: any container restarting, or exited despite an
     unless-stopped restart policy (i.e. it should be running but isn't).
@@ -143,7 +161,8 @@ def check_containers():
             restart_policy = ((c.attrs.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name", "")
             if c.status == "restarting":
                 bad.append(f"{c.name}:restarting")
-            elif c.status == "exited" and restart_policy == "unless-stopped":
+            elif (c.status == "exited" and restart_policy == "unless-stopped"
+                  and c.name not in INTENTIONALLY_STOPPED):
                 bad.append(f"{c.name}:exited")
         if bad:
             return ("down", "crash-looping: " + ", ".join(bad))
