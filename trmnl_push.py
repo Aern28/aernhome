@@ -29,6 +29,12 @@ import time
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+def _q15(dt):
+    """Floor to a 15-min boundary: an unchanged screen must render byte-identical,
+    or its filename changes and the e-ink panel repaints for nothing (2026-09-03)."""
+    return dt.replace(minute=dt.minute - dt.minute % 15, second=0, microsecond=0)
+
+
 CT = ZoneInfo("America/Chicago")
 BASE = os.environ.get("NEXUS_BASE", "http://127.0.0.1:5555")
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
@@ -77,7 +83,7 @@ def build_dashboard():
         idx = (now.hour * 4 + now.minute // 15) % 3
         face = ["[^_^]", "[o_o]", "[-_-]"][idx]
         label = ["WORKING", "WATCHING", "RESTING"][idx]
-    upd = now.strftime("%I:%M %p").lstrip("0")
+    upd = _q15(now).strftime("%I:%M %p").lstrip("0")
     g = lambda k, f, d=0: ((stats.get(k) or {}).get(f)) if isinstance(stats.get(k), dict) else d
     mv = {
         "svc": svc,
@@ -120,7 +126,7 @@ def build_restock():
                      "more": max(0, len(names) - 20)})
     now = datetime.datetime.now(CT)
     return {"merge_variables": {"cats": cats, "count": d.get("count", 0),
-                                "upd": now.strftime("%a %I:%M %p").replace(" 0", " "),
+                                "upd": _q15(now).strftime("%a %I:%M %p").replace(" 0", " "),
                                 "empty": d.get("count", 0) == 0}}
 
 
