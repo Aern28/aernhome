@@ -317,7 +317,17 @@ def probe_tcgplayer_and_pirateship():
                         time.sleep(20)
             if last_exc is not None:
                 reason = f"{type(last_exc).__name__}: {str(last_exc).splitlines()[0]}"[:160]
-                unknown = ("unknown", f"chrome session down after 2 attempts ({reason})")
+                # Hypothesis under test (9/05): the failures line up with the console
+                # being LOCKED (06:30 / 08:10 fail; 19:45 after Aern remoted in, pass).
+                # LogonUI.exe running == lock screen up. Record it next to the error.
+                try:
+                    import subprocess
+                    tl = subprocess.run(["tasklist", "/FI", "IMAGENAME eq LogonUI.exe", "/NH"],
+                                        capture_output=True, text=True, timeout=10).stdout
+                    locked = "yes" if "LogonUI.exe" in tl else "no"
+                except Exception:
+                    locked = "?"
+                unknown = ("unknown", f"chrome session down after 2 attempts ({reason}); screen locked: {locked}")
                 return unknown, unknown
 
             try:
