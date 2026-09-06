@@ -300,10 +300,24 @@ def probe_tcgplayer_and_pirateship():
 
     try:
         with sync_playwright() as p:
-            try:
-                browser, context = _connect_cdp(p)
-            except Exception:
-                unknown = ("unknown", "chrome session down")
+            # 9/05: the 06:30 run failed as "chrome session down" while the same
+            # connect succeeded by hand at 19:45 and the host /json/version answered
+            # all day. The 08:10 'TCG Delivery Check' saw the same shape (websocket
+            # connected, then a 180 s protocol timeout). Record the real exception
+            # and retry once after a pause so the morning failure explains itself.
+            last_exc = None
+            for attempt in (1, 2):
+                try:
+                    browser, context = _connect_cdp(p)
+                    last_exc = None
+                    break
+                except Exception as e:
+                    last_exc = e
+                    if attempt == 1:
+                        time.sleep(20)
+            if last_exc is not None:
+                reason = f"{type(last_exc).__name__}: {str(last_exc).splitlines()[0]}"[:160]
+                unknown = ("unknown", f"chrome session down after 2 attempts ({reason})")
                 return unknown, unknown
 
             try:
