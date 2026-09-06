@@ -109,13 +109,15 @@ def build_season():
 
 def build_restock():
     """/api/restock -> compact merge vars: cats[{k,l,n,items[]}], count, upd, stamp.
-    Keeps under TRMNL's 2 kB webhook cap by trimming to 12 items per category."""
+    Keeps under TRMNL's 2 kB webhook cap by trimming to 20 items per category
+    (raised from 12 on 2026-09-05: the markup now flows House across two columns;
+    28 short names measure well under 1 kB — recheck if items get wordy)."""
     d = _get("/api/restock")
     cats = []
     for c in d.get("categories", []):
         names = [i["item"] for i in c.get("items", [])]
-        cats.append({"k": c["key"], "l": c["label"], "n": len(names), "items": names[:12],
-                     "more": max(0, len(names) - 12)})
+        cats.append({"k": c["key"], "l": c["label"], "n": len(names), "items": names[:20],
+                     "more": max(0, len(names) - 20)})
     now = datetime.datetime.now(CT)
     return {"merge_variables": {"cats": cats, "count": d.get("count", 0),
                                 "upd": now.strftime("%a %I:%M %p").replace(" 0", " "),
