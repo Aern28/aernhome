@@ -47,10 +47,17 @@ STAMP_PATH = os.path.join(DATA_DIR, "keep_sync_last.json")
 EMAIL = os.environ.get("KEEP_EMAIL", "mcarroll203@gmail.com")
 LIST_ID = os.environ.get("KEEP_LIST_ID", "1567028679377.1771595269")  # "Grocery List" — the Assistant shopping list
 ADDED_BY = "keep"
-CATEGORIES = ("house", "rowan", "jace", "business")
-# Word-boundary keyword -> category. Deliberately narrow: an ambiguous item goes to
-# house, which is where he looks first anyway. Extend from real misses, not guesses.
+CATEGORIES = ("house", "grocery", "rowan", "jace", "business")
+# Word-boundary keyword -> category. Deliberately narrow; extend from real misses,
+# not guesses. Since the 2026-09-05 grocery split, an ambiguous KEEP item defaults
+# to GROCERY (this list is the grocery voice inbox — "add cheese bread" is food
+# until proven otherwise); the 'house' keywords catch the durable staples.
 KEYWORDS = {
+    "house": ("tp", "toilet paper", "paper towel", "paper towels", "toothpaste", "toothbrush",
+              "shaver", "razor", "devacurl", "shampoo", "conditioner", "deodorant", "soap",
+              "detergent", "laundry", "dish soap", "dishwasher", "trash bags", "garbage bags",
+              "batteries", "light bulb", "lightbulb", "cleaner", "sponges", "paper plates",
+              "napkins", "foil", "ziploc"),
     "rowan": ("litter", "kitten", "cat food", "cat treats", "nexgard"),
     "jace": ("dog food", "dog treats", "ollie", "jerky", "puppy", "heartgard", "simparica"),
     "business": ("sleeves", "toploader", "toploaders", "shields", "packing slip", "packing slips",
@@ -64,7 +71,8 @@ def _norm(text):
 
 def categorize(text):
     """('item text', category). Honors the API's trailing 'to <cat>' / 'for <cat>'
-    form first (a voice add can say it), then the keyword map, else house."""
+    form first (a voice add can say it), then the keyword map, else GROCERY
+    (Keep is the grocery voice inbox; 2026-09-05 split)."""
     t = (text or "").strip()
     for c in CATEGORIES:
         for tail in (" to " + c, " for " + c, " (" + c + ")"):
@@ -74,10 +82,10 @@ def categorize(text):
     for cat, words in KEYWORDS.items():
         if any((" " + w + " ") in low or low.startswith(" " + w) for w in words):
             return t, cat
-    return t, "house"
+    return t, "grocery"
 
 
-LABELS = {"house": "House", "rowan": "Rowan", "jace": "Jace", "business": "Business"}
+LABELS = {"house": "House", "grocery": "Grocery", "rowan": "Rowan", "jace": "Jace", "business": "Business"}
 
 
 def keep_text_for(row, n_open):

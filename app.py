@@ -1687,7 +1687,7 @@ def api_nexus_maint_done(mid):
 
 
 # ── Restock ───────────────────────────────────────────────────────────────────
-RESTOCK_LABELS = (("house", "House"), ("rowan", "Rowan"), ("jace", "Jace"), ("business", "Business"))
+RESTOCK_LABELS = (("grocery", "Grocery"), ("house", "House"), ("rowan", "Rowan"), ("jace", "Jace"), ("business", "Business"))
 
 
 def _restock_payload():

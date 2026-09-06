@@ -236,7 +236,9 @@ def complete_maintenance(maint_id):
 
 
 # ── Restock (household restock list; feeds /nexus/house + the TRMNL Restock plugin) ──
-RESTOCK_CATEGORIES = ("house", "rowan", "jace", "business")
+# 'grocery' split out of 'house' 2026-09-05: grocery = food/trip items (the Keep voice
+# inbox defaults here), house = durable staples restocked when low.
+RESTOCK_CATEGORIES = ("house", "grocery", "rowan", "jace", "business")
 
 
 def add_restock(item, category="house", added_by=None):
