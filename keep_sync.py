@@ -12,6 +12,10 @@ milk to my shopping list" — so this joins the two: whatever lands in either
 place shows up in both, and checking/clearing on one side clears the other.
 The Mealie "Household Restock" list was retired the same day ("kill it").
 
+Scope (2026-09-05): only SYNC_CATEGORIES (grocery, house) mirror to Keep. Rowan/
+Jace/Business rows are Nexus/TRMNL-only; their Keep lines get DELETED (never
+ticked) and a Keep add that routes out of scope lands in Nexus then leaves Keep.
+
 Rules (per item, decided by which SIDE changed since the last run — no clocks):
     Keep unchecked, not yet linked  -> match an open Nexus row by name, else add
                                        (category from KEYWORDS / trailing "to <cat>")
@@ -48,6 +52,11 @@ EMAIL = os.environ.get("KEEP_EMAIL", "mcarroll203@gmail.com")
 LIST_ID = os.environ.get("KEEP_LIST_ID", "1567028679377.1771595269")  # "Grocery List" — the Assistant shopping list
 ADDED_BY = "keep"
 CATEGORIES = ("house", "grocery", "rowan", "jace", "business")
+# Only these categories mirror to the phone (Aern 2026-09-05: "keep = grocery + house").
+# Rowan/Jace/Business rows live on Nexus + the TRMNL only; a Keep line that routes to an
+# out-of-scope category is deleted from Keep after landing in Nexus (deleted, NOT ticked —
+# a tick means "got it" and would clear the Nexus row).
+SYNC_CATEGORIES = ("grocery", "house")
 # Word-boundary keyword -> category. Deliberately narrow; extend from real misses,
 # not guesses. Since the 2026-09-05 grocery split, an ambiguous KEEP item defaults
 # to GROCERY (this list is the grocery voice inbox — "add cheese bread" is food
@@ -180,6 +189,16 @@ class KeepList:
                 self._dirty = True
                 return
 
+    def delete(self, keep_id):
+        """Remove a line from the Keep list (scope cleanup — never a 'got it')."""
+        if self.dry_run:
+            return
+        for it in self.node.items:
+            if it.id == keep_id:
+                it.delete()
+                self._dirty = True
+                return
+
     def commit(self):
         if self._dirty and not self.dry_run:
             self.keep.sync()
@@ -223,7 +242,7 @@ def reconcile(nexus, keep, state, log):
     n_open = nexus.open_items()                       # id -> row
     k_items = keep.items()                            # keep_id -> item
     counts = {"keep_to_nexus": 0, "nexus_to_keep": 0, "cleared_nexus": 0, "ticked_keep": 0,
-              "reopened": 0, "matched": 0, "renamed": 0}
+              "reopened": 0, "matched": 0, "renamed": 0, "descoped": 0}
     by_nexus = {v["nexus_id"]: k for k, v in links.items() if v.get("nexus_id") is not None}
     n_open_by_name = {}
     for row in n_open.values():
@@ -243,6 +262,15 @@ def reconcile(nexus, keep, state, log):
                 nexus.done(nid)
                 counts["cleared_nexus"] += 1
             del links[keep_id]
+            continue
+        if n_is_open and n_open[nid]["category"] not in SYNC_CATEGORIES:
+            # out-of-scope category (pets/business): remove the phone line, keep the
+            # Nexus row open — even if he ticked it, a tick on a descoped line is not
+            # trusted as "got it" (the sweep and the tick race; Nexus stays canonical)
+            log(f"descoped from Keep (category {n_open[nid]['category']}): {k['text']!r}")
+            keep.delete(keep_id)
+            del links[keep_id]
+            counts["descoped"] += 1
             continue
         nexus_changed = n_is_open != bool(link.get("nexus_open"))
         keep_changed = k["checked"] != bool(link.get("keep_checked"))
@@ -292,11 +320,19 @@ def reconcile(nexus, keep, state, log):
         if row and row["id"] not in by_nexus:
             log(f"linked by name: {text!r} = Nexus #{row['id']}")
             nid = row["id"]
+            cat = row["category"]
             counts["matched"] += 1
         else:
             log(f"Keep -> Nexus: {text!r} -> {cat}")
             nid = nexus.add(text, cat)
             counts["keep_to_nexus"] += 1
+        if cat not in SYNC_CATEGORIES:
+            # routed to a phone-invisible category: it lives on Nexus now, so the
+            # Keep line comes off (deleted, not ticked) and no link is kept
+            log(f"descoped from Keep (category {cat}): {k['text']!r}")
+            keep.delete(keep_id)
+            counts["descoped"] += 1
+            continue
         want = keep_text_for({"item": text, "category": cat}, n_open)
         if _norm(want) != _norm(k["text"]):
             log(f"renamed in Keep: {k['text']!r} -> {want!r}")
@@ -308,8 +344,9 @@ def reconcile(nexus, keep, state, log):
             by_nexus[nid] = keep_id
 
     # 3) open Nexus rows nobody in Keep knows about (Aernbot / Nexus adds) -> into Keep
+    #    (grocery/house only — pets and business never mirror to the phone)
     for nid, row in n_open.items():
-        if nid in by_nexus:
+        if nid in by_nexus or row["category"] not in SYNC_CATEGORIES:
             continue
         text = keep_text_for(row, n_open)
         log(f"Nexus -> Keep: {text!r}")
@@ -356,7 +393,8 @@ def main(argv):
         changes = sum(c.values())
         print(f"keep_sync ok{' (dry-run)' if dry_run else ''}: {changes} change(s) "
               f"[keep->nexus {c['keep_to_nexus']}, nexus->keep {c['nexus_to_keep']}, cleared {c['cleared_nexus']}, "
-              f"ticked {c['ticked_keep']}, reopened {c['reopened']}, matched {c['matched']}, renamed {c.get('renamed', 0)}] · {stamp['open']} open")
+              f"ticked {c['ticked_keep']}, reopened {c['reopened']}, matched {c['matched']}, renamed {c.get('renamed', 0)}, "
+              f"descoped {c.get('descoped', 0)}] · {stamp['open']} open")
         return 0
     print(f"keep_sync FAILED: {stamp['error']}")
     return 1
