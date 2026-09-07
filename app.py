@@ -1144,6 +1144,8 @@ NEXUS_SECTIONS = [
     ("/nexus/travel",     "Travel",      "✈️", "Trip hubs — docs & itineraries"),
     ("/nexus/tcg",        "TCG",         "🃏", "Business reminders & ops"),
     ("/nexus/inventory",  "Inventory",   "🗃️", "Live listings — visual confirm"),
+    ("/nexus/wants",      "Want Board",  "🎴", "Open wants · prices · JP column · links"),
+    ("/nexus/vintage",    "Vintage",     "⭐", "EX-era grails + reverse-holo entry points"),
     ("/nexus/signals",    "Signals",     "📊", "Daily movers · egman delta · riftbound"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
     ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
@@ -1271,6 +1273,22 @@ def nexus_inventory():
 # _COVER_ROOTS / _MEDIA_COVER_ROOTS. card_images/ under DATA_DIR is the only
 # root; files are <tcgplayer_product_id>.jpg materialized by tcg_inventory_publish.py.
 _CARD_IMAGE_ROOTS = [os.path.normpath(os.path.join(DATA_DIR, "card_images"))]
+
+
+@app.route("/nexus/wants")
+@app.route("/nexus/vintage")
+def nexus_boards():
+    """Static boards rendered on the Ashaman HOST by C:\\tcg-inventory\\boards.py (canon's only writer) after each Want Prices /
+    Vintage Watch run; the container just serves the file off the read-only canon mount. Tailscale-only like every nexus page."""
+    if not _is_nexus_allowed():
+        abort(404)
+    name = request.path.rsplit("/", 1)[-1]
+    board_dir = os.path.join(os.path.dirname(os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")), "boards")
+    if not os.path.isfile(os.path.join(board_dir, f"{name}.html")):
+        return make_response("<p style='font-family:sans-serif;padding:2em'>Board not rendered yet - the next Want Prices / Vintage Watch run writes it.</p>", 503)
+    resp = make_response(send_from_directory(board_dir, f"{name}.html"))
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 @app.route("/nexus/card_image/<int:pid>")
@@ -1769,6 +1787,38 @@ def api_nexus_todoist_close(task_id):
     _nexus_json()
     import nexus_sources as ns
     return jsonify({"ok": ns.todoist_close(task_id)})
+
+
+@app.route("/api/tcg/watch-terms")
+def api_tcg_watch_terms():
+    """Card names the fleet is watching, from canon: open singles_positions, confirmed
+    want_list rows (2026-09-06 PC/want build) and the top meta cards. BuzzWatch on Phoenix
+    reads THIS instead of its stale orphan inventory.db (canon moved to Ashaman 9/04 and
+    live SQLite over Tailscale is a hard no). Reads the hourly inventory-ro.db snapshot
+    when present so it never touches the live file."""
+    if not _is_nexus_allowed():
+        abort(404)
+    db = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
+    ro = os.path.join(os.path.dirname(db), "inventory-ro.db")
+    if os.path.exists(ro):
+        db = ro
+    out = {"ok": True, "source": os.path.basename(db), "positions": [], "wants": [], "meta": []}
+    try:
+        c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=10)
+        out["positions"] = [{"name": r[0], "game": r[1]} for r in c.execute("SELECT card_name, game FROM singles_positions WHERE status='open'") if r[0]]
+        # priority 1 first, newest first; game from the resolved product (None = free-text / any game).
+        # Grails (priority 0) and the serials lane are OFF the daily scan by Aern's rule (9/07) - weekly comps instead.
+        has_lane = any(r[1] == "lane" for r in c.execute("PRAGMA table_info(want_list)"))
+        lane_sql = " AND COALESCE(w.lane,'want')='want'" if has_lane else ""   # snapshot may predate the column
+        out["wants"] = [{"name": r[0] or r[1], "game": r[2], "priority": r[3]} for r in c.execute(
+            "SELECT w.card_name, w.raw_text, p.category, w.priority FROM want_list w LEFT JOIN products p ON p.id = w.products_id "
+            "WHERE w.status='confirmed' AND w.priority >= 1" + lane_sql + " ORDER BY w.priority, w.id DESC") if (r[0] or r[1])]
+        out["meta"] = [r[0] for r in c.execute("SELECT card_name FROM meta_card_stats ORDER BY decks_in DESC LIMIT 15") if r[0]]
+        c.close()
+    except Exception as e:
+        out["ok"] = False
+        out["error"] = str(e)[:200]
+    return jsonify(out)
 
 
 @app.route("/api/thread-note")

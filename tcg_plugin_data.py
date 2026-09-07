@@ -12,7 +12,7 @@ stderr = diagnostic counts (visible in n8n execution log, ignored by template).
 
 Override DB locations with env vars:
     TCG_DB_PATH       (default C:/tcg-inventory/inventory.db)
-    AERNBOT_DB_PATH   (default C:/tcg-inventory/aernbot.db)
+    AERNBOT_DB_PATH   (default C:/tcg-inventory/aernbot/aernbot.db)
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 INVENTORY_DB = Path(os.environ.get("TCG_DB_PATH", r"C:/tcg-inventory/inventory.db"))
-AERNBOT_DB = Path(os.environ.get("AERNBOT_DB_PATH", r"C:/tcg-inventory/aernbot.db"))
+AERNBOT_DB = Path(os.environ.get("AERNBOT_DB_PATH", r"C:/tcg-inventory/aernbot/aernbot.db"))
 # Canonical sales store (build-queue #3): same dir as inventory.db, separate file.
 SALES_DB = Path(os.environ.get("TCG_SALES_DB_PATH", str(INVENTORY_DB.parent / "tcg-sales.db")))
 TZ = ZoneInfo("America/Chicago")

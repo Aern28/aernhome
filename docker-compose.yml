@@ -64,6 +64,9 @@ services:
       # TCG business widget reads inventory.db; it's mounted ro at /tcg (see volumes),
       # so point the connector there (default is a Windows path that doesn't exist here).
       - TCG_DB_PATH=/tcg/inventory.db
+      # 2026-09-06: container-owned files moved to C:\tcg-inventory\aernbot (canon dir is single-writer now)
+      - AERNBOT_DB_PATH=/tcg/aernbot/aernbot.db
+      - FAMILY_BOARD_PATH=/tcg/aernbot/family-board.json
       # Fleet sentinel → Signal alerting (numbers live in .env; empty = alerts log-and-skip)
       - SIGNAL_HTTP_URL=http://signal-cli:8080
       - SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT:-}

@@ -83,6 +83,7 @@ CHECK_META = {
     "keep_sync": ("Keep ⇄ Restock sync", "infra"),
     "byos_device": ("TRMNL (BYOS)", "infra"),
     "byos_deps": ("BYOS/Keep deps", "infra"),
+    "canon_guard": ("Canon Guard (single-writer)", "tcg"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -467,6 +468,35 @@ def check_keep_sync():
                   f"{sum(c.values())} change(s) last run")
 
 
+CANON_GUARD_STAMP = os.path.join(os.path.dirname(TCG_DB_PATH), "canon_guard.json")
+CANON_GUARD_STALE_H = 2.5   # Ashaman task "Canon Guard" runs hourly
+
+
+def check_canon_guard():
+    """Dead-man's switch for the canon single-writer invariant (2026-09-06). Ashaman's hourly
+    'Canon Guard' task (C:/tcg-inventory/canon_guard.py) asserts inventory.db quick_check=ok,
+    journal_mode=delete and that NO container mounts C:/tcg-inventory read-write (SQLite locks
+    do not cross the Docker Desktop bind mount - proven 9/06), refreshes inventory-ro.db for
+    container readers, and stamps canon_guard.json. Stale stamp = the task died; FAIL = the
+    invariant broke (the task also files a to_aern queue item)."""
+    try:
+        age_h = (time.time() - os.path.getmtime(CANON_GUARD_STAMP)) / 3600
+        with open(CANON_GUARD_STAMP, "r", encoding="utf-8") as f:
+            st = json.load(f)
+    except OSError:
+        return ("unknown", "no stamp yet - canon_guard.py has not run")
+    except json.JSONDecodeError as e:
+        return ("unknown", f"stamp unreadable: {e}"[:200])
+    if age_h > CANON_GUARD_STALE_H:
+        return ("warn", f"last guard run {age_h:.1f}h ago (host task 'Canon Guard' stale)")
+    if st.get("status") != "ok":
+        return ("down", ("INVARIANT BROKEN: " + "; ".join(st.get("findings") or ["?"]))[:200])
+    snap = st.get("snapshot") or {}
+    return ("up", f"journal={st.get('journal_mode')} \u00b7 quick_check {st.get('quick_check')} \u00b7 "
+                  f"{len(st.get('rw_mounts') or [])} rw canon mount(s) \u00b7 "
+                  f"snapshot {_to_central_str(snap.get('at')) or '?'}")
+
+
 def check_byos_device():
     """The TRMNL on the wall, once it points at Nexus (byos.py). Reads the device
     registry: last poll time, battery voltage, what's on screen, last render error."""
@@ -535,6 +565,7 @@ SIMPLE_CHECKS = {
     "signup_webhook": check_signup_webhook,
     "home_assistant": check_home_assistant,
     "keep_sync": check_keep_sync,
+    "canon_guard": check_canon_guard,
     "byos_device": check_byos_device,
     "byos_deps": check_byos_deps,
 }

@@ -24,15 +24,15 @@
       <div style="height:22px;"></div>
       <div style="height:52px; display:flex; align-items:center; border-bottom:2px solid #000;">
         <span style="font-size:13px; font-weight:700; width:38px;">GAL</span>
-        <div style="font-size:9px; color:#888; display:flex; flex-direction:column; line-height:1.2;"><span>am</span><span>pm</span></div>
+        <div style="font-size: 12px; color: #555; display:flex; flex-direction:column; line-height:1.2;"><span>am</span><span>pm</span></div>
       </div>
       <div style="height:52px; display:flex; align-items:center; border-bottom:2px solid #000;">
         <span style="font-size:13px; font-weight:700; width:38px;">MATT</span>
-        <div style="font-size:9px; color:#888; display:flex; flex-direction:column; line-height:1.2;"><span>am</span><span>pm</span></div>
+        <div style="font-size: 12px; color: #555; display:flex; flex-direction:column; line-height:1.2;"><span>am</span><span>pm</span></div>
       </div>
       <div style="height:40px; display:flex; align-items:center; border-bottom:2px solid #000;">
         <span style="font-size:13px; font-weight:700; width:38px;">JAINA</span>
-        <div style="font-size:8px; color:#888; display:flex; flex-direction:column; line-height:1.2;"><span>drop</span><span>pick</span></div>
+        <div style="font-size: 12px; color: #555; display:flex; flex-direction:column; line-height:1.2;"><span>drop</span><span>pick</span></div>
       </div>
       <div style="height:48px; display:flex; align-items:center;">
         <span style="font-size:13px; font-weight:700;">MEAL</span>
@@ -44,7 +44,7 @@
 
     <!-- DAY COLUMNS -->
     {% for d in days %}
-    <div style="flex:1; display:flex; flex-direction:column; border-left:1px solid #ddd; padding:0 3px;{% if d.day == today %} background:#000; color:#fff;{% endif %}">
+    <div style="flex:1; display:flex; flex-direction:column; border-left:1px solid #ddd; padding:0 3px;{% if d.day == today %} background:#000; color:#fff; font-weight:600;{% endif %}">
 
       <!-- Day header -->
       <div style="font-size:14px; font-weight:700; text-align:center; height:22px; line-height:22px; border-bottom:2px solid {% if d.day == today %}#555{% else %}#000{% endif %};">
@@ -70,12 +70,12 @@
       </div>
 
       <!-- Meal -->
-      <div style="font-size:11px; text-align:center; height:48px; display:flex; align-items:center; justify-content:center;">
+      <div style="font-size: 12px; text-align:center; height:48px; display:flex; align-items:center; justify-content:center;">
         {% if d.meal != blank %}<div>{{ d.meal }}{% if d.meal_type != blank %}<br><b>[{{ d.meal_type }}]</b>{% endif %}</div>{% endif %}
       </div>
 
       <!-- Notes box -->
-      <div style="font-size:10px; text-align:center; flex:1; display:flex; align-items:flex-start; justify-content:center; padding-top:2px; border-top:1px solid {% if d.day == today %}#444{% else %}#ddd{% endif %}; overflow:hidden;">
+      <div style="font-size: 12px; text-align:center; flex:1; display:flex; align-items:flex-start; justify-content:center; padding-top:2px; border-top:1px solid {% if d.day == today %}#444{% else %}#ddd{% endif %}; overflow:hidden;">
         {% if d.notes != blank %}{{ d.notes }}{% endif %}
       </div>
 
@@ -85,7 +85,7 @@
   </div>
 
   <!-- FOOTER -->
-  <div style="display:flex; justify-content:flex-end; font-size:9px; color:#888; margin-top:4px;">
+  <div style="display:flex; justify-content:flex-end; font-size: 12px; color: #555; margin-top:4px;">
     <span>Updated {{ updated }}</span>
 
   </div>

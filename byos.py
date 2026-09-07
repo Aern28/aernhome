@@ -36,7 +36,7 @@ firmware; both well under the OG's 90 kB no-PSRAM ceiling.
 
 Renderer: headless Chrome over raw CDP (websocket-client) against the existing
 `playwright-chrome-relay` sockpuppetbrowser on relay-net — no browser in this
-image. Screenshot -> Pillow -> Floyd-Steinberg 1-bit. If Chrome is unreachable the
+image. Screenshot -> Pillow -> threshold 1-bit (NOT dithered - see to_1bit). If Chrome is unreachable the
 device still gets a Pillow-drawn text screen saying so, never a stale/blank wall.
 
 Refresh policy (server-set, the device obeys): on battery idle 15 min / pinned 2 min;
@@ -57,6 +57,12 @@ import tempfile
 import threading
 import time
 from zoneinfo import ZoneInfo
+
+def _q15(dt):
+    """Floor to a 15-min boundary: an unchanged screen must render byte-identical,
+    or its filename changes and the e-ink panel repaints for nothing (2026-09-03)."""
+    return dt.replace(minute=dt.minute - dt.minute % 15, second=0, microsecond=0)
+
 
 from flask import Blueprint, Flask, Response, abort, jsonify, request, send_from_directory
 
@@ -189,7 +195,7 @@ def data_tcg():
 def data_gwl():
     days = (GWL_DATE - datetime.date.today()).days
     return {"days": days, "weeks_part": days // 7, "days_part": days % 7,
-            "updated": datetime.datetime.now(CT).strftime("%b %d %I:%M %p").replace(" 0", " ")}
+            "updated": _q15(datetime.datetime.now(CT)).strftime("%b %d %I:%M %p").replace(" 0", " ")}
 
 
 SCREENS = {
@@ -208,7 +214,7 @@ def screen_html(name, text=None):
     env = _liquid_env()
     if name == "text":
         tpl = env.get_template("text.html")
-        return SHELL % tpl.render(msg=text or "", updated=datetime.datetime.now(CT).strftime("%I:%M %p").lstrip("0"))
+        return SHELL % tpl.render(msg=text or "", updated=_q15(datetime.datetime.now(CT)).strftime("%I:%M %p").lstrip("0"))
     if name not in SCREENS:
         raise KeyError(name)
     tpl_name, fn, _ = SCREENS[name]
@@ -273,13 +279,23 @@ def screenshot_url(url, settle_ms=1200, timeout_s=25):
         ws.close()
 
 
+BW_THRESHOLD = int(os.environ.get("BYOS_BW_THRESHOLD", "176"))
+
+
 def to_1bit(png_bytes, fmt="png"):
-    """800x480 1-bit, Floyd-Steinberg dithered. PNG for FW >= 1.5.2, BMP otherwise."""
+    """800x480 1-bit by THRESHOLD (not dithering). PNG for FW >= 1.5.2, BMP otherwise.
+
+    Pillow's convert("1") applies Floyd-Steinberg, which is right for photos and wrong
+    for text: it scatters antialiased glyph edges into noise, so small type came out
+    speckled and broken on the panel (seen 2026-09-03 on the weather screen - "Rain 30%"
+    and "Drizzle" had strokes dropping out). These screens are text and line art, so a
+    hard threshold gives solid glyphs. 176 keeps thin antialiased strokes black rather
+    than thinning them; tune with BYOS_BW_THRESHOLD if a future screen needs it."""
     from PIL import Image
     im = Image.open(io.BytesIO(png_bytes)).convert("L")
     if im.size != (W, H):
         im = im.resize((W, H))
-    bw = im.convert("1")
+    bw = im.point(lambda v: 255 if v > BW_THRESHOLD else 0, mode="1")
     buf = io.BytesIO()
     bw.save(buf, format="PNG" if fmt == "png" else "BMP")
     return buf.getvalue()
