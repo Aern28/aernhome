@@ -6,11 +6,12 @@
 """Aernbot's eye on the BUSINESS mailbox.
 
 goobuegaming@gmail.com is a separate Google account the Claude Gmail connector cannot
-read, and Aern explicitly does not want the whole mailbox forwarded. So this reads ONLY
-mail matching the watch list below, over IMAP, and files a one-line item to the Nexus
-`to_aern` queue - which already mirrors to Todoist and shows on /nexus/aern and in the
-morning briefing. Order confirmations, marketing and everything else are never read,
-never copied, never leave the mailbox.
+read. Until 2026-09-14 this filed header-only one-liners for a sender watch list; on
+2026-09-14 Aern granted full read of the mailbox ("check QID") so it now files EVERY
+inbound mail of the last 14 days (minus SKIP noise senders and his own sent mail), each
+with a ~600-char body excerpt, to the Nexus `to_aern` queue - which already mirrors to
+Todoist and shows on /nexus/aern and in the morning briefing. The task runs QID (every 6h).
+The WATCH list is kept only to label known senders.
 
 READ-ONLY by construction: opens the mailbox with readonly=True, so nothing is marked
 seen, moved, or deleted, and it never sends. Seen message-ids are remembered in
@@ -24,6 +25,7 @@ import email
 import imaplib
 import json
 import os
+import re
 import sys
 import urllib.request
 from email.header import decode_header, make_header
@@ -79,6 +81,41 @@ def _hdr(msg, name):
         return raw
 
 
+SKIP = [                     # noise senders - never filed
+    "facebookmail.com",
+    "mail.instagram.com",
+]
+EXCERPT_CHARS = 600
+
+
+def _excerpt(msg):
+    """First EXCERPT_CHARS of the message as plain text (html stripped, quoted replies cut)."""
+    import html as _html
+    parts = []
+    for p in msg.walk():
+        ct = p.get_content_type()
+        if ct not in ("text/plain", "text/html"):
+            continue
+        try:
+            body = p.get_payload(decode=True).decode(p.get_content_charset() or "utf-8", "replace")
+        except Exception:
+            continue
+        if ct == "text/html":
+            body = re.sub(r"<(script|style).*?</\1>", "", body, flags=re.S | re.I)
+            body = re.sub(r"<br\s*/?>|</(p|div|tr|li|h[1-6]|table)>", "\n", body, flags=re.I)
+            body = re.sub(r"<[^>]+>", "", body)
+            body = _html.unescape(body)
+        body = re.sub(r"[ \t\xa0|]+", " ", body)
+        body = re.sub(r"\n\s*\n+", "\n", body).strip()
+        # cut quoted history ("On ... wrote:") so a reply excerpt is the reply, not the thread
+        body = re.split(r"\nOn .{5,80} wrote:", body, maxsplit=1)[0]
+        parts.append(body)
+    if not parts:
+        return "(no text body)"
+    t = max(parts, key=len)
+    return t[:EXCERPT_CHARS] + (" ..." if len(t) > EXCERPT_CHARS else "")
+
+
 def _queue(text, source):
     body = json.dumps({"dir": "to_aern", "text": text, "source": source,
                        "created_by": "aernbot-bizmail", "effort": "read",
@@ -101,9 +138,10 @@ def main():
         pw = f.read().strip()
 
     seen = set(_load(STATE, {"ids": []}).get("ids", []))
-    # Gmail server-side search: only the watch-list senders, last 14 days.
-    froms = " OR ".join("from:" + d for d, _ in WATCH)
-    query = f"({froms}) newer_than:14d"
+    # Gmail server-side search: EVERY inbound mail of the last 14 days (Aern granted full read
+    # of this mailbox on 2026-09-14: "check QID"), minus the SKIP senders and his own sent mail.
+    skips = " ".join("-from:" + d for d in SKIP)
+    query = f"newer_than:14d -from:{ACCOUNT} {skips}".strip()
 
     filed, matched = 0, 0
     try:
@@ -134,11 +172,18 @@ def main():
             sender = _hdr(msg, "From")
             subject = _hdr(msg, "Subject") or "(no subject)"
             date = _hdr(msg, "Date")
-            who = next((label for d, label in WATCH if d in sender.lower()), "watched sender")
-            text = (f"BUSINESS MAILBOX ({ACCOUNT}) - reply from {who}. "
-                    f"From: {sender} | Subject: {subject} | {date}. "
-                    f"Read it in the goobuegaming inbox - this watcher reads headers only, "
-                    f"never the body, and never marks anything read.")
+            who = next((label for d, label in WATCH if d in sender.lower()), "unlisted sender")
+            # Body excerpt for NEW mail only (one extra PEEK fetch; still never marks read).
+            excerpt = ""
+            try:
+                typ2, raw2 = M.fetch(mid, "(BODY.PEEK[])")
+                if typ2 == "OK" and raw2 and isinstance(raw2[0], tuple):
+                    excerpt = _excerpt(email.message_from_bytes(raw2[0][1]))
+            except Exception as e:
+                excerpt = f"(body fetch failed: {e})"
+            text = (f"BUSINESS MAILBOX ({ACCOUNT}) - {who}. "
+                    f"From: {sender} | Subject: {subject} | {date}.\n"
+                    f"{excerpt}")
             try:
                 _queue(text, f"biz_mail_watch.py / {ACCOUNT}")
                 seen.add(gid)
