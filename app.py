@@ -453,6 +453,18 @@ def init_nexus_db():
         )
     """)
 
+    # Living National Dex (2026-09-14) — one row per species Aern has secured. The
+    # reference data itself (names, gens, game availability) is static JSON under
+    # static/dex/; only ownership + a free-text note live here.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS dex_owned (
+            national INTEGER PRIMARY KEY,
+            owned INTEGER NOT NULL DEFAULT 0,
+            note TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Goals — personal/work/house/tcg, with progress + a link to the backing doc.
     cur.execute("""
         CREATE TABLE IF NOT EXISTS goals (
@@ -1138,6 +1150,7 @@ NEXUS_SECTIONS = [
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
     ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
     ("/nexus/games",      "Games",       "🎮", "Backlog & playing"),
+    ("/nexus/dex",        "Dex",         "🔴", "Living National Dex — 1,025 tracked"),
     ("/nexus/notes",      "Notes",       "📝", "Pinned scratchpad"),
     ("/nexus/docs",       "Docs",        "📄", "Reference & playbooks"),
     ("/nexus/house",      "House",       "🏠", "Maintenance & workflows"),
@@ -1443,6 +1456,36 @@ def nexus_games():
     cid, _ = ns._get_igdb_creds()
     return render_template("nexus_games.html", sections=NEXUS_SECTIONS, active="/nexus/games",
                            shelf=shelf, igdb=bool(cid))
+
+
+@app.route("/nexus/dex")
+def nexus_dex():
+    """Living National Dex tracker (2026-09-14). Reference rows come from
+    static/dex/dex_reference.json (PokeAPI CSV dumps, 1,025 species); ownership
+    lives in nexus.db dex_owned. Render is client-side from the JSON."""
+    if not _is_nexus_allowed():
+        abort(404)
+    owned = ns_writes.dex_owned_map()
+    have = sum(1 for v in owned.values() if v.get("owned"))
+    return render_template("nexus_dex.html", sections=NEXUS_SECTIONS, active="/nexus/dex",
+                           owned=owned, have=have, total=1025)
+
+
+@app.route("/api/nexus/dex")
+def api_nexus_dex():
+    if not _is_nexus_allowed():
+        abort(404)
+    return jsonify({"ok": True, "owned": ns_writes.dex_owned_map()})
+
+
+@app.route("/api/nexus/dex/<int:national>", methods=["POST"])
+def api_nexus_dex_set(national):
+    body = _nexus_json()
+    try:
+        ns_writes.set_dex_owned(national, body.get("owned"), body.get("note"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
 
 
 @app.route("/nexus/notes")

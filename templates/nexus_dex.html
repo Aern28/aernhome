@@ -1,0 +1,154 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Dex{% endblock %}
+
+{# Living National Dex (2026-09-14). Reference rows are static JSON (PokeAPI CSV dumps); ownership is nexus.db dex_owned. #}
+
+{% block nexus_content %}
+<section class="mb-4">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 class="text-lg font-semibold text-white">Living National Dex</h2>
+            <div class="text-sm text-gray-300"><span id="dx-have" class="text-white font-semibold">{{ have }}</span> / {{ total }} secured
+                · <span id="dx-need" class="text-amber-300">{{ total - have }}</span> to go</div>
+        </div>
+        <div class="w-full h-2 bg-dark-bg rounded mt-2 overflow-hidden"><div id="dx-bar" class="h-2 bg-emerald-500" style="width:{{ (have * 100 / total)|round(1) }}%"></div></div>
+        <div id="dx-gens" class="grid grid-cols-3 sm:grid-cols-9 gap-2 mt-3 text-[11px] text-gray-300"></div>
+    </div>
+</section>
+
+<section class="mb-4">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-3 flex flex-wrap gap-2 items-center">
+        <input id="dx-q" type="search" placeholder="name or #…" autocomplete="off"
+               class="flex-1 min-w-[140px] bg-dark-bg border border-dark-border rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+        <select id="dx-status" class="bg-dark-bg border border-dark-border rounded-md px-2 py-1.5 text-sm text-gray-300">
+            <option value="all">all</option><option value="need" selected>need</option><option value="have">have</option>
+        </select>
+        <select id="dx-gen" class="bg-dark-bg border border-dark-border rounded-md px-2 py-1.5 text-sm text-gray-300">
+            <option value="">every gen</option>
+            {% for g, r in [(1,'Kanto'),(2,'Johto'),(3,'Hoenn'),(4,'Sinnoh'),(5,'Unova'),(6,'Kalos'),(7,'Alola'),(8,'Galar'),(9,'Paldea')] %}
+            <option value="{{ g }}">Gen {{ g }} · {{ r }}</option>
+            {% endfor %}
+        </select>
+        <select id="dx-era" class="bg-dark-bg border border-dark-border rounded-md px-2 py-1.5 text-sm text-gray-300">
+            <option value="">any era</option>
+            <option value="switch">Switch</option><option value="3ds">3DS</option><option value="ds">DS (R4i)</option>
+            <option value="gba">GBA</option><option value="vc">GB/GBC (VC)</option>
+        </select>
+        <select id="dx-game" class="bg-dark-bg border border-dark-border rounded-md px-2 py-1.5 text-sm text-gray-300 max-w-[190px]">
+            <option value="">any game</option>
+        </select>
+        <label class="text-xs text-gray-400 flex items-center gap-1"><input id="dx-lm" type="checkbox" class="accent-blue-500"> legendary/mythical only</label>
+        <button id="dx-copy" class="ml-auto px-3 py-1.5 rounded-md border bg-dark-bg border-dark-border text-gray-300 hover:border-blue-500 text-xs" title="Copy the visible list (number + name) to the clipboard">copy list</button>
+        <span id="dx-count" class="text-xs text-gray-400"></span>
+    </div>
+</section>
+
+<section>
+    <div class="bg-dark-card border border-dark-border rounded-lg overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-[11px] uppercase tracking-wide text-gray-400 border-b border-dark-border">
+                <tr><th class="px-3 py-2 text-left w-10"></th><th class="px-2 py-2 text-right w-14">#</th><th class="px-2 py-2 text-left">name</th>
+                    <th class="px-2 py-2 text-left w-14">gen</th><th class="px-2 py-2 text-left">where</th></tr>
+            </thead>
+            <tbody id="dx-rows"></tbody>
+        </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">"where" = games whose regional dex lists the species (PokeAPI). A species with only older eras listed reaches HOME by transfer (Bank / Transporter / Let's Go). Legendaries and mythicals are marked ★ — most are one-per-save or event-only, check before planning a hunt.</p>
+</section>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script>
+(function () {
+  const OWNED = {{ owned|tojson }};
+  const TOTAL = {{ total }};
+  const ERA = {
+    vc: ['Red','Blue','Green','Yellow','Gold','Silver','Crystal'],
+    gba: ['Ruby','Sapphire','Emerald','FireRed','LeafGreen'],
+    ds: ['Diamond','Pearl','Platinum','HeartGold','SoulSilver','Black','White','Black 2','White 2'],
+    '3ds': ['X','Y','Omega Ruby','Alpha Sapphire','Sun','Moon','Ultra Sun','Ultra Moon'],
+    switch: ["Let’s Go, Pikachu!","Let’s Go, Eevee!",'Sword','Shield','Sword: The Isle of Armor','Shield: The Isle of Armor','Sword: The Crown Tundra','Shield: The Crown Tundra','Brilliant Diamond','Shining Pearl','Legends: Arceus','Scarlet','Violet','Scarlet: The Teal Mask','Violet: The Teal Mask','Scarlet: The Indigo Disk','Violet: The Indigo Disk','Legends: Z-A','Mega Dimension'],
+  };
+  const eraOf = g => Object.keys(ERA).find(k => ERA[k].includes(g)) || 'other';
+  const ERA_LABEL = { switch: 'Switch', '3ds': '3DS', ds: 'DS', gba: 'GBA', vc: 'VC', other: '?' };
+  const SHORT = { "Let’s Go, Pikachu!": 'LGP', "Let’s Go, Eevee!": 'LGE', 'Omega Ruby': 'OR', 'Alpha Sapphire': 'AS', 'Ultra Sun': 'US', 'Ultra Moon': 'UM',
+    'Brilliant Diamond': 'BD', 'Shining Pearl': 'SP', 'Legends: Arceus': 'PLA', 'Legends: Z-A': 'Z-A', 'Mega Dimension': 'MegaDim', 'HeartGold': 'HG', 'SoulSilver': 'SS',
+    'Sword: The Isle of Armor': 'Sw·IoA', 'Shield: The Isle of Armor': 'Sh·IoA', 'Sword: The Crown Tundra': 'Sw·CT', 'Shield: The Crown Tundra': 'Sh·CT',
+    'Scarlet: The Teal Mask': 'S·TM', 'Violet: The Teal Mask': 'V·TM', 'Scarlet: The Indigo Disk': 'S·ID', 'Violet: The Indigo Disk': 'V·ID', 'FireRed': 'FR', 'LeafGreen': 'LG' };
+  let DEX = [];
+  const $ = id => document.getElementById(id);
+  const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h !== undefined) e.innerHTML = h; return e; };
+
+  function haveCount() { return Object.values(OWNED).filter(v => v.owned).length; }
+  function renderHeader() {
+    const have = haveCount();
+    $('dx-have').textContent = have; $('dx-need').textContent = TOTAL - have;
+    $('dx-bar').style.width = (have * 100 / TOTAL).toFixed(1) + '%';
+    const g = $('dx-gens'); g.innerHTML = '';
+    for (let gen = 1; gen <= 9; gen++) {
+      const rows = DEX.filter(d => d.gen === gen); const h = rows.filter(d => OWNED[d.n] && OWNED[d.n].owned).length;
+      const box = el('div', 'bg-dark-bg border border-dark-border rounded p-1.5');
+      box.innerHTML = `<div class="flex justify-between"><span>G${gen}</span><span class="${h === rows.length ? 'text-emerald-300' : 'text-gray-200'}">${h}/${rows.length}</span></div>
+        <div class="h-1 bg-dark-border rounded mt-1"><div class="h-1 bg-emerald-500 rounded" style="width:${rows.length ? (h * 100 / rows.length) : 0}%"></div></div>`;
+      g.appendChild(box);
+    }
+  }
+  function visible() {
+    const q = $('dx-q').value.trim().toLowerCase(), st = $('dx-status').value, gen = $('dx-gen').value, era = $('dx-era').value, game = $('dx-game').value, lm = $('dx-lm').checked;
+    return DEX.filter(d => {
+      const own = !!(OWNED[d.n] && OWNED[d.n].owned);
+      if (st === 'need' && own) return false; if (st === 'have' && !own) return false;
+      if (gen && d.gen !== +gen) return false;
+      if (lm && !(d.legendary || d.mythical)) return false;
+      if (era && !d.games.some(g => eraOf(g) === era)) return false;
+      if (game && !d.games.includes(game)) return false;
+      if (q && !(d.name.toLowerCase().includes(q) || String(d.n) === q.replace(/^#/, ''))) return false;
+      return true;
+    });
+  }
+  function chips(d) {
+    const byEra = {};
+    d.games.forEach(g => { (byEra[eraOf(g)] = byEra[eraOf(g)] || []).push(SHORT[g] || g); });
+    return ['switch', '3ds', 'ds', 'gba', 'vc', 'other'].filter(k => byEra[k]).map(k =>
+      `<span class="inline-block mr-1 mb-0.5 px-1.5 py-0.5 rounded border border-dark-border bg-dark-bg text-[11px] text-gray-300"><span class="text-gray-500 mr-1">${ERA_LABEL[k]}</span>${byEra[k].join(' · ')}</span>`).join('');
+  }
+  function renderRows() {
+    const rows = visible(); const tb = $('dx-rows'); tb.innerHTML = '';
+    $('dx-count').textContent = rows.length + ' shown';
+    const frag = document.createDocumentFragment();
+    rows.forEach(d => {
+      const own = !!(OWNED[d.n] && OWNED[d.n].owned);
+      const tr = el('tr', 'border-b border-dark-border/60 ' + (own ? 'opacity-60' : ''));
+      tr.innerHTML = `<td class="px-3 py-1.5"><input type="checkbox" class="accent-emerald-500 w-4 h-4" data-n="${d.n}" ${own ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-right text-gray-400 font-mono">${String(d.n).padStart(4, '0')}</td>
+        <td class="px-2 py-1.5 text-gray-100">${d.name}${d.legendary || d.mythical ? ' <span class="text-amber-300" title="' + (d.mythical ? 'mythical' : 'legendary') + '">★</span>' : ''}${d.baby ? ' <span class="text-gray-500 text-xs">baby</span>' : ''}</td>
+        <td class="px-2 py-1.5 text-gray-400">${d.gen} <span class="text-gray-600">${d.region.slice(0, 3)}</span></td>
+        <td class="px-2 py-1.5">${chips(d)}</td>`;
+      frag.appendChild(tr);
+    });
+    tb.appendChild(frag);
+  }
+  async function toggle(n, owned, box) {
+    OWNED[n] = Object.assign(OWNED[n] || {}, { owned: owned ? 1 : 0 });
+    renderHeader();
+    try {
+      const r = await fetch('/api/nexus/dex/' + n, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owned: owned ? 1 : 0 }) });
+      if (!r.ok) throw new Error(r.status);
+      box.closest('tr').classList.toggle('opacity-60', owned);
+    } catch (e) { OWNED[n].owned = owned ? 0 : 1; box.checked = !owned; renderHeader(); alert('save failed: ' + e); }
+  }
+  $('dx-rows').addEventListener('change', e => { const b = e.target; if (b && b.dataset.n) toggle(+b.dataset.n, b.checked, b); });
+  ['dx-q', 'dx-status', 'dx-gen', 'dx-era', 'dx-game', 'dx-lm'].forEach(id => $(id).addEventListener('input', renderRows));
+  $('dx-copy').addEventListener('click', () => {
+    const txt = visible().map(d => `#${String(d.n).padStart(4, '0')} ${d.name}`).join('\n');
+    navigator.clipboard.writeText(txt).then(() => { $('dx-count').textContent = 'copied ' + visible().length; });
+  });
+  fetch('/static/dex/dex_reference.json').then(r => r.json()).then(data => {
+    DEX = data;
+    const games = [...new Set(data.flatMap(d => d.games))].sort((a, b) => a.localeCompare(b));
+    const sel = $('dx-game'); games.forEach(g => { const o = el('option'); o.value = g; o.textContent = g; sel.appendChild(o); });
+    renderHeader(); renderRows();
+  });
+})();
+</script>
+{% endblock %}
