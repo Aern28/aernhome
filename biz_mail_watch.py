@@ -9,8 +9,10 @@ goobuegaming@gmail.com is a separate Google account the Claude Gmail connector c
 read. Until 2026-09-14 this filed header-only one-liners for a sender watch list; on
 2026-09-14 Aern granted full read of the mailbox ("check QID") so it now files EVERY
 inbound mail of the last 14 days (minus SKIP noise senders and his own sent mail), each
-with a ~600-char body excerpt, to the Nexus `to_aern` queue - which already mirrors to
-Todoist and shows on /nexus/aern and in the morning briefing. The task runs QID (every 6h).
+with a ~3000-char body excerpt, to the Nexus `to_fleet` queue. Nothing goes to Aern's
+own queue from here ("putting my email in the queue is just another inbox"): Aernbot's
+heartbeat (HEARTBEAT.md `bizmail_pending`) is the agent that reads each item and picks
+ignore / queue-to-Aern / Signal / email, then resolves it. The task runs QID (every 6h).
 The WATCH list is kept only to label known senders.
 
 READ-ONLY by construction: opens the mailbox with readonly=True, so nothing is marked
@@ -85,7 +87,7 @@ SKIP = [                     # noise senders - never filed
     "facebookmail.com",
     "mail.instagram.com",
 ]
-EXCERPT_CHARS = 600
+EXCERPT_CHARS = 3000   # enough of a pre-order newsletter for the judging agent to see the lines
 
 
 def _excerpt(msg):
@@ -116,8 +118,8 @@ def _excerpt(msg):
     return t[:EXCERPT_CHARS] + (" ..." if len(t) > EXCERPT_CHARS else "")
 
 
-def _queue(text, source):
-    body = json.dumps({"dir": "to_aern", "text": text, "source": source,
+def _queue(text, source, direction="to_fleet"):
+    body = json.dumps({"dir": direction, "text": text, "source": source,
                        "created_by": "aernbot-bizmail", "effort": "read",
                        "priority": 1}).encode()
     req = urllib.request.Request(NEXUS + "/api/queue", data=body,
@@ -185,7 +187,10 @@ def main():
                     f"From: {sender} | Subject: {subject} | {date}.\n"
                     f"{excerpt}")
             try:
-                _queue(text, f"biz_mail_watch.py / {ACCOUNT}")
+                # ALWAYS to_fleet: Aernbot's heartbeat reads these, judges (ignore / queue to
+                # Aern / Signal / email) and resolves the item. Nothing goes to Aern's queue
+                # from here - Aern 2026-09-14: "putting my email in the queue is just another inbox".
+                _queue(text, f"biz_mail_watch.py / {ACCOUNT}", "to_fleet")
                 seen.add(gid)
                 filed += 1
             except Exception as e:
