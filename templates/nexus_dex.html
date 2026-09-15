@@ -121,7 +121,8 @@
       const tr = el('tr', 'border-b border-dark-border/60 ' + (own ? 'opacity-60' : ''));
       tr.innerHTML = `<td class="px-3 py-1.5"><input type="checkbox" class="accent-emerald-500 w-4 h-4" data-n="${d.n}" ${own ? 'checked' : ''}></td>
         <td class="px-2 py-1.5 text-right text-gray-400 font-mono">${String(d.n).padStart(4, '0')}</td>
-        <td class="px-2 py-1.5 text-gray-100">${d.name}${d.legendary || d.mythical ? ' <span class="text-amber-300" title="' + (d.mythical ? 'mythical' : 'legendary') + '">★</span>' : ''}${d.baby ? ' <span class="text-gray-500 text-xs">baby</span>' : ''}</td>
+        <td class="px-2 py-1.5 text-gray-100">${d.name}${d.legendary || d.mythical ? ' <span class="text-amber-300" title="' + (d.mythical ? 'mythical' : 'legendary') + '">★</span>' : ''}${d.baby ? ' <span class="text-gray-500 text-xs">baby</span>' : ''}
+          <button data-note="${d.n}" title="source / plan note (click to edit)" class="ml-1 text-[11px] ${OWNED[d.n] && OWNED[d.n].note ? 'text-sky-300' : 'text-gray-600'} hover:text-sky-200">${OWNED[d.n] && OWNED[d.n].note ? '✎ ' + esc(OWNED[d.n].note) : '✎'}</button></td>
         <td class="px-2 py-1.5 text-gray-400">${d.gen} <span class="text-gray-600">${d.region.slice(0, 3)}</span></td>
         <td class="px-2 py-1.5">${chips(d)}</td>`;
       frag.appendChild(tr);
@@ -138,6 +139,17 @@
     } catch (e) { OWNED[n].owned = owned ? 0 : 1; box.checked = !owned; renderHeader(); alert('save failed: ' + e); }
   }
   $('dx-rows').addEventListener('change', e => { const b = e.target; if (b && b.dataset.n) toggle(+b.dataset.n, b.checked, b); });
+  $('dx-rows').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-note]'); if (!b) return;
+    const n = +b.dataset.note; const cur = (OWNED[n] && OWNED[n].note) || '';
+    const v = prompt('Source / plan note for #' + n + ' (empty clears):', cur); if (v === null) return;
+    try {
+      const r = await fetch('/api/nexus/dex/' + n, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: v }) });
+      if (!r.ok) throw new Error(r.status);
+      OWNED[n] = Object.assign(OWNED[n] || { owned: 0 }, { note: v.trim() || null }); renderRows();
+    } catch (err) { alert('save failed: ' + err); }
+  });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   ['dx-q', 'dx-status', 'dx-gen', 'dx-era', 'dx-game', 'dx-lm'].forEach(id => $(id).addEventListener('input', renderRows));
   $('dx-copy').addEventListener('click', () => {
     const txt = visible().map(d => `#${String(d.n).padStart(4, '0')} ${d.name}`).join('\n');
