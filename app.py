@@ -1146,6 +1146,7 @@ NEXUS_SECTIONS = [
     ("/nexus/inventory",  "Inventory",   "🗃️", "Live listings — visual confirm"),
     ("/nexus/wants",      "Want Board",  "🎴", "Open wants · prices · JP column · links"),
     ("/nexus/vintage",    "Vintage",     "⭐", "EX-era grails + reverse-holo entry points"),
+    ("/nexus/theories",   "Theory Box",  "🧪", "Market reads, written down and graded"),
     ("/nexus/signals",    "Signals",     "📊", "Daily movers · egman delta · riftbound"),
     ("/nexus/infra",      "Infra",       "🛰️", "Homelab health"),
     ("/nexus/fleet",      "Fleet",       "📶", "Aernbot · TCG · infra · host uptime"),
@@ -1277,6 +1278,7 @@ _CARD_IMAGE_ROOTS = [os.path.normpath(os.path.join(DATA_DIR, "card_images"))]
 
 @app.route("/nexus/wants")
 @app.route("/nexus/vintage")
+@app.route("/nexus/theories")
 def nexus_boards():
     """Static boards rendered on the Ashaman HOST by C:\\tcg-inventory\\boards.py (canon's only writer) after each Want Prices /
     Vintage Watch run; the container just serves the file off the read-only canon mount. Tailscale-only like every nexus page."""

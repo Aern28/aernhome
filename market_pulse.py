@@ -68,7 +68,7 @@ def chase_index(cur, category):
     """, (category,)).fetchall()
     ids = [t[0] for t in top]
     if len(ids) < 5:
-        return {}
+        return {}, 0, 0
     ph = ",".join("?" * len(ids))
     rows = cur.execute(f"""
         SELECT pr.product_id, pr.date, MAX(pr.market_price)
@@ -94,12 +94,29 @@ def chase_index(cur, category):
             if last is not None:
                 f[d] = last
         filled[pid] = f
+    # 2026-09-10: the index is a MEDIAN over contributors, so a change in WHO
+    # contributes moves it with no price move at all. On 9/05 the 21-day
+    # forward-fill cap re-admitted 7 Pokemon cards after a fetch gap: 6 -> 13
+    # contributors, +22% overnight, and a false SURGE alert. Diagnose on a
+    # stable contributor pool: cards present on EVERY date of the comparison
+    # window. 56d covers every horizon diagnose() uses; fall back to 14d (the
+    # surge horizon), then to the old all-comers series as a last resort.
+    # Returns (idx, pool_size, window_days); window_days 0 = legacy fallback.
+    if not all_dates:
+        return {}, 0, 0
+    latest = date.fromisoformat(all_dates[-1])
+    for hz in (56, 14):
+        window = [d for d in all_dates if (latest - date.fromisoformat(d)).days <= hz]
+        stable = [pid for pid in means if all(d in filled[pid] for d in window)]
+        if len(stable) >= 5:
+            idx = {d: statistics.median(filled[pid][d] / means[pid] for pid in stable) for d in window}
+            return idx, len(stable), hz
     idx = {}
     for d in all_dates:
         vals = [filled[pid][d] / means[pid] for pid in means if d in filled[pid]]
         if len(vals) >= 5:
             idx[d] = statistics.median(vals)
-    return idx
+    return idx, len(means), 0
 
 
 def nearest(idx, target, tol=4):
@@ -199,7 +216,10 @@ def main():
     alerts = []
     print(f"MARKET PULSE {date.today().isoformat()}")
     for g in GAMES:
-        sig, detail = diagnose(chase_index(cur, g))
+        idx, n_pool, hz = chase_index(cur, g)
+        sig, detail = diagnose(idx)
+        if n_pool:  # show the denominator - a reader must be able to see composition, not just the number
+            detail += f" [pool n={n_pool}, {hz}d-stable]" if hz else f" [pool n={n_pool}, UNSTABLE legacy series]"
         tag = f"[{sig.upper()}]" if sig else "[steady]"
         print(f"  {tag:<11} {g}: {detail}")
         if sig and state.get(g) != sig:
