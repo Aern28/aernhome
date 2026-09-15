@@ -181,6 +181,38 @@ def set_goal_status(goal_id, status):
         )
 
 
+# ── Living National Dex (2026-09-14) ─────────────────────────────────────────
+def dex_owned_map():
+    """{national: {"owned": 0|1, "note": str|None, "updated_at": str}} for every row present."""
+    with closing(_conn()) as conn:
+        rows = conn.execute("SELECT national, owned, note, updated_at FROM dex_owned").fetchall()
+    return {int(r[0]): {"owned": int(r[1] or 0), "note": r[2], "updated_at": r[3]} for r in rows}
+
+
+def set_dex_owned(national, owned=None, note=None):
+    """Upsert one species. owned may be None (leave as is); note None = leave as is, '' = clear."""
+    try:
+        national = int(national)
+    except (TypeError, ValueError):
+        raise ValueError("bad national number")
+    if not 1 <= national <= 1025:
+        raise ValueError("national number out of range")
+    if owned is not None:
+        owned = 1 if owned in (1, True, "1", "true", "on") else 0
+    with closing(_conn()) as conn, conn:
+        cur = conn.execute("SELECT owned, note FROM dex_owned WHERE national = ?", (national,))
+        row = cur.fetchone()
+        cur_owned, cur_note = (int(row[0]), row[1]) if row else (0, None)
+        new_owned = cur_owned if owned is None else owned
+        new_note = cur_note if note is None else (note.strip() or None)
+        conn.execute(
+            "INSERT INTO dex_owned (national, owned, note, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(national) DO UPDATE SET owned = excluded.owned, note = excluded.note, "
+            "updated_at = CURRENT_TIMESTAMP",
+            (national, new_owned, new_note),
+        )
+
+
 # ── Maintenance ───────────────────────────────────────────────────────────────
 def add_maintenance(task, category=None, due_date=None, interval_days=None, notes=None):
     task = (task or "").strip()
