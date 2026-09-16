@@ -14,6 +14,7 @@ The queue used to carry these as daily digests; per Aern 9/02 the page replaces
 that (queue keeps only position-movers + confirmed egman signals).
 """
 import glob
+import json
 import os
 import re
 import sqlite3
@@ -123,6 +124,33 @@ def _read_text(path, cap=20000):
     return t if len(t) <= cap else t[:cap] + "\n\n[truncated - full file in tcg-inventory-tool/reports/]"
 
 
+def _load_sealed():
+    """Newest sealed_index_*.json from sealed_tracker.py --report (2026-09-16): per-game
+    class lines (median % of MSRP, median boxes/day) + one row per booster box. The JSON is
+    already shaped for display; this only picks the file and groups boxes by game so the
+    template stays dumb. None when the tracker has not written a report yet."""
+    paths = sorted(glob.glob(os.path.join(REPORTS_DIR, "sealed_index_*.json")))
+    if not paths:
+        return None
+    try:
+        with open(paths[-1], "r", encoding="utf-8") as f:
+            idx = json.load(f)
+    except (OSError, ValueError):
+        return None
+    by_game = {}
+    for b in idx.get("boxes", []):
+        by_game.setdefault(b.get("game"), []).append(b)
+    games = []
+    for g in idx.get("games", []):
+        if not g.get("boxes"):
+            continue
+        g = dict(g)
+        g["rows"] = by_game.get(g.get("game"), [])
+        games.append(g)
+    return {"file": os.path.basename(paths[-1]), "generated": idx.get("generated"),
+            "buy_ratio": idx.get("buy_ratio"), "games": games}
+
+
 def load():
     try:
         con = sqlite3.connect(INV_DB)
@@ -142,6 +170,7 @@ def load():
         "delta_file": os.path.basename(delta_path) if delta_path else None,
         "momentum_text": _read_text(momentum_path),
         "momentum_file": os.path.basename(momentum_path) if momentum_path else None,
+        "sealed": _load_sealed(),
         "held_count": len(held),
         "reports_present": os.path.isdir(REPORTS_DIR),
     }

@@ -3,7 +3,7 @@
 
 {% block nexus_content %}
 <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
-    <p class="text-sm text-gray-400">Daily TCG signals — movers · egman delta · riftbound. Reports ride the hourly mirror from Phoenix; <span class="text-emerald-400 font-semibold">HELD</span> = live inventory has copies.</p>
+    <p class="text-sm text-gray-400">Daily TCG signals — movers · egman delta · sealed index · riftbound. Reports land from the 7 AM chain on the canon host; <span class="text-emerald-400 font-semibold">HELD</span> = live inventory has copies.</p>
     <p class="text-xs text-gray-400">{{ movers.date or '—' }}</p>
 </div>
 
@@ -61,6 +61,85 @@
 <section class="bg-dark-card border border-dark-border rounded-lg p-4 mb-4">
     <h3 class="text-sm font-semibold text-white mb-2">📉 Drops</h3>
     {{ mover_table(movers.drops, false) }}
+</section>
+
+<section class="mb-4">
+    <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden" open>
+        <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-white">
+            📦 Sealed Index <span class="text-xs font-normal text-gray-400">({{ sealed.file if sealed else 'no report' }}) — buy gate: market ≥ {{ sealed.buy_ratio if sealed else 1.25 }}× landed cost AND 30/90d flat-or-up · Max landed = market / {{ sealed.buy_ratio if sealed else 1.25 }} · Break-even = net after 12.75% + $0.30 + ship</span>
+        </summary>
+        <div class="px-4 pb-4 pt-3 border-t border-dark-border">
+        {% if not sealed %}
+            <p class="text-sm text-gray-400">No sealed index yet — sealed_tracker.py --report writes one in the 7 AM chain.</p>
+        {% else %}
+            <div class="overflow-x-auto mb-4">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-xs uppercase tracking-wide text-gray-400 border-b border-dark-border">
+                        <th class="text-left py-2 pr-3">Game (class line)</th>
+                        <th class="text-right py-2 pr-3">Boxes</th>
+                        <th class="text-right py-2 pr-3">Median % MSRP</th>
+                        <th class="text-right py-2 pr-3">Median box/day</th>
+                        <th class="text-right py-2 pr-3">Median 30d</th>
+                        <th class="text-right py-2">Sold 7d</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for g in sealed.games %}
+                    <tr class="border-b border-dark-border">
+                        <td class="py-2 pr-3 text-white">{{ g.category }}</td>
+                        <td class="text-right py-2 pr-3 font-mono text-gray-400">{{ g.priced }}/{{ g.boxes }}</td>
+                        <td class="text-right py-2 pr-3 font-mono font-semibold {% if g.median_pct_msrp is not none and g.median_pct_msrp >= 125 %}text-emerald-400{% elif g.median_pct_msrp is not none and g.median_pct_msrp < 100 %}text-red-300{% else %}text-white{% endif %}">{{ '%d%%'|format(g.median_pct_msrp) if g.median_pct_msrp is not none else '—' }}</td>
+                        <td class="text-right py-2 pr-3 font-mono text-white">{{ '%.2f'|format(g.median_velocity) if g.median_velocity is not none else '—' }}</td>
+                        <td class="text-right py-2 pr-3 font-mono {% if g.median_slope30 is not none and g.median_slope30 < 0 %}text-red-300{% else %}text-gray-400{% endif %}">{{ '%+d%%'|format(g.median_slope30) if g.median_slope30 is not none else '—' }}</td>
+                        <td class="text-right py-2 font-mono text-gray-400">{{ g.sales7 }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% for g in sealed.games %}
+            <details class="mb-2" {% if g.game in ('hololive', 'onepiece', 'gundam') %}open{% endif %}>
+                <summary class="cursor-pointer select-none text-sm font-semibold text-white py-1">{{ g.category }} <span class="text-xs font-normal text-gray-400">({{ g.rows|length }} boxes)</span></summary>
+                <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs uppercase tracking-wide text-gray-400 border-b border-dark-border">
+                            <th class="text-left py-2 pr-3">Box</th>
+                            <th class="text-left py-2 pr-3">Rel</th>
+                            <th class="text-right py-2 pr-3">Market</th>
+                            <th class="text-right py-2 pr-3">% MSRP</th>
+                            <th class="text-right py-2 pr-3">30d</th>
+                            <th class="text-right py-2 pr-3">90d</th>
+                            <th class="text-right py-2 pr-3">7d/30d sold</th>
+                            <th class="text-right py-2 pr-3">box/day</th>
+                            <th class="text-right py-2 pr-3">Max landed</th>
+                            <th class="text-right py-2">Break-even</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for b in g.rows %}
+                        <tr class="border-b border-dark-border">
+                            <td class="py-2 pr-3"><a href="{{ b.url }}" target="_blank" rel="noopener" class="text-blue-400 hover:underline">{{ b.name }}</a></td>
+                            <td class="py-2 pr-3 text-gray-400">{{ (b.released or '—')[:10] }}</td>
+                            <td class="text-right py-2 pr-3 font-mono text-white">{{ '$%.2f'|format(b.market) if b.market else '—' }}</td>
+                            <td class="text-right py-2 pr-3 font-mono font-semibold {% if b.pct_msrp is not none and b.pct_msrp >= 125 %}text-emerald-400{% elif b.pct_msrp is not none and b.pct_msrp < 100 %}text-red-300{% else %}text-white{% endif %}">{{ '%d%%'|format(b.pct_msrp) if b.pct_msrp is not none else '—' }}</td>
+                            <td class="text-right py-2 pr-3 font-mono {% if b.slope30 is not none and b.slope30 < 0 %}text-red-300{% else %}text-gray-400{% endif %}">{{ '%+d%%'|format(b.slope30) if b.slope30 is not none else '—' }}</td>
+                            <td class="text-right py-2 pr-3 font-mono {% if b.slope90 is not none and b.slope90 < 0 %}text-red-300{% else %}text-gray-400{% endif %}">{{ '%+d%%'|format(b.slope90) if b.slope90 is not none else '—' }}</td>
+                            <td class="text-right py-2 pr-3 font-mono text-gray-400">{{ b.sales7 }}/{{ b.sales30 }}</td>
+                            <td class="text-right py-2 pr-3 font-mono text-white">{{ '%.2f'|format(b.velocity) if b.velocity is not none else '—' }}</td>
+                            <td class="text-right py-2 pr-3 font-mono text-amber-300">{{ '$%.2f'|format(b.max_landed) if b.max_landed else '—' }}</td>
+                            <td class="text-right py-2 font-mono text-gray-400">{{ '$%.2f'|format(b.break_even) if b.break_even else '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </details>
+            {% endfor %}
+        {% endif %}
+        </div>
+    </details>
 </section>
 
 <section class="mb-4">
