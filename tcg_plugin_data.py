@@ -200,7 +200,7 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
         """
         SELECT sp.card_name, sp.set_name, sp.card_number, sp.qty_remaining,
                sp.buy_price_per, sp.stop_loss_per, sp.buy_date, sp.max_hold_date,
-               sp.thesis, lp.market_price
+               sp.thesis, lp.market_price, sp.game
         FROM singles_positions sp
         LEFT JOIN (
           SELECT product_id, market_price,
@@ -224,6 +224,7 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
         max_hold,
         thesis,
         current,
+        game,
     ) in cur.fetchall():
         if current is None or buy is None:
             continue
@@ -265,6 +266,12 @@ def query_positions(con: sqlite3.Connection, today: dt.date) -> list[dict]:
                 "total": total or "?",
                 "stop": f"${stop:.0f}" if stop else "—",
                 "cat": catalyst,
+                # Numeric extras (2026-09-18) for seat tooling that reads canon THROUGH
+                # this endpoint instead of a stale local inventory.db: game, deployed
+                # capital (buy x qty) and unrealized $ as floats. TRMNL Liquid ignores them.
+                "game": game,
+                "dep": round((buy or 0) * (qty or 0), 2),
+                "pldn": round(pld_total, 2),
             }
         )
     return out
