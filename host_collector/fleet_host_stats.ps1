@@ -463,6 +463,9 @@ function Test-GitUnpushed {
             if ($s.no_upstream.Count)       { $bits += "no upstream: $($s.no_upstream -join ', ')"; $worst = Escalate $worst "warn" }
             if ($s.oldest_stranded_days -gt 14) { $bits += "oldest stranded $($s.oldest_stranded_days)d"; $worst = Escalate $worst "down" }
             if ($s.pushed.Count)            { $bits += "$($s.pushed.Count) pushed" }
+            # held is informational, never escalates: 'never' is a decision we made,
+            # not a fault. Shown so a deliberately-parked repo stays visible.
+            if ($s.held.Count)              { $bits += "held: $($s.held -join ', ')" }
 
             if ($bits.Count) { $parts += "$seat : $($bits -join '; ')" } else { $parts += "$seat : clean" }
         }
