@@ -245,6 +245,66 @@ function Test-PhoenixBackup {
 }
 
 # ---------------------------------------------------------------------------
+# Check 2b: trainer_backup / ashaman_backup - the other two seats' push stamps
+#
+# Added 2026-09-21. Phoenix's push had a freshness check from the start; Trainer's
+# (nightly 22:30, live since 9/02) never got one, and Ashaman had no backup push at
+# all until 9/21 - backup-staging held *-trainer and *-phoenix and no *-ashaman,
+# so the Aernbot volumes and the non-git compose dirs were unprotected.
+#
+# Both hosts are always-on, so the tolerance is tighter than Phoenix's 30/54:
+# one missed nightly run is a warn, two is down.
+# ---------------------------------------------------------------------------
+
+function Test-SeatBackupStamp {
+    param(
+        [string]$Id,
+        [string]$Label,
+        [string]$StampPath,
+        [double]$WarnHours = 26,
+        [double]$DownHours = 50,
+        [string]$MissedHint = "missed a nightly run"
+    )
+    try {
+        # Same fresh-SMB-session dance as Test-NexusBackup / Test-PhoenixBackup: a
+        # cached session can keep this green against a rotated credential.
+        net use "\\192.168.1.118\home" /delete /y 2>$null | Out-Null
+
+        if (-not (Test-Path $StampPath)) {
+            return New-CheckResult -Id $Id -Label $Label -Status "down" -Detail "No completion stamp at $StampPath - push has never succeeded, or the share is unreachable"
+        }
+
+        $ageHours = (New-TimeSpan -Start (Get-Item $StampPath).LastWriteTime -End (Get-Date)).TotalHours
+        $rounded = [math]::Round($ageHours, 1)
+
+        if ($ageHours -lt $WarnHours) {
+            return New-CheckResult -Id $Id -Label $Label -Status "up" -Detail "Last successful push ${rounded}h ago"
+        }
+        elseif ($ageHours -lt $DownHours) {
+            return New-CheckResult -Id $Id -Label $Label -Status "warn" -Detail "Last successful push ${rounded}h ago ($MissedHint)"
+        }
+        else {
+            return New-CheckResult -Id $Id -Label $Label -Status "down" -Detail "Last successful push ${rounded}h ago - STALLED"
+        }
+    }
+    catch {
+        return New-CheckResult -Id $Id -Label $Label -Status "unknown" -Detail "Error: $($_.Exception.Message)"
+    }
+}
+
+function Test-TrainerBackup {
+    Test-SeatBackupStamp -Id "trainer_backup" -Label "Trainer Backup Push (NAS)" `
+        -StampPath "\\192.168.1.118\home\backup-staging\trainer-last-push.txt" `
+        -MissedHint "missed the 22:30 run"
+}
+
+function Test-AshamanBackup {
+    Test-SeatBackupStamp -Id "ashaman_backup" -Label "Ashaman Backup Push (NAS)" `
+        -StampPath "\\192.168.1.118\home\backup-staging\ashaman-last-push.txt" `
+        -MissedHint "missed the 23:00 run"
+}
+
+# ---------------------------------------------------------------------------
 # Check 3: supersaiyan_backup - newest backup_log_*.txt on F:\
 # ---------------------------------------------------------------------------
 
@@ -315,10 +375,20 @@ function Test-DiskC {
         $freeGB = $drive.Free / 1GB
         $roundedGB = [math]::Round($freeGB, 1)
 
+        # Thresholds are absolute GB, not percent, because the real constraint is
+        # headroom for the nightly volume-tarball staging - ashaman-backup-push.ps1
+        # aborts below 10 GB free, so that is the genuine hard floor.
+        #
+        # warn was 30 GB until 2026-09-23. On a 119 GB drive that is ~25%, and C:
+        # sat at 31 GB for weeks, so the check flapped warn->up->warn on ordinary
+        # churn (Ollama's updater alone rewrote ~1.46 GB per release against an
+        # install that never applied it). Nothing was ever actually wrong. Cleanup
+        # took C: to 40.9 GB free; 20 GB leaves a real 10 GB of margin above the
+        # abort floor and makes a warn mean something again.
         if ($freeGB -lt 10) {
             return New-CheckResult -Id $id -Label $label -Status "down" -Detail "Free: $roundedGB GB"
         }
-        elseif ($freeGB -lt 30) {
+        elseif ($freeGB -lt 20) {
             return New-CheckResult -Id $id -Label $label -Status "warn" -Detail "Free: $roundedGB GB"
         }
         else {
@@ -331,7 +401,83 @@ function Test-DiskC {
 }
 
 # ---------------------------------------------------------------------------
-# Check 6: tailscale - tailscale status --json
+# Check 6: git_unpushed - repos under C:\projects holding work only on this disk
+# ---------------------------------------------------------------------------
+# Added 2026-09-23. Git drift was the one lane on this board with no monitor, and
+# it had already bitten: an obivault commit literally reads "was sitting
+# uncommitted on Ashaman" - caught by a person noticing, not by anything. At the
+# time this was written Ashaman held 8 commits that existed nowhere else
+# (obivault +6, discord-claude-relay +1, tcg-inventory-tool +1) and
+# resp-illness-digest had a remote but no upstream, so a bare `git push` was a
+# silent no-op.
+#
+# DETECTION ONLY - this never pushes. Pushing is Aern's, deliberately.
+#
+# Status is driven by two things only: commits ahead of upstream, and a branch
+# with no upstream at all. A dirty working tree is REPORTED but does not change
+# status - work in progress is normal and nagging about it trains you to ignore
+# the check. Repos with no remote are counted, not escalated: that is a policy
+# question (should this be on GitHub at all), not drift.
+#
+# down = the oldest stranded commit is over 14 days old; at that point it is not
+# "not pushed yet", it is lost work waiting to happen.
+
+function Test-GitUnpushed {
+    $id = "git_unpushed"
+    $label = "Git Drift (all seats)"
+    try {
+        $stage = "\\192.168.1.118\home\backup-staging"
+        $seats = @("ashaman", "phoenix", "trainer")
+        if (-not (Test-Path $stage)) {
+            return New-CheckResult -Id $id -Label $label -Status "unknown" -Detail "staging share unreachable: $stage"
+        }
+
+        $parts = @(); $worst = "up"
+        function Escalate([string]$cur, [string]$new) {
+            $rank = @{ "up" = 0; "warn" = 1; "down" = 2; "unknown" = 1 }
+            if ($rank[$new] -gt $rank[$cur]) { return $new } else { return $cur }
+        }
+
+        foreach ($seat in $seats) {
+            $f = Join-Path $stage "git-drift-$seat.json"
+            if (-not (Test-Path $f)) {
+                $parts += "$seat : no stamp"
+                $worst = Escalate $worst "unknown"
+                continue
+            }
+            try { $s = Get-Content $f -Raw | ConvertFrom-Json }
+            catch { $parts += "$seat : unreadable stamp"; $worst = Escalate $worst "unknown"; continue }
+
+            # A stamp that stopped updating is the failure the backup lanes taught us to
+            # watch for - stale is not the same as clean. 36h covers a missed daily run.
+            $ageH = ([DateTime]::Now - [DateTime]::Parse($s.ran_at)).TotalHours
+            if ($ageH -gt 36) {
+                $parts += ("{0} : stamp {1:N0}h old" -f $seat, $ageH)
+                $worst = Escalate $worst "warn"
+                continue
+            }
+
+            $bits = @()
+            if ($s.push_failed.Count)       { $bits += "$($s.push_failed.Count) PUSH FAILED"; $worst = Escalate $worst "down" }
+            if ($s.awaiting_approval.Count) { $bits += "$($s.awaiting_approval.Count) awaiting approval: $($s.awaiting_approval -join ', ')"; $worst = Escalate $worst "warn" }
+            if ($s.no_upstream.Count)       { $bits += "no upstream: $($s.no_upstream -join ', ')"; $worst = Escalate $worst "warn" }
+            if ($s.oldest_stranded_days -gt 14) { $bits += "oldest stranded $($s.oldest_stranded_days)d"; $worst = Escalate $worst "down" }
+            if ($s.pushed.Count)            { $bits += "$($s.pushed.Count) pushed" }
+
+            if ($bits.Count) { $parts += "$seat : $($bits -join '; ')" } else { $parts += "$seat : clean" }
+        }
+
+        $detail = $parts -join ' | '
+        return New-CheckResult -Id $id -Label $label -Status $worst -Detail $detail
+    }
+    catch {
+        return New-CheckResult -Id $id -Label $label -Status "unknown" -Detail "Error: $($_.Exception.Message)"
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# Check 7: tailscale - tailscale status --json
 # ---------------------------------------------------------------------------
 
 function Test-Tailscale {
@@ -447,9 +593,12 @@ $checks = @()
 $checks += Invoke-CheckSafely -Block { Test-TcgAutoprocess } -Id "tcg_autoprocess" -Label "TCG AutoProcess Task"
 $checks += Invoke-CheckSafely -Block { Test-NexusBackup } -Id "nexus_backup" -Label "Nexus Backup (H:)"
 $checks += Invoke-CheckSafely -Block { Test-PhoenixBackup } -Id "phoenix_backup" -Label "Phoenix Backup Push (NAS)"
+$checks += Invoke-CheckSafely -Block { Test-TrainerBackup } -Id "trainer_backup" -Label "Trainer Backup Push (NAS)"
+$checks += Invoke-CheckSafely -Block { Test-AshamanBackup } -Id "ashaman_backup" -Label "Ashaman Backup Push (NAS)"
 $checks += Invoke-CheckSafely -Block { Test-SupersaiyanBackup } -Id "supersaiyan_backup" -Label "Supersaiyan Backup (F:)"
 $checks += Invoke-CheckSafely -Block { Test-ChromeCdp } -Id "chrome_cdp" -Label "Chrome CDP (TCGplayer automation)"
 $checks += Invoke-CheckSafely -Block { Test-DiskC } -Id "disk_c" -Label "Disk Space (C:)"
+$checks += Invoke-CheckSafely -Block { Test-GitUnpushed } -Id "git_unpushed" -Label "Git Drift (all seats)"
 $checks += Invoke-CheckSafely -Block { Test-Tailscale } -Id "tailscale" -Label "Tailscale"
 $checks += Invoke-CheckSafely -Block { Test-MattSession } -Id "matt_session" -Label "Matt Interactive Session"
 
