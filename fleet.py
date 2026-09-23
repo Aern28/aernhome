@@ -84,6 +84,7 @@ CHECK_META = {
     "byos_device": ("TRMNL (BYOS)", "infra"),
     "byos_deps": ("BYOS/Keep deps", "infra"),
     "canon_guard": ("Canon Guard (single-writer)", "tcg"),
+    "feed_fresh": ("Nexus Feeds", "infra"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -551,6 +552,19 @@ def check_byos_deps():
     return ("up", "Pillow, python-liquid, websocket-client, gkeepapi, gpsoauth importable")
 
 
+
+def check_feed_fresh():
+    """Every /nexus/feed producer exits 0 while broken (9/22: X-Feed silent since
+    8/31, OPTCG Twitter/Video since 9/15, found only by eyeballing). Warn when a
+    source's newest item is older than its cadence allows (feed_health.py)."""
+    import feed_health  # lazy: pulls nexus_writes + xfeed
+    st = feed_health.all_status()
+    stale = [f"{s} {feed_health.fmt_age(h['age_h'])}" for s, h in st.items() if h["stale"]]
+    if stale:
+        return ("warn", "stale: " + ", ".join(stale) + " (see /nexus/feed)")
+    return ("up", f"{len(st)} sources fresh")
+
+
 SIMPLE_CHECKS = {
     "relay_alive": check_relay_alive,
     "containers": check_containers,
@@ -568,6 +582,7 @@ SIMPLE_CHECKS = {
     "canon_guard": check_canon_guard,
     "byos_device": check_byos_device,
     "byos_deps": check_byos_deps,
+    "feed_fresh": check_feed_fresh,
 }
 
 

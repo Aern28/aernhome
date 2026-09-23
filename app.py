@@ -1119,6 +1119,7 @@ _start_podcast_feed_writer()
 # over Tailscale. Streams + burst-collapse live in xfeed.py; project doc in
 # Trainer C:\projects\x-feed\project.md.
 import xfeed
+import feed_health
 
 
 @app.route("/feed.xml")
@@ -1616,6 +1617,13 @@ def nexus_feed():
             continue
         cards.append({"meta": _feed_meta(s), "entries": entries,
                       "total": counts.get(s, 0)})
+    # 9/23: a silent producer gets a red badge instead of quietly aging
+    # (X-Feed sat on 8/31 and Twitter/Video on 9/15 before anyone noticed).
+    for c in cards:
+        h = feed_health.status(c["meta"]["slug"])
+        c["stale"] = h["stale"]
+        c["stale_note"] = (f"stale: last item {feed_health.fmt_age(h['age_h'])} ago "
+                           f"(expected within {feed_health.fmt_age(h['max_h'])})") if h["stale"] else ""
     return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
                            cards=cards, retired=retired)
 

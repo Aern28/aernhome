@@ -20,12 +20,14 @@
     {% for card in cards %}
     <section class="bg-dark-card border border-dark-border rounded-lg overflow-hidden border-l-4 {{ accents.get(card.meta.slug, 'border-slate-500') }}">
         <div class="flex items-center justify-between px-4 py-3 border-b border-dark-border">
-            <h3 class="text-base font-semibold text-white">{{ card.meta.icon }} {{ card.meta.label }}</h3>
+            <h3 class="text-base font-semibold text-white">{{ card.meta.icon }} {{ card.meta.label }}
+                {% if card.stale %}<span class="ml-2 px-1.5 py-0.5 rounded bg-red-900/50 text-red-300 text-xs font-medium" title="{{ card.stale_note }}">🔴 stale</span>{% endif %}</h3>
             {% if card.total %}
             <a href="/nexus/feed/{{ card.meta.slug }}" class="text-xs font-medium text-blue-400 hover:text-blue-300">
                 {% if card.total > card.entries|length %}all {{ card.total }} →{% else %}{{ card.total }} item{{ '' if card.total == 1 else 's' }}{% endif %}</a>
             {% endif %}
         </div>
+        {% if card.stale %}<p class="px-4 py-2 text-xs text-red-400 border-b border-dark-border">{{ card.stale_note }} — the producer is probably exiting 0 while broken.</p>{% endif %}
         {% if card.entries %}
         <ul class="divide-y divide-dark-border">
             {% for it in card.entries %}
