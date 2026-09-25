@@ -58,6 +58,7 @@ TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
 FLEET_INTERVAL = int(os.environ.get("FLEET_INTERVAL", "60") or "60")
 HISTORY_LEN = 100
+UNKNOWN_DEGRADE_H = 3  # a check "unknown" this long renders "warn" (see sentinel_pass)
 ALERT_COOLDOWN_S = 10 * 60  # max 1 alert per check per 10 min
 DIGEST_HOUR = 7  # 07:00 America/Chicago daily digest
 CENTRAL_TZ = ZoneInfo("America/Chicago")
@@ -776,6 +777,52 @@ def check_postage():
     return out or [("postage_error", "Postage Screen", "tcg", "unknown", "no valid checks reported")]
 
 
+TASK_RESULTS_PATH = os.path.join(DATA_DIR, "task-results.json")
+TASK_RESULTS_STALE_H = 3   # Trainer task "Task Results Push" runs hourly
+
+
+def check_task_results():
+    """One check per host from /data/task-results.json: are any ENABLED scheduled tasks
+    reporting a failing last-result code? Written hourly by Trainer's C:/tools/task-results.py
+    (Trainer locally + Ashaman via a read-only ssh schtasks query).
+
+    Seat fleet-task-results, 2026-09-25: Watch Digest exited rc=1 every morning 9/15-9/21 while
+    this board said 33/33 green, because nothing here looked at task results. A failing task is
+    "warn", not "down": the task's own lane may still be fine (a retry twin may have covered it),
+    but a human should look. One-time tasks with no next run are "spent" and never count.
+    """
+    try:
+        age_h = (time.time() - os.path.getmtime(TASK_RESULTS_PATH)) / 3600
+    except OSError:
+        return [("tasks_missing", "Task results", "fleet", "unknown",
+                 "task-results.json not found - Trainer task-results.py not yet run")]
+    if age_h > TASK_RESULTS_STALE_H:
+        return [("tasks_stale", "Task results", "fleet", "warn",
+                 f"task-results.json is {age_h:.1f}h old (Trainer 'Task Results Push' stale)")]
+    try:
+        with open(TASK_RESULTS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return [("tasks_error", "Task results", "fleet", "unknown", f"read error: {e}"[:200])]
+    out = []
+    for h in (data.get("hosts") or []) if isinstance(data, dict) else []:
+        host = str(h.get("host") or "?")
+        cid, label = f"tasks_{host}", f"Task results · {host.capitalize()}"
+        if not h.get("ok"):
+            out.append((cid, label, "fleet", "unknown", f"query failed: {h.get('error')}"[:200]))
+            continue
+        tasks = h.get("tasks") or []
+        bad = [t for t in tasks if t.get("failing")]
+        if bad:
+            names = "; ".join(f"{t.get('name')} rc={t.get('last_result')} ({t.get('last_run')})"
+                              for t in bad[:4])
+            more = f" +{len(bad) - 4} more" if len(bad) > 4 else ""
+            out.append((cid, label, "fleet", "warn", f"{len(bad)} of {len(tasks)} failing: {names}{more}"[:300]))
+        else:
+            out.append((cid, label, "fleet", "up", f"{len(tasks)} enabled tasks, none failing"))
+    return out or [("tasks_error", "Task results", "fleet", "unknown", "no hosts reported")]
+
+
 def run_all_checks():
     """Run every check, each wrapped so one crash can't take down the rest.
     Returns {id: {"label", "group", "status", "detail"}}."""
@@ -817,6 +864,13 @@ def run_all_checks():
     except Exception as e:
         census_items = [("census_error", "Fleet Census", "fleet", "unknown", f"check crashed: {e}"[:200])]
     for cid, label, group, status, detail in census_items:
+        results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
+
+    try:
+        task_items = check_task_results()
+    except Exception as e:
+        task_items = [("tasks_error", "Task results", "fleet", "unknown", f"check crashed: {e}"[:200])]
+    for cid, label, group, status, detail in task_items:
         results[cid] = {"label": label, "group": group, "status": status, "detail": detail}
 
     return results
@@ -905,7 +959,7 @@ def _build_digest(checks_state, now):
     for cid, entry in checks_state.items():
         by_group.setdefault(entry.get("group", "infra"), []).append((cid, entry))
 
-    for group in ("aernbot", "tcg", "infra", "host"):
+    for group in ("aernbot", "tcg", "infra", "host", "fleet"):
         items = sorted(by_group.get(group, []), key=lambda kv: kv[1].get("label", kv[0]))
         if not items:
             continue
@@ -965,6 +1019,22 @@ def sentinel_pass():
         prev = checks_state.get(cid)
         prev_status = prev.get("status") if prev else None
         entry = prev or {"history": []}
+        # Stuck-unknown -> degraded (seat fleet-task-results, 2026-09-25). A check that cannot
+        # tell whether its thing works is itself a finding once it has been blind for hours:
+        # Postage Check's NAS leg failed every 30-min cycle for ~14h (9/21-9/22) while the
+        # board rendered "unknown" and nobody looked. The raw-unknown clock lives in its own
+        # field, so the promotion to "warn" is one transition (one alert), not a flap.
+        if r["status"] == "unknown":
+            entry.setdefault("unknown_since", now_iso)
+            try:
+                blind_h = (now - dt.datetime.fromisoformat(entry["unknown_since"])).total_seconds() / 3600
+            except (ValueError, TypeError):
+                entry["unknown_since"], blind_h = now_iso, 0.0
+            if blind_h >= UNKNOWN_DEGRADE_H:
+                r = {**r, "status": "warn",
+                     "detail": f"unknown for {blind_h:.1f}h (degraded) - {r['detail']}"[:300]}
+        else:
+            entry.pop("unknown_since", None)
         entry["label"] = r["label"]
         entry["group"] = r["group"]
         entry["detail"] = r["detail"]
