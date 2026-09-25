@@ -240,16 +240,6 @@ DEFAULT_SERVICES = [
         "enabled": 1,
     },
     {
-        "name": "uptime-kuma",
-        "display_name": "Uptime Kuma",
-        "url": "http://host.docker.internal:3001",
-        "public_url": "http://100.110.245.37:3001",
-        "check_type": "http",
-        "docker_container": "uptime-kuma",
-        "icon_emoji": "📊",
-        "enabled": 0,  # RETIRED 2026-08-03 (push monitors ported into fleet.py); board entry disabled 2026-08-16
-    },
-    {
         "name": "home-assistant",
         "display_name": "Home Assistant",
         "url": "http://192.168.1.70:8123",
