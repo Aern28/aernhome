@@ -260,21 +260,26 @@ finally {
     # aern-signup booking notifications (the fleet check calls this out as "bookings are
     # NOT notifying"). Same port-proxy break as the board, different container, and it
     # needed a manual `docker restart n8n` both times. Automate what you did by hand.
-    $n8nOk = $false
-    foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
-        try {
-            if ((Invoke-WebRequest -Uri $u -TimeoutSec 15 -UseBasicParsing).StatusCode -eq 200) { $n8nOk = $true; break }
-        } catch { }
+    # POLL, don't probe once: n8n is Postgres-backed and slow to boot. 2026-09-20 probed it
+    # 11s after the engine came up, restarted it, gave it 25s, and exited 3 on a race --
+    # n8n was fine the next day. 9/13 won the same race by luck.
+    function Wait-N8n([int]$TimeoutSec) {
+        $deadline = (Get-Date).AddSeconds($TimeoutSec)
+        do {
+            foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
+                try {
+                    if ((Invoke-WebRequest -Uri $u -TimeoutSec 10 -UseBasicParsing).StatusCode -eq 200) { return $true }
+                } catch { }
+            }
+            Start-Sleep -Seconds 10
+        } while ((Get-Date) -lt $deadline)
+        return $false
     }
+    $n8nOk = Wait-N8n -TimeoutSec 90
     if (-not $n8nOk) {
-        Write-Log "    n8n :5678 dead -- restarting n8n."
+        Write-Log "    n8n :5678 dead after 90s -- restarting n8n."
         & $Docker restart n8n 2>$null | Out-Null
-        Start-Sleep -Seconds 25
-        foreach ($u in @('http://127.0.0.1:5678/healthz', 'http://127.0.0.1:5678/')) {
-            try {
-                if ((Invoke-WebRequest -Uri $u -TimeoutSec 15 -UseBasicParsing).StatusCode -eq 200) { $n8nOk = $true; break }
-            } catch { }
-        }
+        $n8nOk = Wait-N8n -TimeoutSec 180
         Write-Log ("    after restart, n8n reachable = {0}" -f $n8nOk)
     } else { Write-Log "    n8n reachable on :5678." }
 
