@@ -49,6 +49,7 @@ MATT_CODE_MAP = [
     ("post call", "Postcall"), ("clinic", "Clinic"), ("education", "Education"),
 ]
 MATT_FALLBACK = "Service"
+NO_SCHOOL_RE = re.compile(r"\bno school\b", re.I)
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -277,8 +278,14 @@ def main():
     dates = week_dates()
     cal = calendar_client()
     gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates))
-    matt_by, matt_notes = classify_matt(fetch_events(cal, CAL_MATT, dates))
+    matt_events = fetch_events(cal, CAL_MATT, dates)
+    matt_by, matt_notes = classify_matt(matt_events)
     lunch, dinner, jaina, buy = school_lunch(dates), mealie_dinner(dates), jaina_overrides(), restock()
+    # The Jaina row is a fixed weekly template, so it showed "Matt/Matt" on the 10/09
+    # HISD PD day. An all-day "No school" event on Matt's calendar wins over it.
+    no_school = {w["date"] for w in (ev_local(e) for e in matt_events
+                                      if NO_SCHOOL_RE.search(e.get("summary") or ""))
+                 if w and w["all_day"]}
 
     days = []
     for i, d in enumerate(dates):
@@ -291,7 +298,8 @@ def main():
             "day": dn,
             "gal_am": g.get("am") or "", "gal_pm": g.get("pm") or "",
             "matt_am": m.get("am") or "", "matt_pm": m.get("pm") or "",
-            "jaina_drop": jaina.get(dn, {}).get("drop", ""), "jaina_pick": jaina.get(dn, {}).get("pick", ""),
+            "jaina_drop": "Home" if k in no_school else jaina.get(dn, {}).get("drop", ""),
+            "jaina_pick": "Home" if k in no_school else jaina.get(dn, {}).get("pick", ""),
             "meal": meal, "meal_type": "", "notes": notes,
         })
 
