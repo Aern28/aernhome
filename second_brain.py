@@ -53,7 +53,9 @@ FLEET_STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 
 VALID_PROJECT_STATUS = {"active", "blocked", "parked", "done"}
-VALID_QUEUE_DIR = {"to_aern", "to_fleet"}
+# to_review (info-streams plan, Aern 10/09): bot/task output that needs Aern's
+# thought, walked with him in /goodmorning. Deliberately NOT mirrored to Todoist.
+VALID_QUEUE_DIR = {"to_aern", "to_fleet", "to_review"}
 VALID_QUEUE_STATUS = {"open", "done"}
 VALID_AGENDA_WHICH = {"daily", "weekly"}
 VALID_PRIORITY = {1, 2, 3}

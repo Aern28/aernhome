@@ -20,6 +20,7 @@
             <select name="dir" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
                 <option value="to_aern">→ For Aern</option>
                 <option value="to_fleet">→ For the fleet</option>
+                <option value="to_review">→ For review (walk in session)</option>
             </select>
             <select name="priority" class="bg-dark-bg border border-dark-border rounded-md px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
                 <option value="1">P1 — highest</option>
@@ -38,8 +39,8 @@
     </form>
 </section>
 
-<!-- Two columns: For Aern / For the fleet -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Three columns: For Aern / For review / For the fleet -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <section>
         <h3 class="text-lg font-semibold text-white mb-3">📥 For Aern</h3>
         <ul id="queue-to-aern-open" class="space-y-2 mb-3">
@@ -48,6 +49,20 @@
         <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
             <summary class="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-gray-300">✅ Done</summary>
             <ul id="queue-to-aern-done" class="px-4 pb-3 pt-2 border-t border-dark-border space-y-2">
+                <li class="text-xs text-gray-400">Loading…</li>
+            </ul>
+        </details>
+    </section>
+
+    <section>
+        <h3 class="text-lg font-semibold text-white mb-1">🔎 For review</h3>
+        <p class="text-xs text-gray-400 mb-3">Bot and task findings that need thought. Walked in /goodmorning; not in Todoist.</p>
+        <ul id="queue-to-review-open" class="space-y-2 mb-3">
+            <li class="text-sm text-gray-400">Loading…</li>
+        </ul>
+        <details class="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
+            <summary class="cursor-pointer select-none px-4 py-2 text-xs font-semibold text-gray-300">✅ Done</summary>
+            <ul id="queue-to-review-done" class="px-4 pb-3 pt-2 border-t border-dark-border space-y-2">
                 <li class="text-xs text-gray-400">Loading…</li>
             </ul>
         </details>

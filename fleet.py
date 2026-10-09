@@ -3,8 +3,9 @@ fleet.py — Fleet board sentinel for the Aernbot/TCG/infra homelab.
 
 A background daemon thread polls a fixed set of health checks every
 FLEET_INTERVAL seconds, persists current state + rolling history to
-/data/fleet_state.json (atomic temp+rename write), and sends Signal alerts on
-state transitions plus a 07:00 America/Chicago daily digest. A Flask
+/data/fleet_state.json (atomic temp+rename write), records state transitions
+on the board, and pushes to Signal only sustained outages of PUSH_CHECKS plus
+a one-line 07:00 America/Chicago status (info-streams plan, 10/09). A Flask
 Blueprint exposes the current state at GET /api/fleet.
 
 Every check is wrapped so a single failure (dead socket, missing file, locked
@@ -60,7 +61,14 @@ FLEET_INTERVAL = int(os.environ.get("FLEET_INTERVAL", "60") or "60")
 HISTORY_LEN = 100
 UNKNOWN_DEGRADE_H = 3  # a check "unknown" this long renders "warn" (see sentinel_pass)
 ALERT_COOLDOWN_S = 10 * 60  # max 1 alert per check per 10 min
-DIGEST_HOUR = 7  # 07:00 America/Chicago daily digest
+DIGEST_HOUR = 7  # 07:00 America/Chicago daily status line
+# Info-streams plan (Aern 10/09, fleet-config ref/info-streams.md): the phone gets
+# outages that need action plus ONE daily status line. Every other transition is
+# board-only (recent_alerts, /nexus/fleet). A push-list check pushes once per
+# episode, after it has been not-up for PUSH_SUSTAIN_S; no RECOVERED pushes.
+PUSH_CHECKS = {"relay_alive", "tcg_autoprocess", "chrome_cdp", "containers", "tailscale"}
+PUSH_SUSTAIN_S = 30 * 60
+QUEUE_PATH = os.path.join(DATA_DIR, "queue.json")
 CENTRAL_TZ = ZoneInfo("America/Chicago")
 
 SIGNAL_HTTP_URL = os.environ.get("SIGNAL_HTTP_URL", "")
@@ -951,48 +959,30 @@ def _rate_limited(last_sent_iso, now):
     return (now - last).total_seconds() < ALERT_COOLDOWN_S
 
 
-def _build_digest(checks_state, now):
-    local_now = now.astimezone(CENTRAL_TZ)
-    lines = [f"Fleet daily digest — {local_now.strftime('%Y-%m-%d %H:%M %Z')}"]
+def _review_waiting():
+    """Open to_review queue items (the session walk-through backlog), or None."""
+    try:
+        with open(QUEUE_PATH, encoding="utf-8") as f:
+            items = json.load(f).get("items", [])
+        return sum(1 for i in items if i.get("dir") == "to_review" and i.get("status") == "open")
+    except (OSError, ValueError, AttributeError):
+        return None
 
-    by_group = {}
-    for cid, entry in checks_state.items():
-        by_group.setdefault(entry.get("group", "infra"), []).append((cid, entry))
 
-    for group in ("aernbot", "tcg", "infra", "host", "fleet"):
-        items = sorted(by_group.get(group, []), key=lambda kv: kv[1].get("label", kv[0]))
-        if not items:
-            continue
-        lines.append(f"\n{group.upper()}:")
-        for _cid, entry in items:
-            icon = _STATUS_ICON.get(entry.get("status"), "•")
-            lines.append(f"  {icon} {entry.get('label')}: {entry.get('status')}")
-
-    # Flaps in the last 24h, derived from each check's rolling history.
-    cutoff = now - dt.timedelta(hours=24)
-    flap_lines = []
-    for _cid, entry in checks_state.items():
-        history = entry.get("history", [])
-        changes = 0
-        last_status = None
-        for h in history:
-            try:
-                ts = dt.datetime.fromisoformat(h["ts"])
-            except (ValueError, KeyError, TypeError):
-                continue
-            if ts < cutoff:
-                last_status = h.get("status")
-                continue
-            if last_status is not None and h.get("status") != last_status:
-                changes += 1
-            last_status = h.get("status")
-        if changes:
-            flap_lines.append(f"  {entry.get('label')}: {changes} change(s)")
-
-    lines.append("\nFlaps (24h):")
-    lines.extend(flap_lines if flap_lines else ["  none"])
-
-    return "\n".join(lines)
+def _build_status_line(checks_state):
+    """The one-line 07:00 phone status: green count, what isn't, review backlog."""
+    total = len(checks_state)
+    bad = sorted((e for e in checks_state.values() if e.get("status") != "up"),
+                 key=lambda e: -_STATUS_RANK.get(e.get("status"), 0))
+    line = f"Fleet {total - len(bad)}/{total} up"
+    if bad:
+        named = ", ".join(f"{_STATUS_ICON.get(e.get('status'), '•')} {e.get('label')}" for e in bad[:3])
+        more = f" +{len(bad) - 3} more" if len(bad) > 3 else ""
+        line += f" · {named}{more}"
+    waiting = _review_waiting()
+    if waiting:
+        line += f" · {waiting} waiting for review"
+    return line
 
 
 # ── Sentinel pass ──────────────────────────────────────────────────────────
@@ -1076,31 +1066,55 @@ def sentinel_pass():
             detail = checks_state[cid].get("detail") or ""
             suffix = f" — {detail}" if detail else ""
             alert_lines.append(f"{icon} {label}: {old_status} → {new_status}{suffix}")
-        alerts_state[cid] = {"last_sent": now_iso}
+        alerts_state.setdefault(cid, {})["last_sent"] = now_iso
 
+    # Transitions are board-only now (Aern 10/09): recorded, never pushed.
     if alert_lines:
         message = "Fleet alert:\n" + "\n".join(alert_lines)
+        state["recent_alerts"].append({"ts": now_iso, "message": message, "sent": False, "board_only": True})
+        state["recent_alerts"] = state["recent_alerts"][-20:]
+
+    # Phone push: a PUSH_CHECKS check not-up for PUSH_SUSTAIN_S, once per episode.
+    # The episode is keyed on last_change, so a flap that recovers inside the
+    # window never pushes, and a new outage after a recovery pushes again.
+    push_lines = []
+    for cid in sorted(PUSH_CHECKS):
+        entry = checks_state.get(cid)
+        if not entry or entry.get("status") == "up":
+            continue
+        try:
+            down_s = (now - dt.datetime.fromisoformat(entry["last_change"])).total_seconds()
+        except (KeyError, ValueError, TypeError):
+            continue
+        if down_s < PUSH_SUSTAIN_S or alerts_state.get(cid, {}).get("pushed_episode") == entry["last_change"]:
+            continue
+        detail = (entry.get("detail") or "")[:120]
+        push_lines.append(f"{_STATUS_ICON.get(entry['status'], '•')} {entry['label']} {entry['status']} "
+                          f"{int(down_s // 60)}m" + (f" — {detail}" if detail else ""))
+        alerts_state.setdefault(cid, {})["pushed_episode"] = entry["last_change"]
+    if push_lines:
+        message = "Fleet outage:\n" + "\n".join(push_lines)
         try:
             sent = _send_signal(message)
         except Exception as e:
-            print(f"[fleet] alert send crashed: {e}")
+            print(f"[fleet] outage push crashed: {e}")
             sent = False
         state["recent_alerts"].append({"ts": now_iso, "message": message, "sent": sent})
         state["recent_alerts"] = state["recent_alerts"][-20:]
 
-    # Daily digest at 07:00 America/Chicago (guarded by last_digest_date so a
+    # One-line status at 07:00 America/Chicago (guarded by last_digest_date so a
     # 60s poll interval doesn't resend it every pass through the hour).
     local_now = now.astimezone(CENTRAL_TZ)
     today_str = local_now.strftime("%Y-%m-%d")
     if local_now.hour == DIGEST_HOUR and state.get("last_digest_date") != today_str:
         try:
-            digest = _build_digest(checks_state, now)
-            sent = _send_signal(digest)
+            status_line = _build_status_line(checks_state)
+            sent = _send_signal(status_line)
         except Exception as e:
-            print(f"[fleet] digest build/send crashed: {e}")
-            digest, sent = None, False
-        if digest is not None:
-            state["recent_alerts"].append({"ts": now_iso, "message": digest, "sent": sent})
+            print(f"[fleet] status line build/send crashed: {e}")
+            status_line, sent = None, False
+        if status_line is not None:
+            state["recent_alerts"].append({"ts": now_iso, "message": status_line, "sent": sent})
             state["recent_alerts"] = state["recent_alerts"][-20:]
         state["last_digest_date"] = today_str
 

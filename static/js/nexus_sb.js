@@ -195,6 +195,7 @@ function sbRenderQueueColumn(items, openElId, doneElId) {
 function sbRenderQueue(data) {
     const items = Array.isArray(data.items) ? data.items : [];
     sbRenderQueueColumn(items.filter((i) => i.dir === 'to_aern'), 'queue-to-aern-open', 'queue-to-aern-done');
+    sbRenderQueueColumn(items.filter((i) => i.dir === 'to_review'), 'queue-to-review-open', 'queue-to-review-done');
     sbRenderQueueColumn(items.filter((i) => i.dir === 'to_fleet'), 'queue-to-fleet-open', 'queue-to-fleet-done');
     const el = document.getElementById('queue-last-update');
     if (el) el.textContent = new Date().toLocaleTimeString();
@@ -206,7 +207,7 @@ async function sbLoadQueue() {
         sbRenderQueue(data || {});
     } catch (err) {
         console.error('Failed to load queue:', err);
-        ['queue-to-aern-open', 'queue-to-fleet-open'].forEach((id) => {
+        ['queue-to-aern-open', 'queue-to-review-open', 'queue-to-fleet-open'].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '<li class="text-center text-red-400 text-sm">Failed to load queue.</li>';
         });
