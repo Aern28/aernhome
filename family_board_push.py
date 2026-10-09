@@ -272,7 +272,8 @@ def calendar_client():
 
 
 def main():
-    sys.stdout.reconfigure(encoding="utf-8")  # calendar titles carry emoji; cp1252 consoles choke
+    if sys.stdout:  # None under pythonw (the scheduled task: no console window every 15 min)
+        sys.stdout.reconfigure(encoding="utf-8")  # calendar titles carry emoji; cp1252 consoles choke
     dates = week_dates()
     cal = calendar_client()
     gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates))
