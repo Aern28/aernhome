@@ -59,15 +59,19 @@ def week_dates():
     return [monday + timedelta(days=i) for i in range(7)]
 
 
+# TRMNL's edge answers 403 to Python's default "Python-urllib" agent (10/08); name ourselves.
+UA = {"user-agent": "family-board-push/1.1 (aernhome)"}
+
+
 def get_json(url, headers=None, timeout=15):
-    req = urllib.request.Request(url, headers=headers or {})
+    req = urllib.request.Request(url, headers={**UA, **(headers or {})})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 
 def post_json(url, payload, timeout):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                 headers={"content-type": "application/json"}, method="POST")
+                                 headers={**UA, "content-type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status
 
