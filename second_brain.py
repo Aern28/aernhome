@@ -33,6 +33,7 @@ partial doc so a single bad write can't take the pages down.
 """
 
 import os
+import re
 import json
 import secrets
 import sqlite3
@@ -59,6 +60,21 @@ VALID_QUEUE_DIR = {"to_aern", "to_fleet", "to_review"}
 VALID_QUEUE_STATUS = {"open", "done"}
 VALID_AGENDA_WHICH = {"daily", "weekly"}
 VALID_PRIORITY = {1, 2, 3}
+
+# Canon (Aern 10/09, seat project nexus-canon): the seat board is canon for fleet
+# work. A queue item may carry `project_id`; when that project is marked done or
+# leaves the board, its open items close themselves. Project-less items die by
+# `key` supersession or by expiry (`ttl_hours`, with a per-dir default below).
+# On 10/09 an open item ("spec needed before the weekend build") outlived the
+# work it pointed at by two days and three sessions copied it as live state.
+PROJECT_ID_MAX = 80
+QUEUE_TTL_MAX_H = 24 * 90
+# Real to-dos (to_aern, to_fleet) never expire by default; review surfaces do.
+QUEUE_DEFAULT_TTL_H = {"to_review": 24 * 7}
+# Agenda lines link to a project with an inline tag, e.g. "- [ ] Ship it {p:nexus-canon}".
+AGENDA_TAG_RE = re.compile(r"\{p:([A-Za-z0-9._-]{1,80})\}")
+AGENDA_ITEM_RE = re.compile(r"^(\s*)[-*]\s+\[( |x|X)\]\s?(.*)$")
+AGENDA_DATE_RE = re.compile(r"^#\s.*?(\d{4}-\d{2}-\d{2})")
 
 
 # ── Gate (same convention as fleet.py / app.py) ───────────────────────────
@@ -255,6 +271,99 @@ def _clean_project(raw, existing=None):
     }
 
 
+# ── Queue <-> seat canon helpers ───────────────────────────────────────────
+def _project_index(seat=None):
+    """{project_id: project} for the current board (never raises)."""
+    try:
+        doc = seat if seat is not None else load_seat()
+        return {p.get("id"): p for p in doc["projects"] if isinstance(p, dict) and p.get("id")}
+    except Exception:
+        return {}
+
+
+def _close_queue_item(item, note, via=None):
+    """Mark one item done in-memory and close its Todoist twin (best-effort).
+    The caller saves the queue. Shared by resolve, key supersession, project
+    close and expiry so every path closes the twin the same way."""
+    item["status"] = "done"
+    item["resolved_at"] = _now_iso()
+    if note:
+        item["resolution_note"] = note
+    if via:
+        item["resolved_via"] = via
+    try:
+        import todoist_bridge
+        if item.get("todoist_id"):
+            todoist_bridge.close_task(item["todoist_id"])
+        elif item.get("dir") == "to_aern":
+            todoist_bridge.close_by_content(todoist_bridge.QUEUE_PREFIX + item.get("text", ""))
+    except Exception:
+        pass
+
+
+def _close_linked_items(notes_by_project):
+    """Close every OPEN queue item linked to a project in `notes_by_project`
+    ({project_id: note}). Returns the closed item ids. Runs under the store lock
+    (re-entrant, so it is safe from inside a seat write)."""
+    if not notes_by_project:
+        return []
+    closed = []
+    with _STORE_LOCK:
+        doc = load_queue()
+        for item in doc["items"]:
+            if (isinstance(item, dict) and item.get("status") == "open"
+                    and item.get("project_id") in notes_by_project):
+                _close_queue_item(item, notes_by_project[item["project_id"]], via="project")
+                closed.append(item.get("id"))
+        if closed:
+            save_queue_atomic(doc)
+    return closed
+
+
+def _sweep_expired():
+    """Close open items whose expires_at has passed ("aged out", never deleted).
+    Lazy: called from queue reads/writes instead of a scheduled task (Aern 10/09,
+    Q12) - every seat and bot hits the queue all day. Cheap: local JSON only."""
+    try:
+        now = dt.datetime.now(dt.timezone.utc)
+        with _STORE_LOCK:
+            doc = load_queue()
+            changed = False
+            for item in doc["items"]:
+                if not isinstance(item, dict) or item.get("status") != "open":
+                    continue
+                exp = item.get("expires_at")
+                if not exp:
+                    continue
+                try:
+                    when = dt.datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if when <= now:
+                    _close_queue_item(item, f"aged out (expired {_local_str(exp) or exp})", via="expiry")
+                    changed = True
+            if changed:
+                save_queue_atomic(doc)
+    except Exception as e:
+        print(f"[second_brain] queue expiry sweep failed: {e}")
+
+
+def _enrich_items(items, projects=None):
+    """Copies of `items` with live project_status/project_title for linked items
+    (computed, never stored: the board is the canon)."""
+    projects = projects if projects is not None else _project_index()
+    out = []
+    for i in items:
+        if isinstance(i, dict) and i.get("project_id"):
+            i = dict(i)
+            p = projects.get(i["project_id"])
+            i["project_status"] = p.get("status") if p else "unknown"
+            if p:
+                i["project_title"] = p.get("title")
+        out.append(i)
+    return out
+
+
 # ── /api/seat ──────────────────────────────────────────────────────────────
 @sb_bp.route("/api/seat")
 def api_seat_get():
@@ -287,6 +396,10 @@ def api_seat_post():
             "current_updated_by": doc.get("updated_by"),
             "current_projects": doc.get("projects"),
         }), 409
+
+    # Status before this write, to detect projects that close (-> done) or leave
+    # the board; their linked open queue items close after the save (Q3/Q9).
+    before = {p.get("id"): p.get("status") for p in doc["projects"] if isinstance(p, dict)}
 
     if isinstance(body.get("projects"), list):
         # Full replace. DANGEROUS: anything absent from the payload is deleted.
@@ -323,7 +436,20 @@ def api_seat_post():
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
-    return jsonify({"ok": True, "seat": doc})
+    after = {p.get("id"): p for p in doc["projects"] if isinstance(p, dict)}
+    notes = {}
+    for pid, old_status in before.items():
+        if pid not in after:
+            notes[pid] = f"auto: project {pid} removed from the board ({updated_by})"
+        elif old_status != "done" and after[pid].get("status") == "done":
+            notes[pid] = f"auto: project {pid} marked done ({updated_by})"
+    closed = []
+    try:
+        closed = _close_linked_items(notes)
+    except Exception as e:
+        print(f"[second_brain] linked-item close failed: {e}")
+
+    return jsonify({"ok": True, "seat": doc, "closed_queue_items": closed})
 
 
 @sb_bp.route("/api/seat/prune", methods=["POST"])
@@ -332,6 +458,7 @@ def api_seat_prune():
     body = _sb_json()
     doc = load_seat()
     before = len(doc["projects"])
+    pruned_ids = [p.get("id") for p in doc["projects"] if isinstance(p, dict) and p.get("status") == "done"]
     doc["projects"] = [p for p in doc["projects"] if isinstance(p, dict) and p.get("status") != "done"]
     removed = before - len(doc["projects"])
     doc["updated_at"] = _now_iso()
@@ -342,7 +469,14 @@ def api_seat_prune():
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
-    return jsonify({"ok": True, "removed": removed, "seat": doc})
+    # Removal is a close (Q9): never leave a linked item pointing at nothing.
+    closed = []
+    try:
+        closed = _close_linked_items({pid: f"auto: project {pid} pruned from the board" for pid in pruned_ids})
+    except Exception as e:
+        print(f"[second_brain] linked-item close on prune failed: {e}")
+
+    return jsonify({"ok": True, "removed": removed, "seat": doc, "closed_queue_items": closed})
 
 
 # ── /api/queue ─────────────────────────────────────────────────────────────
@@ -350,6 +484,9 @@ def api_seat_prune():
 def api_queue_get():
     if not _is_nexus_allowed():
         abort(404)
+    # Lazy housekeeping (Q12): expiry every read, Todoist sync-back throttled.
+    _sweep_expired()
+    _sync_todoist_completions()
     doc = load_queue()
     items = doc["items"]
 
@@ -361,7 +498,9 @@ def api_queue_get():
     if status_filter in VALID_QUEUE_STATUS:
         items = [i for i in items if i.get("status") == status_filter]
 
-    return jsonify({"items": items})
+    # project_status is live from the board. Items on a PARKED project are still
+    # returned (callers like /goodmorning hide them, Q3); never stored.
+    return jsonify({"items": _enrich_items(items)})
 
 
 @sb_bp.route("/api/queue", methods=["POST"])
@@ -393,6 +532,28 @@ def api_queue_post():
     # to-dos and keep needing a human/seat resolve.
     key = (body.get("key") or "").strip()[:64] or None
 
+    # Canon link (Q1/Q5/Q13): optional. An unknown id is stored and FLAGGED,
+    # never rejected - a rejected post is a lost alert.
+    warnings = []
+    project_id = str(body.get("project_id") or "").strip()[:PROJECT_ID_MAX] or None
+    project_unknown = False
+    if project_id and project_id not in _project_index():
+        project_unknown = True
+        warnings.append(f"project_id '{project_id}' is not on the board - stored and flagged")
+
+    # Expiry (Q4): explicit ttl_hours wins; else a per-dir default for
+    # project-less items. Linked items close with their project instead.
+    ttl_h = None
+    if body.get("ttl_hours") not in (None, ""):
+        try:
+            ttl_h = max(1, min(int(body.get("ttl_hours")), QUEUE_TTL_MAX_H))
+        except (TypeError, ValueError):
+            warnings.append("ttl_hours ignored (not an integer)")
+    elif not project_id:
+        ttl_h = QUEUE_DEFAULT_TTL_H.get(direction)
+    expires_at = ((dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=ttl_h)).isoformat()
+                  if ttl_h else None)
+
     item = {
         "id": _short_id(),
         "dir": direction,
@@ -410,7 +571,11 @@ def api_queue_post():
         "created_by": body.get("created_by") or "unknown",
         "status": "open",
         "resolved_at": None,
+        "project_id": project_id,
+        "expires_at": expires_at,
     }
+    if project_unknown:
+        item["project_unknown"] = True
 
     # For-Aern items ride his normal GTD flow: mirror into Todoist (best-effort;
     # a Todoist outage never blocks the queue write). Stored id lets resolve
@@ -430,24 +595,18 @@ def api_queue_post():
         for old in doc["items"]:
             if (old.get("status") == "open" and old.get("dir") == direction
                     and old.get("key") == key):
-                old["status"] = "done"
-                old["resolved_at"] = now
-                old["resolution_note"] = f"superseded by {item['id']}"
+                # to_aern twins ride Todoist; closed like a manual resolve would
+                _close_queue_item(old, f"superseded by {item['id']}")
                 superseded.append(old["id"])
-                # to_aern twins ride Todoist; close them like a manual resolve would
-                try:
-                    import todoist_bridge
-                    if old.get("todoist_id"):
-                        todoist_bridge.close_task(old["todoist_id"])
-                except Exception:
-                    pass
     doc["items"].append(item)
     try:
         save_queue_atomic(doc)
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
+    _sweep_expired()
 
-    return jsonify({"ok": True, "id": item["id"], "item": item, "superseded": superseded})
+    return jsonify({"ok": True, "id": item["id"], "item": item, "superseded": superseded,
+                    "warnings": warnings})
 
 
 @sb_bp.route("/api/queue/resolve", methods=["POST"])
@@ -474,23 +633,10 @@ def api_queue_resolve():
     found = None
     for item in doc["items"]:
         if item.get("id") == item_id:
-            item["status"] = "done"
-            item["resolved_at"] = _now_iso()
-            # Only set when supplied: re-resolving after a reopen must not wipe an
-            # existing note just because this caller had nothing to add.
-            if note:
-                item["resolution_note"] = note
+            # Note only set when supplied: re-resolving after a reopen must not
+            # wipe an existing note. The Todoist twin closes best-effort.
+            _close_queue_item(item, note)
             found = item
-            # Close the Todoist twin (best-effort, never blocks the resolve)
-            try:
-                import todoist_bridge
-                if item.get("todoist_id"):
-                    todoist_bridge.close_task(item["todoist_id"])
-                elif item.get("dir") == "to_aern":
-                    todoist_bridge.close_by_content(
-                        todoist_bridge.QUEUE_PREFIX + item.get("text", ""))
-            except Exception:
-                pass
             break
 
     if not found:
@@ -611,6 +757,34 @@ def api_agenda_post():
             "current_content": current.get("content"),
         }), 409
 
+    # Project-tag guard (Q15): five skills rewrite this blob through an LLM, and a
+    # dropped {p:<id>} tag silently unlinks a line from the board. A save may not
+    # lose a tag that sat on a still-UNCHECKED line unless the caller ticks that
+    # line (the tag survives), names it in drop_tags (a deliberate delete), the
+    # project is done or off the board, or this is a new day's agenda (the H1 date
+    # changed - not carrying yesterday's line forward is a decision, not a slip).
+    projects = _project_index()
+    warnings = []
+    if current and isinstance(current.get("content"), str):
+        old_date, new_date = _agenda_date(current["content"]), _agenda_date(content)
+        if not (old_date and new_date and old_date != new_date):
+            drop = {str(t) for t in (body.get("drop_tags") or []) if t}
+            kept = _agenda_tags(content)[1]
+            missing = sorted(
+                t for t in _agenda_tags(current["content"])[0] - kept - drop
+                if t in projects and projects[t].get("status") != "done")
+            if missing:
+                return jsonify({
+                    "ok": False,
+                    "error": ("agenda save would drop project tag(s) from unchecked line(s): "
+                              + ", ".join("{p:%s}" % t for t in missing)
+                              + ". Keep the tag on the line, tick the line, or pass drop_tags to delete it on purpose."),
+                    "missing_tags": missing,
+                }), 422
+    unknown = sorted(t for t in _agenda_tags(content)[1] if t not in projects)
+    if unknown:
+        warnings.append("tag(s) not on the board: " + ", ".join(unknown))
+
     doc[which] = {
         "content": content,
         "updated_at": _now_iso(),
@@ -622,7 +796,84 @@ def api_agenda_post():
     except OSError as e:
         return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
 
-    return jsonify({"ok": True, which: {k: v for k, v in doc[which].items() if k != "content"}})
+    return jsonify({"ok": True, which: {k: v for k, v in doc[which].items() if k != "content"},
+                    "warnings": warnings})
+
+
+def _agenda_date(content):
+    for line in (content or "").splitlines():
+        m = AGENDA_DATE_RE.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _agenda_tags(content):
+    """(tags on unchecked lines, every tag anywhere) for an agenda blob."""
+    unchecked, every = set(), set()
+    for line in (content or "").splitlines():
+        tags = set(AGENDA_TAG_RE.findall(line))
+        every |= tags
+        m = AGENDA_ITEM_RE.match(line)
+        if m and m.group(2) == " ":
+            unchecked |= tags
+    return unchecked, every
+
+
+def _agenda_lines(content, projects):
+    """Parse an agenda blob into display lines with LIVE project status (Q10/Q16).
+    Display only: the stored markdown is never rewritten here."""
+    out = []
+    for raw in (content or "").splitlines():
+        if not raw.strip():
+            continue
+        h = re.match(r"^(#{1,6})\s+(.*)$", raw)
+        if h:
+            out.append({"kind": "heading", "level": len(h.group(1)), "text": h.group(2).strip()})
+            continue
+        m = AGENDA_ITEM_RE.match(raw)
+        b = None if m else re.match(r"^(\s*)[-*]\s+(.*)$", raw)
+        if m:
+            indent, text, checked = len(m.group(1)), m.group(3), m.group(2) != " "
+        elif b:
+            indent, text, checked = len(b.group(1)), b.group(2), None
+        else:
+            out.append({"kind": "text", "text": raw.strip()})
+            continue
+        links = []
+        for pid in AGENDA_TAG_RE.findall(text):
+            p = projects.get(pid)
+            links.append({"id": pid, "found": bool(p),
+                          "status": p.get("status") if p else "unknown",
+                          "title": (p or {}).get("title"),
+                          "next_step": (p or {}).get("next_step"),
+                          "blocked_on": (p or {}).get("blocked_on")})
+        clean = AGENDA_TAG_RE.sub("", text).rstrip()
+        # A done project shows its unchecked line as done; /goodmorning ticks it for real.
+        auto_done = bool(checked is False and links and all(l["status"] == "done" for l in links))
+        out.append({"kind": "item" if checked is not None else "bullet", "indent": indent,
+                    "checked": checked, "auto_done": auto_done, "text": clean, "projects": links})
+    return out
+
+
+@sb_bp.route("/api/agenda/view")
+def api_agenda_view():
+    """Daily + weekly agenda parsed for the /nexus/aern display, with each
+    {p:<id>} tag resolved against the board at read time."""
+    if not _is_nexus_allowed():
+        abort(404)
+    doc = load_agenda()
+    projects = _project_index()
+    out = {}
+    for which in ("daily", "weekly"):
+        entry = doc.get(which)
+        if not entry:
+            out[which] = None
+            continue
+        meta = _with_local({k: v for k, v in entry.items() if k != "content"}, "updated_at")
+        meta["lines"] = _agenda_lines(entry.get("content"), projects)
+        out[which] = meta
+    return jsonify(out)
 
 
 # ── /api/needs-aern ────────────────────────────────────────────────────────
@@ -704,8 +955,13 @@ def _needs_from_queue():
     out = []
     try:
         doc = load_queue()
+        projects = _project_index()
         for item in doc["items"]:
             if item.get("dir") == "to_aern" and item.get("status") == "open":
+                # Parked means stop raising it (Q3): linked items wait, unseen.
+                pid = item.get("project_id")
+                if pid and (projects.get(pid) or {}).get("status") == "parked":
+                    continue
                 out.append({
                     "source_kind": "queue",
                     "id": item.get("id"),
@@ -805,6 +1061,7 @@ def api_needs_aern():
     if not _is_nexus_allowed():
         abort(404)
 
+    _sweep_expired()
     _sync_todoist_completions()
 
     items = []

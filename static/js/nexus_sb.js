@@ -348,11 +348,82 @@ async function sbLoadAern() {
     }
 }
 
+// ── /nexus/aern live agenda ───────────────────────────────────────────────
+// Each {p:<id>} line carries its project's LIVE board status (the board is
+// canon). A done project shows its unchecked line struck through; the stored
+// agenda text is untouched until an agent ticks it.
+const SB_PROJECT_BADGE = {
+    active: ['text-emerald-400', 'active'],
+    blocked: ['text-amber-400', 'blocked'],
+    parked: ['text-gray-400', 'parked'],
+    done: ['text-emerald-400', 'done ✓'],
+    unknown: ['text-red-400', 'not on board'],
+};
+
+/** Escape, then allow **bold** and `code` - the only markdown the agenda uses. */
+function sbInlineMd(s) {
+    return sbEscapeHtml(s)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="font-mono text-[11px] bg-dark-bg border border-dark-border rounded px-1">$1</code>');
+}
+
+function sbRenderAgendaLine(l) {
+    if (l.kind === 'heading') {
+        return l.level <= 1
+            ? `<h3 class="text-base font-semibold text-white mb-1">${sbInlineMd(l.text)}</h3>`
+            : `<h4 class="text-xs font-semibold uppercase tracking-wide text-gray-400 mt-3 mb-1">${sbInlineMd(l.text)}</h4>`;
+    }
+    if (l.kind === 'text') {
+        // "> note" lines are the agenda's summary blockquote: drop the marker.
+        return `<p class="text-sm text-gray-400 mb-1">${sbInlineMd(l.text.replace(/^>\s?/, ''))}</p>`;
+    }
+    const done = l.checked === true || l.auto_done;
+    const box = l.kind === 'item' ? (done ? '✅' : '⬜') : '•';
+    const badges = (l.projects || []).map((p) => {
+        const [cls, label] = SB_PROJECT_BADGE[p.status] || SB_PROJECT_BADGE.unknown;
+        const next = p.next_step
+            ? `<div class="text-[11px] text-gray-300 mt-1 whitespace-pre-wrap break-words">${p.blocked_on ? `<span class="text-amber-400">blocked on ${sbEscapeHtml(p.blocked_on)}</span> · ` : ''}${sbEscapeHtml(p.next_step)}</div>`
+            : '';
+        return `<details class="inline-block"><summary class="cursor-pointer text-[11px] ${cls}">● ${sbEscapeHtml(label)}</summary><div class="text-[11px] text-gray-400 mt-1"><span class="font-mono">${sbEscapeHtml(p.id)}</span>${p.title ? ` · ${sbEscapeHtml(p.title)}` : ''}</div>${next}</details>`;
+    }).join(' ');
+    const auto = l.auto_done ? ' <span class="text-[11px] text-emerald-400">(project done)</span>' : '';
+    return `<div class="flex gap-2 text-sm mb-1" style="margin-left:${Math.min(l.indent || 0, 8) * 6}px">
+        <span class="shrink-0">${box}</span>
+        <div class="min-w-0 break-words ${done ? 'line-through opacity-60 text-gray-400' : 'text-gray-200'}">${sbInlineMd(l.text)}${auto} ${badges}</div>
+    </div>`;
+}
+
+function sbRenderAgendaBlock(elId, entry, emptyText) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!entry || !Array.isArray(entry.lines) || !entry.lines.length) {
+        el.innerHTML = `<p class="text-sm text-gray-400">${emptyText}</p>`;
+        return;
+    }
+    const items = entry.lines.filter((l) => l.kind === 'item');
+    const doneCount = items.filter((l) => l.checked === true || l.auto_done).length;
+    el.innerHTML = entry.lines.map(sbRenderAgendaLine).join('')
+        + `<p class="text-[11px] text-gray-400 mt-3">${doneCount}/${items.length} done · updated ${sbRelativeTime(entry.updated_at)} by ${sbEscapeHtml(entry.updated_by || 'unknown')}</p>`;
+}
+
+async function sbLoadAgenda() {
+    try {
+        const data = await sbFetchJson('/api/agenda/view');
+        sbRenderAgendaBlock('agenda-daily', data.daily, 'No daily agenda yet.');
+        sbRenderAgendaBlock('agenda-weekly', data.weekly, 'No weekly agenda yet.');
+    } catch (err) {
+        console.error('Failed to load agenda:', err);
+        const el = document.getElementById('agenda-daily');
+        if (el) el.innerHTML = '<div class="text-center text-red-400 text-sm">Failed to load agenda.</div>';
+    }
+}
+
 // ── Shared boot / auto-refresh ────────────────────────────────────────────
 function sbLoadAll() {
     if (document.getElementById('seat-groups')) sbLoadSeat();
     if (document.getElementById('queue-to-aern-open')) sbLoadQueue();
     if (document.getElementById('aern-list')) sbLoadAern();
+    if (document.getElementById('agenda-daily')) sbLoadAgenda();
 }
 
 function sbStartAutoRefresh() {
