@@ -1,5 +1,5 @@
 {
- "_comment": "Nexus feature map: every GET page/API -> the sources it shows -> how fresh each must be. Read by nexus_verify.py (PASS/STALE/DEAD/DRIFT) and by the steward. A new GET route must land here (pages) or in excluded, or nexus_verify reports DRIFT. Source kinds: agenda_board (agenda {p:id} lines vs board status), connector (nexus_contract.envelope(name): DEAD on error/source_missing, STALE on a warning or an old as_of - preferred for anything nexus_sources serves), fleet_check (reuse a fleet.py check, no duplicate logic), file_age, glob_newest, sqlite_max (SQL returns one UTC timestamp), json_field (file + dotted key holding an ISO timestamp), dir_present, nonempty (module:function must return something non-empty - catches 'empty = all clear'), user_store (Aern-entered data: no freshness, page must render). stale_after_h null = no freshness bar. fallback: true = the page uses this source only when its primary is empty; it is probed and reported but does not set the page verdict. cf_expect: a Cloudflare-shaped request must get 404 (default) or, with \"decoy\", a 200 whose tiny body differs from the internal one (/api/restock answers {status: ok} with no data).",
+ "_comment": "Nexus feature map: every GET page/API -> the sources it shows -> how fresh each must be. Read by nexus_verify.py (PASS/STALE/DEAD/DRIFT) and by the steward. A new GET route must land here (pages) or in excluded, or nexus_verify reports DRIFT. Source kinds: agenda_board (agenda {p:id} lines vs board status), connector (nexus_contract.envelope(name): DEAD on error/source_missing, STALE on a warning or an old as_of - preferred for anything nexus_sources serves), fleet_check (reuse a fleet.py check, no duplicate logic), file_age, glob_newest, sqlite_max (SQL returns one UTC timestamp), json_field (file + dotted key holding an ISO timestamp), dir_present, nonempty (module:function must return something non-empty - catches 'empty = all clear'), user_store (Aern-entered data: no freshness, page must render). stale_after_h null = no freshness bar. fallback: true = the page uses this source only when its primary is empty; it is probed and reported but does not set the page verdict. cf_expect: a Cloudflare-shaped request must get 404 (default) or, with \"decoy\", a 200 whose tiny body differs from the internal one (/api/restock answers {status: ok} with no data). post_guards: write endpoints that must 404 to a Cloudflare-shaped POST (probed with an empty body, so a missing gate gets a 400 and never a write).",
  "version": 2,
  "pages": [
   {
@@ -515,5 +515,19 @@
   "/nexus/fleetdocs/<path:relpath>": "per-item page (parent mapped)",
   "/nexus/vault": "302 to /nexus/fleetdocs since the vault mount retired 2026-08-06 (vault.py)",
   "/api/nexus-verify": "the verifier's own result endpoint; GETting it from inside verify() would recurse (CF guard checked by hand 10/09)"
- }
+ },
+ "post_guards": [
+  "/api/nexus/capture",
+  "/api/agenda",
+  "/api/seat",
+  "/api/queue",
+  "/api/queue/resolve",
+  "/api/nexus/note",
+  "/api/nexus/doc",
+  "/api/nexus/media",
+  "/api/nexus/book",
+  "/api/nexus/goal",
+  "/api/nexus/link",
+  "/api/nexus/feed"
+ ]
 }

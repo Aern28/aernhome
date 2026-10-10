@@ -186,6 +186,24 @@ class AgendaBoard(unittest.TestCase):
         self.assertEqual((unknown, carried), (["daily: ghost"], []))
 
 
+class PostGuards(unittest.TestCase):
+    def test_only_404_passes_and_body_is_empty(self):
+        seen = []
+
+        class R:
+            def __init__(self, code):
+                self.status_code = code
+
+        class C:
+            def post(self, path, json=None, headers=None):
+                seen.append((path, json, headers.get("CF-Connecting-IP")))
+                return R(404 if path == "/ok" else 400)
+
+        bad = nv.post_guards({"post_guards": ["/ok", "/open"]}, C())
+        self.assertEqual(bad, ["/open -> HTTP 400"])
+        self.assertTrue(all(body == {} and cf for _, body, cf in seen))
+
+
 class Summary(unittest.TestCase):
     def test_summary_names_worst_first_and_drift(self):
         res = {"pages": [

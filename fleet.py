@@ -592,7 +592,7 @@ def check_nexus_pages():
         _nexus_verify_cache["at"] = now
     res = _nexus_verify_cache["result"]
     line = nexus_verify.summary(res) + " (py /app/nexus_verify.py)"
-    if any(p["render"]["verdict"] != "PASS" for p in res["pages"]):
+    if res.get("open_posts") or any(p["render"]["verdict"] != "PASS" for p in res["pages"]):
         return ("down", line)
     return ("up", line) if res["worst"] == "PASS" else ("warn", line)
 

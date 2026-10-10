@@ -234,6 +234,17 @@ def check_page(client, page):
     return "PASS", f"HTTP 200, {len(body) // 1024}KB, CF->404"
 
 
+def post_guards(fmap, client):
+    """Write endpoints that answered a Cloudflare-shaped POST with anything but 404.
+    Empty JSON body: an ungated handler rejects it (400) rather than writing."""
+    bad = []
+    for path in fmap.get("post_guards", []):
+        r = client.post(path, json={}, headers={"CF-Connecting-IP": "203.0.113.9"})
+        if r.status_code != 404:
+            bad.append(f"{path} -> HTTP {r.status_code}")
+    return bad
+
+
 def drift(fmap, app):
     mapped = {p["path"] for p in fmap["pages"]} | set(fmap.get("excluded", {}))
     rules = {r.rule for r in app.url_map.iter_rules() if "GET" in r.methods}
@@ -261,9 +272,11 @@ def verify(only=None, map_path=MAP_PATH):
         pages.append({"path": page["path"], "title": page.get("title", ""), "verdict": worst,
                       "render": {"verdict": verdict, "evidence": evidence}, "sources": sources})
     unmapped, gone = ([], []) if only else drift(fmap, app)
-    verdicts = [p["verdict"] for p in pages] + (["DRIFT"] if unmapped or gone else [])
+    open_posts = [] if only else post_guards(fmap, client)
+    verdicts = ([p["verdict"] for p in pages] + (["DRIFT"] if unmapped or gone else [])
+                + (["DEAD"] if open_posts else []))
     return {"checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "pages": pages, "unmapped": unmapped, "gone": gone,
+            "pages": pages, "unmapped": unmapped, "gone": gone, "open_posts": open_posts,
             "worst": max(verdicts, key=RANK.get) if verdicts else "PASS"}
 
 
@@ -274,6 +287,8 @@ def summary(result):
     for p in sorted(bad, key=lambda p: -RANK[p["verdict"]]):
         why = next((s for s in p["sources"] if s["verdict"] == p["verdict"] and not s.get("fallback")), None)
         parts.append(f"{p['path']} {p['verdict']}" + (f" ({why['id']})" if why else ""))
+    if result.get("open_posts"):
+        parts.append(f"PUBLIC WRITE: {', '.join(result['open_posts'])}")
     if result["unmapped"]:
         parts.append(f"DRIFT unmapped: {', '.join(result['unmapped'])}")
     if result["gone"]:
@@ -298,6 +313,10 @@ def main():
                 print(f"      {s['verdict']:7} {s['id']}{' (fallback, not counted)' if s['fallback'] else ''}: {s['evidence']}")
                 if s.get("note"):
                     print(f"              note: {s['note']}")
+        guards = len(load_map(args.map).get("post_guards", []))
+        if not args.only:
+            print(f"[{'DEAD' if result['open_posts'] else 'PASS':7}] post guards: "
+                  + ("; ".join(result["open_posts"]) or f"{guards} write endpoints 404 to a public POST"))
         for r in result["unmapped"]:
             print(f"[DRIFT  ] unmapped GET route {r} - add it to nexus_feature_map.json pages or excluded")
         for r in result["gone"]:
