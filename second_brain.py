@@ -1090,7 +1090,7 @@ def _needs_from_queue():
                     "id": item.get("id"),
                     "effort": item.get("effort"),
                     "title": (ask or item.get("text", ""))[:140],
-                    "detail": (item.get("text", "")[:300] if ask
+                    "detail": (item.get("text", "")[:4000] if ask
                                else (f"source: {item.get('source')}" if item.get("source") else "")),
                     "ask": ask,
                     "options": item.get("options") or [],

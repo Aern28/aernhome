@@ -155,7 +155,7 @@ function sbRenderQueueItem(item, resolvable) {
         <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
                 ${item.ask ? `<div class="text-sm font-semibold text-white break-words mb-1">${sbEscapeHtml(item.ask)}</div>` : ''}
-                <div class="text-sm text-gray-200 break-words">${sbEscapeHtml(item.text)}</div>
+                <div class="nx-clamp text-sm text-gray-200 break-words">${sbEscapeHtml(item.text)}</div>
                 <div class="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-gray-400">
                     <span class="${pColor} font-semibold">P${sbEscapeHtml(item.priority)}</span>
                     <span>${sbEscapeHtml(item.created_by || 'unknown')}</span>
@@ -211,6 +211,7 @@ async function sbLoadQueue() {
     try {
         const data = await sbFetchJson('/api/queue');
         sbRenderQueue(data || {});
+        sbWireClamps();
     } catch (err) {
         console.error('Failed to load queue:', err);
         ['queue-to-aern-open', 'queue-to-review-open', 'queue-to-fleet-open'].forEach((id) => {
@@ -312,7 +313,7 @@ function sbRenderAernItem(item) {
             <div class="min-w-0">
                 <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}${item.id ? ` · <span class="font-mono normal-case text-gray-400">#${sbEscapeHtml(item.id)}</span>` : ''}${item.repeat_count > 1 ? ` <span class="nx-tag">×${sbEscapeHtml(item.repeat_count)}</span>` : ''}${item.ask_missing ? ` <span class="nx-tag nx-tag-warn">no ask · ${sbEscapeHtml(item.created_by || 'unknown')}</span>` : ''}</div>
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
-                ${item.detail ? `<div class="text-sm text-gray-300 mt-1 break-words">${sbEscapeHtml(item.detail)}</div>` : ''}
+                ${item.detail ? `<div class="nx-clamp text-sm text-gray-300 mt-1 break-words">${sbEscapeHtml(item.detail)}</div>` : ''}
             </div>
             ${action}
         </div>
@@ -366,6 +367,7 @@ async function sbLoadAern() {
     try {
         const data = await sbFetchJson('/api/needs-aern');
         sbRenderAern(data || {});
+        sbWireClamps();
     } catch (err) {
         console.error('Failed to load needs-aern:', err);
         const el = document.getElementById('aern-list');
@@ -444,6 +446,27 @@ async function sbLoadAgenda() {
 }
 
 // ── Shared boot / auto-refresh ────────────────────────────────────────────
+// Long queue text (10/10: a multi-KB digest filled /nexus/queue): clamp to a few
+// lines and add a "more" toggle only where the text actually overflows.
+function sbWireClamps(root) {
+    (root || document).querySelectorAll('.nx-clamp:not([data-clamp-done])').forEach((el) => {
+        if (el.closest('details:not([open])') || el.offsetParent === null) return; // hidden: measured when its <details> opens
+        el.dataset.clampDone = '1';
+        if (el.scrollHeight <= el.clientHeight + 2) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nx-clamp-btn';
+        btn.textContent = 'more';
+        btn.addEventListener('click', () => {
+            const open = el.classList.toggle('open');
+            btn.textContent = open ? 'less' : 'more';
+        });
+        el.after(btn);
+    });
+}
+
+document.addEventListener('toggle', (e) => { if (e.target.open) sbWireClamps(e.target); }, true);
+
 function sbLoadAll() {
     if (document.getElementById('seat-groups')) sbLoadSeat();
     if (document.getElementById('queue-to-aern-open')) sbLoadQueue();

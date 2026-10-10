@@ -115,6 +115,11 @@
 .nx-tag { display: inline-block; text-transform: none; letter-spacing: 0; padding: 0 6px; border-radius: 6px; border: 1px solid var(--nx-line); color: var(--nx-fg); }
 .nx-tag-warn { border-style: dashed; color: var(--nx-muted); }
 
+/* Long queue text: four lines, then a more/less toggle (nexus_sb.js sbWireClamps). */
+.nx-clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.nx-clamp-btn { background: none; border: 0; padding: 4px 0; color: var(--nx-need); font: inherit; font-size: 12px; cursor: pointer; }
+
 /* Section wrappers: on a phone they stack exactly like the bare stream they replaced. */
 .nx-sec, .nx-shelves { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
