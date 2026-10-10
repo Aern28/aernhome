@@ -54,19 +54,19 @@
       <!-- Gal AM/PM -->
       <div style="font-size:12px; text-align:center; height:52px; display:flex; flex-direction:column; justify-content:center; border-bottom:2px solid {% if d.day == today %}#555{% else %}#000{% endif %};">
         {% if d.gal_am != blank %}<div style="font-weight:700;">{{ d.gal_am }}</div>{% endif %}
-        {% if d.gal_pm != blank %}<div style="color:{% if d.day == today %}#aaa{% else %}#888{% endif %};">{{ d.gal_pm }}</div>{% endif %}
+        {% if d.gal_pm != blank %}<div style="color:{% if d.day == today %}#fff{% else %}#555{% endif %};">{{ d.gal_pm }}</div>{% endif %}
       </div>
 
       <!-- Matt AM/PM -->
       <div style="font-size:12px; text-align:center; height:52px; display:flex; flex-direction:column; justify-content:center; border-bottom:2px solid {% if d.day == today %}#555{% else %}#000{% endif %};">
         {% if d.matt_am != blank %}<div style="font-weight:700;">{{ d.matt_am }}</div>{% endif %}
-        {% if d.matt_pm != blank %}<div style="color:{% if d.day == today %}#aaa{% else %}#888{% endif %};">{{ d.matt_pm }}</div>{% endif %}
+        {% if d.matt_pm != blank %}<div style="color:{% if d.day == today %}#fff{% else %}#555{% endif %};">{{ d.matt_pm }}</div>{% endif %}
       </div>
 
       <!-- Jaina dropoff/pickup -->
       <div style="font-size:12px; text-align:center; height:40px; display:flex; flex-direction:column; justify-content:center; border-bottom:2px solid {% if d.day == today %}#555{% else %}#000{% endif %};">
         {% if d.jaina_drop != blank %}<div>{{ d.jaina_drop }}</div>{% endif %}
-        {% if d.jaina_pick != blank %}<div style="color:{% if d.day == today %}#aaa{% else %}#888{% endif %};">{{ d.jaina_pick }}</div>{% endif %}
+        {% if d.jaina_pick != blank %}<div style="color:{% if d.day == today %}#fff{% else %}#555{% endif %};">{{ d.jaina_pick }}</div>{% endif %}
       </div>
 
       <!-- Meal -->

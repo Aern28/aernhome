@@ -76,8 +76,8 @@
               <span style="font-size:13px; font-weight:700;{% if p.plp_neg %} color:#000;{% endif %}">{{ p.plp }}</span>
               <span style="font-size:12px; color:#555;">{{ p.pld }}</span>
             </div>
-            <div style="font-size: 12px; color:#666; margin-top:2px;">Day {{ p.day }}/{{ p.total }} · Stop {{ p.stop }}</div>
-            {% if p.cat %}<div style="font-size: 12px; color:#666;">Catalyst: {{ p.cat }}</div>{% endif %}
+            <div style="font-size: 12px; color:#555; margin-top:2px;">Day {{ p.day }}/{{ p.total }} · Stop {{ p.stop }}</div>
+            {% if p.cat %}<div style="font-size: 12px; color:#555;">Catalyst: {{ p.cat }}</div>{% endif %}
           </div>
           {% endfor %}
         {% else %}
@@ -93,7 +93,7 @@
         {% endif %}
 
         <!-- LAST UPDATED -->
-        <div style="margin-top:auto; font-size: 12px; color:#666; text-align:right;">
+        <div style="margin-top:auto; font-size: 12px; color:#555; text-align:right;">
           Prices: {{ pf }} <span style="color: #555;">({{ pfa }})</span>
         </div>
 

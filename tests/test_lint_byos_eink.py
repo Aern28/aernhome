@@ -26,15 +26,9 @@ HEX = re.compile(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b")
 SIZE = re.compile(r"font-size\s*:\s*([0-9.]+)px", re.I)
 MIN_PX = 12
 
-# (template, finding) -> count on 2026-10-10. Lower these as Aern fixes them.
-BASELINE = {
-    ("dashboard.html", "grey text #666"): 2,
-    ("family-agenda.html", "grey text #888"): 3,
-    ("family-agenda.html", "grey text #aaa"): 3,
-    ("tcg-business.html", "grey text #666"): 3,
-    ("weather-openmeteo.html", "grey text #666"): 7,
-    ("weather-openmeteo.html", "grey text #ddd"): 1,
-}
+# (template, finding) -> count. Emptied 2026-10-10: Aern approved fixing all 19 (#666 and
+# #888 on white -> #555; #ddd and #aaa on black -> #fff). Any violation now fails the push.
+BASELINE = {}
 
 
 def _bright(h):
