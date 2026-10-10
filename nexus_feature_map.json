@@ -4,14 +4,8 @@
  "pages": [
   {
    "path": "/nexus",
-   "title": "Home",
+   "title": "Today (home)",
    "sources": [
-    {
-     "id": "todoist_today",
-     "kind": "connector",
-     "name": "todoist_today",
-     "stale_after_h": 1
-    },
     {
      "id": "schedule_today",
      "kind": "connector",
@@ -19,10 +13,10 @@
      "stale_after_h": 1
     },
     {
-     "id": "oura_summary",
+     "id": "todoist_today",
      "kind": "connector",
-     "name": "oura_summary",
-     "stale_after_h": 48
+     "name": "todoist_today",
+     "stale_after_h": 1
     },
     {
      "id": "tcg_alerts",
@@ -31,37 +25,23 @@
      "stale_after_h": 30
     },
     {
-     "id": "infra_summary",
+     "id": "tcg_business",
      "kind": "connector",
-     "name": "infra_summary",
-     "stale_after_h": 2
+     "name": "tcg_business",
+     "stale_after_h": 30
+    },
+    {
+     "id": "want_prices",
+     "kind": "json_field",
+     "file": "/tcg/want_prices_last.json",
+     "field": "at",
+     "stale_after_h": 26,
+     "note": "Want board pocket; want_prices.py 07:40 daily on Ashaman"
     },
     {
      "id": "feeds",
      "kind": "fleet_check",
      "check": "feed_fresh"
-    },
-    {
-     "id": "goals_summary",
-     "kind": "connector",
-     "name": "goals_summary"
-    },
-    {
-     "id": "maintenance_due",
-     "kind": "connector",
-     "name": "maintenance_due"
-    },
-    {
-     "id": "currently_reading",
-     "kind": "connector",
-     "name": "currently_reading",
-     "fallback": true,
-     "note": "Obsidian leg; vault mount retired 2026-08-06. Only used when nexus.db has no reading book - dead code, candidate for removal."
-    },
-    {
-     "id": "reading_books",
-     "kind": "user_store",
-     "db": "{DATA_DIR}/nexus.db"
     }
    ]
   },

@@ -127,6 +127,19 @@ def todoist_today(ttl=120):
     return _cached("todoist_today", ttl, _todoist_today_compute)
 
 
+# Side data from the same fetch (home redesign 10/10): due dates of queue twins
+# ("Nexus: " tasks, keyed by Todoist id) so home can hide an ask Aern dated for
+# later, and the next few dated tasks after today. Filled by _todoist_today_compute.
+_TODOIST_EXTRA = {"twin_due": {}, "upcoming": []}
+
+
+def todoist_extra():
+    """{"twin_due": {todoist_id: "YYYY-MM-DD"}, "upcoming": [task, ...]} from the
+    last todoist_today fetch (refreshing it if stale). Never raises."""
+    todoist_today()
+    return _TODOIST_EXTRA
+
+
 def _todoist_today_compute():
     """Fetch + filter today/overdue Todoist tasks.
 
@@ -175,16 +188,12 @@ def _todoist_today_compute():
     _mark("todoist_today", True, "partial: stopped at 10 pages" if cursor else "")
 
     today = datetime.date.today()
-    out = []
+    out, twin_due, upcoming = [], {}, []
     for t in tasks:
         if not isinstance(t, dict):
             continue
         content = t.get("content")
-        if isinstance(content, str) and content.startswith("Nexus: "):
-            # Queue twins (todoist_bridge.QUEUE_PREFIX — hardcoded here because
-            # todoist_bridge imports from this module) live on /nexus/aern;
-            # never double-list them, even once Aern dates one.
-            continue
+        is_twin = isinstance(content, str) and content.startswith("Nexus: ")
         due = t.get("due")
         if not isinstance(due, dict):
             continue  # undated task — skip
@@ -211,7 +220,16 @@ def _todoist_today_compute():
             due_date = datetime.date.fromisoformat(date_part)
         except ValueError:
             continue
+        if is_twin:
+            # Queue twins (todoist_bridge.QUEUE_PREFIX — hardcoded here because
+            # todoist_bridge imports from this module) live on /nexus/aern;
+            # never double-list them, even once Aern dates one. Keep the date.
+            twin_due[str(t.get("id", ""))] = date_part
+            continue
         if due_date > today:
+            if (due_date - today).days <= 7:
+                upcoming.append({"content": t.get("content", ""), "due": date_part,
+                                 "id": str(t.get("id", ""))})
             continue  # future task — skip (today + overdue only)
 
         try:
@@ -228,6 +246,8 @@ def _todoist_today_compute():
         })
 
     out.sort(key=lambda r: (-r["overdue_days"], -r["priority"]))
+    upcoming.sort(key=lambda r: r["due"])
+    _TODOIST_EXTRA.update(twin_due=twin_due, upcoming=upcoming[:5])
     return out
 
 
@@ -1042,7 +1062,9 @@ def schedule_today(ttl=900):
     GOOGLE_CALENDAR_SA / CALENDAR_ID / CALENDAR_ID_GAL. Each owner's calendar
     must be shared (read-only) with the service account's email. Degrades to
     {} per owner if creds/libs/calendar are unavailable. Never raises.
-    Shape: {"today": {"matt": [...], "gal": [...]}, "tomorrow": {"matt": [...], "gal": [...]}}."""
+    Shape: {"today": {"matt": [...], "gal": [...]}, "tomorrow": {...}, "later": {...}}.
+    Each item: summary, when, allday, plus start/end (ISO, Central) for the home
+    day strip; "later" = days 2-7, for "Next up" (home redesign 10/10)."""
     return _cached("schedule_today", ttl, _schedule_today_compute)
 
 
@@ -1050,20 +1072,21 @@ def _schedule_today_compute():
     errs = []
     matt = _schedule_for(os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com"), errs)
     gal_id = os.environ.get("CALENDAR_ID_GAL", "")
-    gal = _schedule_for(gal_id, errs) if gal_id else {"today": [], "tomorrow": []}
+    gal = _schedule_for(gal_id, errs) if gal_id else {"today": [], "tomorrow": [], "later": []}
     _mark("schedule_today", not errs, "; ".join(errs))
     out = {
         "today": {"matt": matt["today"], "gal": gal["today"]},
         "tomorrow": {"matt": matt["tomorrow"], "gal": gal["tomorrow"]},
+        "later": {"matt": matt["later"], "gal": gal["later"]},
     }
     has_any = any(out["today"].values()) or any(out["tomorrow"].values())
     return out if has_any else {}
 
 
 def _schedule_for(cal_id, errs=None):
-    """Today + tomorrow items for a single calendar id. Never raises;
-    returns {"today": [], "tomorrow": []} on any failure or missing config."""
-    empty = {"today": [], "tomorrow": []}
+    """Today, tomorrow and the next week ("later") for a single calendar id. Never
+    raises; returns empty lists on any failure or missing config."""
+    empty = {"today": [], "tomorrow": [], "later": []}
     sa_path = os.environ.get(
         "GOOGLE_CALENDAR_SA",
         "/workspace/.credentials/claudendar-service-account.json")
@@ -1082,7 +1105,7 @@ def _schedule_for(cal_id, errs=None):
         tz = ZoneInfo("America/Chicago")
         now = datetime.datetime.now(tz)
         start = datetime.datetime.combine(now.date(), datetime.time.min, tzinfo=tz)
-        end = start + datetime.timedelta(days=2)
+        end = start + datetime.timedelta(days=8)
         # Bound the calendar round-trip: googleapiclient/httplib2 have no default
         # socket timeout, so a hung Google endpoint would otherwise wedge this
         # request thread forever. A transient socket.timeout is caught below and
@@ -1098,7 +1121,7 @@ def _schedule_for(cal_id, errs=None):
                 calendarId=cal_id, singleEvents=True, orderBy="startTime",
                 timeMin=start.astimezone(datetime.timezone.utc).isoformat(),
                 timeMax=end.astimezone(datetime.timezone.utc).isoformat(),
-                timeZone="America/Chicago", maxResults=25,
+                timeZone="America/Chicago", maxResults=80,
             ).execute().get("items", [])
         finally:
             socket.setdefaulttimeout(_prev_to)
@@ -1108,9 +1131,10 @@ def _schedule_for(cal_id, errs=None):
         return empty
 
     today_d, tom_d = now.date(), now.date() + datetime.timedelta(days=1)
-    out = {"today": [], "tomorrow": []}
+    out = {"today": [], "tomorrow": [], "later": []}
     for ev in items:
         s = ev.get("start", {})
+        e_ = ev.get("end", {})
         summary = (ev.get("summary") or "(busy)").strip()
         for pre in ("GEN - ", "GEN -", "GEN-"):  # strip QGenda clinical prefix
             if summary.startswith(pre):
@@ -1119,18 +1143,27 @@ def _schedule_for(cal_id, errs=None):
         try:
             if s.get("dateTime"):
                 when_dt = datetime.datetime.fromisoformat(s["dateTime"]).astimezone(tz)
+                end_dt = (datetime.datetime.fromisoformat(e_["dateTime"]).astimezone(tz)
+                          if e_.get("dateTime") else when_dt)
                 day = when_dt.date()
                 when = when_dt.strftime("%I:%M %p").lstrip("0")
                 allday = False
+                start_iso, end_iso = when_dt.isoformat(), end_dt.isoformat()
+                # An overnight block that began yesterday is still today's (strip + Next up).
+                if day < today_d and end_dt.date() >= today_d:
+                    day = today_d
             else:
                 day = datetime.date.fromisoformat(s.get("date"))
                 when, allday = "all day", True
+                start_iso, end_iso = day.isoformat(), (e_.get("date") or day.isoformat())
         except (ValueError, TypeError):
             continue
-        item = {"summary": summary, "when": when, "allday": allday}
+        item = {"summary": summary, "when": when, "allday": allday, "start": start_iso, "end": end_iso}
         if day == today_d:
             out["today"].append(item)
         elif day == tom_d:
             out["tomorrow"].append(item)
+        elif day > tom_d:
+            out["later"].append(item)
     return out
 

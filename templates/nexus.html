@@ -1,120 +1,168 @@
-{% extends "nexus_base.html" %}
-{% block nexus_title %}Home{% endblock %}
+<!DOCTYPE html>
+{#- Nexus home (redesign, Aern-approved spec 10/10; view-model nexus_home.py, styles
+    nexus-home.css). Standalone page: base.html hard-codes the dark Tailwind shell. -#}
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#EEF2F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#18201E" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nexus">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="/static/css/nexus-home.css?v={{ home_ver }}">
+</head>
+<body class="nh">
+<div class="nh-wrap">
 
-{% macro age(f) -%}
-<span class="nx-age {{ f.state if f.state != 'fresh' else '' }}" title="{{ f.why }}">{{ f.label }}</span>
-{%- endmacro %}
+<nav class="nh-nav" aria-label="Nexus sections">
+    <span class="nh-brand">Nexus</span>
+    <div class="nh-tabs">
+    {% for key, href, label in nexus_tabs %}
+        <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+    </div>
+    <button type="button" class="nh-cap-toggle" aria-label="Capture a thought or task" aria-controls="nh-cap" aria-expanded="false"
+            onclick="var f=document.getElementById('nh-cap');var o=f.classList.toggle('open');this.setAttribute('aria-expanded',o);if(o)f.querySelector('input').focus();">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <form id="nh-cap" class="nh-cap" data-nx-capture>
+        <label for="nx-capture" class="nh-sr">Capture a thought or task</label>
+        <input id="nx-capture" type="text" autocomplete="off" placeholder="Capture a thought or task">
+    </form>
+</nav>
 
-{% block nexus_content %}
-<div class="nx-narrow nx-home">
+<header class="nh-head">
+    <div class="nh-title">
+        <h1>{{ data.date }}</h1>
+        {% if data.weather %}<span class="nh-weather" title="{{ data.weather.source }}">{{ data.weather.text }}</span>{% endif %}
+    </div>
+    {% set s = data.strip %}
+    {% if data.sched_down %}
+    <p class="nh-warn">The calendars are unreachable right now, so your day may not be empty.</p>
+    {% else %}
+    <div class="nh-strip" role="img" aria-label="{{ s.aria }}">
+        <div class="nh-strip-bar">
+            {% for r in s.rows %}
+            <div class="nh-strip-row nh-{{ r.who }}">
+                {% for b in r.blocks %}<span class="nh-block" style="left: {{ b.left }}%; width: {{ b.width }}%"><span class="nh-long">{{ b.label }}</span><span class="nh-short">{{ b.short or b.label }}</span></span>{% endfor %}
+            </div>
+            {% endfor %}
+            {% if s.now is not none %}<div class="nh-now" style="left: {{ s.now }}%"></div>{% endif %}
+        </div>
+        <div class="nh-hours" aria-hidden="true"><span>6 am</span><span>9 am</span><span>12 pm</span><span>3 pm</span><span>6 pm</span><span>9 pm</span></div>
+    </div>
+    {% endif %}
+    {% if data.next_up %}<p class="nh-next"><strong>Next up:</strong> {{ data.next_up }}</p>{% endif %}
+</header>
 
-{% set st = data.status %}
-<a class="nx-status" href="/nexus/fleet"><span class="nx-dot {{ st[0] if st[0] != 'ok' else '' }}"></span>{{ st[1] }}</a>
+<div class="nh-main">
+<div class="nh-left">
 
-<form class="nx-cap" data-nx-capture>
-    <input id="nx-capture" type="text" autocomplete="off" placeholder="Capture…" aria-label="Quick capture">
-    <button type="submit">Add</button>
-</form>
-<details class="nx-inbox" {% if not data.captures %}hidden{% endif %}>
-    <summary>Capture inbox</summary>
-    <ul data-nx-capture-list>
-        {% for c in data.captures %}
-        <li data-capture="{{ c.id }}">
-            <span>{{ c.text }}</span>
-            <button data-nx-action="capture-to-goal" data-id="{{ c.id }}" aria-label="Make a goal">→ goal</button>
-            <button data-nx-action="capture-dismiss" data-id="{{ c.id }}" aria-label="Dismiss">✕</button>
+{% set w = data.waiting %}
+<section class="nh-sec" aria-labelledby="wait-h">
+    {% if w is none %}
+    <h2 id="wait-h">Waiting on you</h2>
+    <p class="nh-warn">Could not read the queue. Open <a href="/nexus/aern">the full list</a>.</p>
+    {% elif w %}
+    <h2 id="wait-h">Waiting on you <span class="nh-count">({{ w|length }})</span></h2>
+    <ul class="nh-asks">
+        {% for it in w %}
+        <li class="nh-ask">
+            <p class="nh-ask-q">{{ it.title }}</p>
+            {% if it.detail %}<p class="nh-ask-d">{{ it.detail }}</p>{% endif %}
+            {% if it.options %}
+            <div class="nh-opts nx-opts">
+                {% for o in it.options %}<button type="button" class="nh-opt{{ ' rec' if loop.first }}" data-nx-action="queue-choose" data-id="{{ it.id }}" data-choice="{{ o }}">{{ '★ ' if loop.first }}{{ o }}</button>{% endfor %}
+            </div>
+            {% else %}
+            <div class="nh-opts nx-opts">
+                <button type="button" class="nh-opt" data-nx-action="queue-resolve" data-id="{{ it.id }}">{{ 'Read it' if it.effort == 'read' else 'Done' }}</button>
+                {% if it.ask_missing %}<span class="nh-noask">Posted without a question by {{ it.created_by or 'an unknown sender' }}</span>{% endif %}
+            </div>
+            {% endif %}
         </li>
         {% endfor %}
     </ul>
-</details>
-
-{# ── Needs you (left column on desktop) ── #}
-<section class="nx-sec nx-sec-needs">
-{% set nd = data.needs %}
-<h2 class="nx-h">Needs you <a href="/nexus/aern">Aern tab →</a></h2>
-{% if nd.error %}
-<div class="nx-card down"><div class="nx-downmsg">Could not build the needs list. Open the Aern tab.</div></div>
-{% elif nd['items'] %}
-<ul class="nx-list">
-    {% for it in nd['items'] %}
-    <li class="nx-need">
-        <div class="t">{{ it.title }}</div>
-        {% if it.detail %}<div class="d">{{ it.detail }}</div>{% endif %}
-        <div class="m"><span class="nx-pri">P{{ it.priority }}</span>{{ it.source_kind|replace('_', ' ') }}</div>
-        {% set a = it.action %}
-        {% if a and a.kind == 'queue-choose' %}<div class="nx-opts nx-opts-row">{% for o in a.options %}<button class="nx-opt{{ ' nx-opt-rec' if loop.first }}" data-nx-action="queue-choose" data-id="{{ a.id }}" data-choice="{{ o }}">{{ '★ ' if loop.first }}{{ o }}</button>{% endfor %}</div>
-        {% elif a and a.kind == 'link' %}<a class="nx-act link" href="{{ a.href }}">{{ a.label }}</a>
-        {% elif a %}<button class="nx-act" data-nx-action="{{ a.kind }}" data-id="{{ a.id }}">{{ a.label }}</button>{% endif %}
-    </li>
-    {% endfor %}
-</ul>
-{% if nd.more %}<a class="nx-more" href="/nexus/aern">+{{ nd.more }} more →</a>{% endif %}
-{% else %}
-<div class="nx-clear">Nothing needs you 🎉</div>
-{% endif %}
-{% if nd.sessions %}
-<a class="nx-sessions" href="/nexus/aern"><b>{{ nd.sessions|length }}</b> project{{ 's' if nd.sessions|length != 1 }} waiting on a session with you: {{ nd.sessions|map(attribute='title')|join(' · ')|truncate(90) }} →</a>
-{% endif %}
-
+    {% else %}
+    <h2 id="wait-h">Waiting on you</h2>
+    <p class="nh-quiet">Nothing is waiting on you.</p>
+    {% endif %}
 </section>
 
-{# ── Your day + At a glance (right column on desktop) ── #}
-<section class="nx-sec nx-sec-day">
-<h2 class="nx-h">Your day</h2>
-{% set f = data.fresh.schedule_today %}
-<div class="nx-card {{ 'down' if f.state == 'down' }}">
-    <div class="nx-ch"><b>Schedule</b>{{ age(f) }}</div>
-    {% if f.state == 'down' %}
-    <div class="nx-downmsg">Calendar unreachable ({{ f.why }}). Your schedule may not be empty.</div>
-    {% else %}
-    <div class="nx-ev">
-        {% for d in data.days %}
-        <div class="day">{{ d.label }}</div>
-        {% if d.groups %}
-            {% for g in d.groups %}
-            <div class="who">{{ g.who }}</div>
-            {% for e in g.events %}<div class="w">{{ e.when }}</div><div>{{ e.summary }}</div>{% endfor %}
-            {% endfor %}
-        {% else %}<div class="w">—</div><div class="nx-empty">Nothing scheduled</div>{% endif %}
-        {% endfor %}
-    </div>
-    {% endif %}
-</div>
-
-{% set f = data.fresh.todoist_today %}
-<div class="nx-card {{ 'down' if f.state == 'down' }}">
-    <div class="nx-ch"><b>Today</b>{{ age(f) }}</div>
-    {% if f.state == 'down' %}
-    <div class="nx-downmsg">Todoist unreachable ({{ f.why }}). Tasks may be due; this is not "nothing due".</div>
-    {% elif nd.today %}
-    <ul class="nx-todo">
-        {% for t in nd.today %}
-        <li><button class="nx-tick" data-nx-action="todoist-close" data-id="{{ t.todoist_id }}" aria-label="Complete {{ t.title }}"></button><span>{{ t.title }}</span></li>
+<section class="nh-sec" aria-labelledby="tasks-h">
+    <h2 id="tasks-h">Tasks</h2>
+    {% if data.tasks_down %}
+    <p class="nh-warn">Todoist is unreachable, so tasks may be due that aren't shown.</p>
+    {% elif data.tasks %}
+    <ul class="nh-tasks">
+        {% for t in data.tasks %}
+        <li>
+            <button type="button" class="nh-tick" data-nx-action="todoist-close" data-id="{{ t.id }}" aria-label="Complete: {{ t.text }}"></button>
+            <span class="nh-task">{{ t.text }}</span>
+            <span class="nh-when{{ ' late' if t.late }}">{{ t.when }}</span>
+        </li>
         {% endfor %}
     </ul>
-    {% else %}<div class="nx-empty">Nothing due today 🎉</div>{% endif %}
-</div>
-
-{% set f = data.fresh.oura_summary %}{% set o = data.env.oura_summary.data or {} %}
-<div class="nx-chips">
-    <a class="nx-chip {{ f.state if f.state != 'fresh' }}" href="https://cloud.ouraring.com" title="{{ f.why }}">Health
-        {% if o %}<span class="n">{{ (o.readiness or {}).score or '–' }} · {{ (o.sleep or {}).score or '–' }} · {{ (o.activity or {}).score or '–' }}</span>{% endif %}
-        <span class="a">{{ f.label }}</span></a>
-</div>
-
-{# ── All quiet ── #}
-<h2 class="nx-h">At a glance</h2>
-<div class="nx-chips">
-    {% set f = data.fresh.infra_summary %}{% set i = data.env.infra_summary.data or {} %}
-    <a class="nx-chip {{ f.state if f.state != 'fresh' }}" href="/nexus/infra" title="{{ f.why }}">{{ '⚠️' if i.down else '✅' }} Infra <span class="n">{{ i.up }}/{{ i.total }}</span><span class="a">{{ f.label.split(' · ')[0] }}</span></a>
-    {% set m = data.env.maintenance_due.data or [] %}
-    <a class="nx-chip" href="/nexus/house">{{ '🔧' if m else '✅' }} Maintenance <span class="n">{{ (m|length ~ ' due') if m else 'none due' }}</span></a>
-    {% set f = data.fresh.tcg_alerts %}{% set t = data.env.tcg_alerts.data or {} %}
-    <a class="nx-chip {{ f.state if f.state != 'fresh' }}" href="/nexus/tcg" title="{{ f.why }}">TCG <span class="n">${{ '%.0f'|format(t.inventory_value or 0) }} · {{ t.sales_today or 0 }} sales</span><span class="a">prices {{ f.label.split(' · ')[0] }}</span></a>
-    {% set g = data.env.goals_summary.data or [] %}
-    <a class="nx-chip" href="/nexus/goals">🎯 Goals <span class="n">{{ g|length }} active</span></a>
-</div>
+    {% else %}
+    <p class="nh-quiet">Nothing due.</p>
+    {% endif %}
+    {% if data.captures %}
+    <details class="nh-inbox">
+        <summary>Capture inbox ({{ data.captures|length }})</summary>
+        <ul data-nx-capture-list>
+            {% for c in data.captures %}
+            <li data-capture="{{ c.id }}">
+                <span>{{ c.text }}</span>
+                <button type="button" data-nx-action="capture-to-goal" data-id="{{ c.id }}">Make it a goal</button>
+                <button type="button" data-nx-action="capture-dismiss" data-id="{{ c.id }}">Dismiss</button>
+            </li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
 </section>
 
 </div>
-{% endblock %}
+
+<section class="nh-sec nh-right" aria-labelledby="binder-h">
+    <h2 id="binder-h">Your binder</h2>
+    <div class="nh-binder">
+        <div class="nh-rings" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="nh-pockets">
+            {% for p in data.pockets %}
+            <a class="nh-pocket nh-{{ p.row }}" href="{{ p.href }}"{% if p.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>
+                <span class="nh-pname">{{ p.name }}</span>
+                <span class="nh-pnote{{ ' alert' if p.alert }}">{{ p.note }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <p class="nh-caption">Top row sells, middle row buys, bottom row is home and Aernbot.</p>
+</section>
+
+</div>
+
+<footer class="nh-foot">
+    {% if data.fleet %}<p class="nh-fleet"><a href="/nexus/fleet">{{ data.fleet }}</a></p>{% endif %}
+    <p><a href="/nexus/more">Every Nexus page</a></p>
+</footer>
+
+</div>
+
+<nav class="nh-bottom" aria-label="Nexus sections">
+    {% for key, href, label in nexus_tabs %}
+    <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+</nav>
+
+<script src="/static/js/nexus.js?v={{ nexusjs_ver }}"></script>
+</body>
+</html>

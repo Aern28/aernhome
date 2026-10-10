@@ -32,7 +32,10 @@ HA_WEBHOOK = "http://192.168.1.70:8123/api/webhook/family-board-d8dad8d5e3e65bd1
 MEALIE = "http://127.0.0.1:9925"
 NEXUS = "http://127.0.0.1:5555"
 SCHOOL_ID = "245e1964-1273-4ff7-ab6c-fead625072b4"
-JAINA_FILE = "C:/tcg-inventory/jaina-overrides.json"
+# Host path on Ashaman; the aernhome container sees the same dir at /tcg (Nexus home reads it too).
+JAINA_FILE = os.environ.get("JAINA_FILE") or next(
+    (p for p in ("C:/tcg-inventory/jaina-overrides.json", "/tcg/jaina-overrides.json") if os.path.exists(p)),
+    "C:/tcg-inventory/jaina-overrides.json")
 BOARD_FILE = "C:/tcg-inventory/aernbot/family-board.json"
 DRY = "--dry-run" in sys.argv
 
@@ -264,6 +267,15 @@ def jaina_overrides():
     return out
 
 
+def jaina_for(day_name, no_school, overrides):
+    """Jaina's (drop, pick) for one day: "Home"/"Home" when the day has an all-day
+    "No school" event, else the weekly template. Shared by the board and Nexus home."""
+    if no_school:
+        return "Home", "Home"
+    j = overrides.get(day_name, {})
+    return j.get("drop", ""), j.get("pick", "")
+
+
 def calendar_client():
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -294,12 +306,12 @@ def main():
         din, lun = dinner.get(dn, ""), lunch.get(dn, "")
         meal = (f"{din} \u00b7 L: {lun}" if din else f"L: {lun}") if lun else din
         notes = " \u00b7 ".join((matt_notes.get(k, []) + gal_notes.get(k, []))[:2])[:60]
+        j_drop, j_pick = jaina_for(dn, k in no_school, jaina)
         days.append({
             "day": dn,
             "gal_am": g.get("am") or "", "gal_pm": g.get("pm") or "",
             "matt_am": m.get("am") or "", "matt_pm": m.get("pm") or "",
-            "jaina_drop": "Home" if k in no_school else jaina.get(dn, {}).get("drop", ""),
-            "jaina_pick": "Home" if k in no_school else jaina.get(dn, {}).get("pick", ""),
+            "jaina_drop": j_drop, "jaina_pick": j_pick,
             "meal": meal, "meal_type": "", "notes": notes,
         })
 

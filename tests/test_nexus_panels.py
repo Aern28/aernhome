@@ -108,9 +108,9 @@ class StatusAndTabs(unittest.TestCase):
         self.assertEqual(npl.status_line({})[0], "warn")
 
     def test_tabs(self):
-        cases = {"/nexus": "home", "/nexus/": "home", "/nexus/aern": "aern", "/nexus/signals": "tcg",
-                 "/nexus/books": "media", "/nexus/house": "more", "/nexus/feed/x-feed": "more",
-                 "/nexus/tcg": "tcg", "/nexus/tcgx": "more"}
+        cases = {"/nexus": "today", "/nexus/": "today", "/nexus/aern": "today", "/nexus/signals": "tcg",
+                 "/nexus/books": "media", "/nexus/house": "house", "/nexus/feed/aernbot": "aernbot",
+                 "/nexus/feed/x-feed": None, "/nexus/tcg": "tcg", "/nexus/tcgx": None, "/nexus/more": None}
         for path, tab in cases.items():
             self.assertEqual(npl.tab_for(path), tab, path)
 

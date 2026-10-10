@@ -112,6 +112,9 @@ CONNECTORS = {
 NOT_CONNECTORS = {
     "health", "cache_time", "cache_clear", "todoist_close", "download_poster_image",
     "tmdb_search", "igdb_search", "openlibrary_search",
+    # Side data of the todoist_today fetch (same call, same age): home reads it next to
+    # that connector's envelope, so it has no freshness of its own to declare.
+    "todoist_extra",
 }
 
 

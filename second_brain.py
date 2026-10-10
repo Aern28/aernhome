@@ -1099,6 +1099,7 @@ def _needs_from_queue():
                     # ask_missing flag but are just as unanswerable.
                     "ask_missing": not ask,
                     "created_by": item.get("created_by") or "",
+                    "todoist_id": item.get("todoist_id") or "",
                     "priority": item.get("priority") if item.get("priority") in VALID_PRIORITY else 2,
                     "ref": item.get("source") or "/nexus/queue",
                 })

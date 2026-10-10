@@ -130,7 +130,8 @@ def inject_asset_version():
     cached copy — which otherwise makes newly added Tailwind classes render unstyled."""
     out = {"served_at": datetime.now(ZoneInfo("America/Chicago")).strftime("%m/%d %H:%M")}
     for key, rel in (("css_ver", ("css", "app.css")), ("js_ver", ("js", "nexus_sb.js")),
-                     ("panels_ver", ("css", "nexus-panels.css")), ("nexusjs_ver", ("js", "nexus.js"))):
+                     ("panels_ver", ("css", "nexus-panels.css")), ("nexusjs_ver", ("js", "nexus.js")),
+                     ("home_ver", ("css", "nexus-home.css"))):
         try:
             out[key] = int(os.path.getmtime(os.path.join(app.static_folder, *rel)))
         except OSError:
@@ -138,7 +139,7 @@ def inject_asset_version():
     # Bottom tab bar on every Nexus page (nexus-panels 10/09).
     import nexus_panels
     out["nexus_tabs"] = nexus_panels.TABS
-    out["nexus_tab"] = nexus_panels.tab_for(request.path) if request else "home"
+    out["nexus_tab"] = nexus_panels.tab_for(request.path) if request else "today"
     return out
 
 
@@ -1179,29 +1180,74 @@ def nexus_home():
     """
     if not _is_nexus_allowed():
         abort(404)
-    # nexus-panels (Aern grill 10/09): Needs you, then Your day, then quiet chips.
-    # Every card reads a nexus_contract envelope, so its corner shows age + source
-    # and a dead source renders red instead of an empty "all clear".
+    # Home redesign (Aern-approved spec 10/10, nexus_home.py): date + weather, day strip,
+    # Next up, Waiting on you (asks only), Tasks, the binder (one tap to his most common
+    # work), and the fleet as one muted line only when something is not up.
+    import re
     import nexus_contract as nc
+    import nexus_home as nh
     import nexus_panels as npl
+    import nexus_sources as ns
     import second_brain
-    env = {n: nc.envelope(n) for n in ("schedule_today", "todoist_today", "oura_summary",
-                                         "tcg_alerts", "infra_summary", "goals_summary",
-                                         "maintenance_due")}
-    fresh = {n: npl.freshness(e, HOME_STALE_H.get(n)) for n, e in env.items()}
-    try:
-        checks = fleet.load_state().get("checks", {})
-    except Exception:
-        checks = {}
-    try:
-        needs = npl.needs_view(second_brain.needs_aern_items())
-    except Exception as e:
-        print(f"[nexus] needs-aern failed: {e}")
-        needs = {"items": [], "more": 0, "sessions": [], "today": [], "error": True}
+    now = datetime.now(nh.CT)
+    today = now.date()
+
+    def safe(fn, default=None):
+        try:
+            return fn()
+        except Exception as e:
+            print(f"[nexus home] {getattr(fn, '__name__', 'part')} failed: {e}")
+            return default
+
+    sched_env = nc.envelope("schedule_today")
+    todo_env = nc.envelope("todoist_today")
+    sched = sched_env["data"] or {}
+    extra = safe(ns.todoist_extra, {"twin_due": {}, "upcoming": []})
+    needs = safe(second_brain.needs_aern_items, None)
+    checks = safe(lambda: fleet.load_state().get("checks", {}), {})
+
+    def _jaina():
+        import family_board_push as fbp
+        return nh.jaina_label(sched, now, fbp.jaina_overrides())
+
+    def _held():
+        items = second_brain._needs_from_tcg_held()
+        m = re.match(r"(\d+)", items[0]["title"]) if items else None
+        return int(m.group(1)) if m else 0
+
+    def _wants():
+        with open("/tcg/want_prices_last.json", encoding="utf-8") as f:
+            w = json.load(f)
+        return w if w.get("ok") and str(w.get("at", ""))[:10] == today.isoformat() else None
+
+    def _signals():
+        import nexus_signals as sig
+        return sig.load()
+
+    def _notebook():
+        import xfeed
+        e = xfeed.notebook_entries(1)
+        return e[0]["title"] if e else None
+
+    signals = safe(_signals, {}) or {}
+    pocket_in = {
+        "tcg_business": safe(lambda: nc.envelope("tcg_business")["data"], {}),
+        "tcg_alerts": safe(lambda: nc.envelope("tcg_alerts")["data"], {}),
+        "held": safe(_held, 0), "wants": safe(_wants), "sealed": signals.get("sealed"),
+        "movers": signals.get("movers"), "restock": safe(_restock_payload),
+        "gal_today": nh.gal_today(sched), "notebook": safe(_notebook),
+    }
     data = {
-        "env": env, "fresh": fresh, "needs": needs,
-        "status": npl.status_line(checks),
-        "days": npl.schedule_view(env["schedule_today"]["data"]),
+        "date": nh.date_label(now),
+        "weather": safe(lambda: nh.weather_line(now)),
+        "strip": nh.day_strip(sched, now, safe(_jaina)),
+        "sched_down": npl.freshness(sched_env)["state"] == "down",
+        "next_up": nh.next_up(sched, now),
+        "waiting": nh.waiting(needs, extra.get("twin_due"), today) if needs is not None else None,
+        "tasks": nh.tasks(todo_env["data"] or [], extra.get("upcoming"), today),
+        "tasks_down": npl.freshness(todo_env)["state"] == "down",
+        "pockets": nh.pockets(pocket_in),
+        "fleet": nh.fleet_line(npl.status_line(checks)),
         "captures": ns_writes.list_capture(limit=8),
     }
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)

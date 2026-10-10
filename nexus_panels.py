@@ -22,16 +22,18 @@ CENTRAL = ZoneInfo("America/Chicago")
 NEEDS_CAP = 5
 EVENING_HOUR = 18
 
-# Bottom tab bar (Aern 10/09: Home / Aern / TCG / Media / More; House lives in More).
+# Tabs (home redesign, Aern 10/10): Today / TCG / House / Aernbot / Media. Waiting-on-you
+# on Today replaces the old Aern tab; every other page is linked from the bottom of Today.
 TABS = [
-    ("home", "/nexus", "Home"),
-    ("aern", "/nexus/aern", "Aern"),
+    ("today", "/nexus", "Today"),
     ("tcg", "/nexus/tcg", "TCG"),
+    ("house", "/nexus/house", "House"),
+    ("aernbot", "/nexus/feed/aernbot", "Aernbot"),
     ("media", "/nexus/media", "Media"),
-    ("more", "/nexus/more", "More"),
 ]
 _TAB_PREFIX = [
-    ("/nexus/aern", "aern"), ("/nexus/queue", "aern"), ("/nexus/seat", "aern"),
+    ("/nexus/aern", "today"), ("/nexus/queue", "today"), ("/nexus/seat", "today"),
+    ("/nexus/house", "house"), ("/nexus/feed/aernbot", "aernbot"),
     ("/nexus/tcg", "tcg"), ("/nexus/signals", "tcg"), ("/nexus/inventory", "tcg"),
     ("/nexus/wants", "tcg"), ("/nexus/vintage", "tcg"), ("/nexus/theories", "tcg"),
     ("/nexus/media", "media"), ("/nexus/books", "media"), ("/nexus/tv", "media"),
@@ -42,11 +44,11 @@ _TAB_PREFIX = [
 def tab_for(path):
     path = (path or "").rstrip("/") or "/nexus"
     if path == "/nexus":
-        return "home"
+        return "today"
     for prefix, tab in _TAB_PREFIX:
         if path == prefix or path.startswith(prefix + "/"):
             return tab
-    return "more"
+    return None  # a page outside the five tabs: none is marked current
 
 
 def _ago(hours):
