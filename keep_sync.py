@@ -12,9 +12,10 @@ milk to my shopping list" — so this joins the two: whatever lands in either
 place shows up in both, and checking/clearing on one side clears the other.
 The Mealie "Household Restock" list was retired the same day ("kill it").
 
-Scope (2026-09-05): only SYNC_CATEGORIES (grocery, house) mirror to Keep. Rowan/
-Jace/Business rows are Nexus/TRMNL-only; their Keep lines get DELETED (never
-ticked) and a Keep add that routes out of scope lands in Nexus then leaves Keep.
+Scope (2026-09-05, pets added 2026-10-10): only SYNC_CATEGORIES (grocery, house,
+rowan, jace) mirror to Keep; pet lines carry their "(Rowan)"/"(Jace)" tag there.
+Business rows are Nexus/TRMNL-only; their Keep lines get DELETED (never ticked)
+and a Keep add that routes to business lands in Nexus then leaves Keep.
 
 Rules (per item, decided by which SIDE changed since the last run — no clocks):
     Keep unchecked, not yet linked  -> match an open Nexus row by name, else add
@@ -52,11 +53,12 @@ EMAIL = os.environ.get("KEEP_EMAIL", "mcarroll203@gmail.com")
 LIST_ID = os.environ.get("KEEP_LIST_ID", "1567028679377.1771595269")  # "Grocery List" — the Assistant shopping list
 ADDED_BY = "keep"
 CATEGORIES = ("house", "grocery", "rowan", "jace", "business")
-# Only these categories mirror to the phone (Aern 2026-09-05: "keep = grocery + house").
-# Rowan/Jace/Business rows live on Nexus + the TRMNL only; a Keep line that routes to an
+# Only these categories mirror to the phone (Aern 2026-09-05: "keep = grocery + house";
+# 2026-10-10: "keep pets on keep with the tag" - the TRMNL still groups by category).
+# Business rows live on Nexus + the TRMNL only; a Keep line that routes to an
 # out-of-scope category is deleted from Keep after landing in Nexus (deleted, NOT ticked —
 # a tick means "got it" and would clear the Nexus row).
-SYNC_CATEGORIES = ("grocery", "house")
+SYNC_CATEGORIES = ("grocery", "house", "rowan", "jace")
 # Word-boundary keyword -> category. Deliberately narrow; extend from real misses,
 # not guesses. Since the 2026-09-05 grocery split, an ambiguous KEEP item defaults
 # to GROCERY (this list is the grocery voice inbox — "add cheese bread" is food
@@ -264,7 +266,7 @@ def reconcile(nexus, keep, state, log):
             del links[keep_id]
             continue
         if n_is_open and n_open[nid]["category"] not in SYNC_CATEGORIES:
-            # out-of-scope category (pets/business): remove the phone line, keep the
+            # out-of-scope category (business): remove the phone line, keep the
             # Nexus row open — even if he ticked it, a tick on a descoped line is not
             # trusted as "got it" (the sweep and the tick race; Nexus stays canonical)
             log(f"descoped from Keep (category {n_open[nid]['category']}): {k['text']!r}")
@@ -344,7 +346,7 @@ def reconcile(nexus, keep, state, log):
             by_nexus[nid] = keep_id
 
     # 3) open Nexus rows nobody in Keep knows about (Aernbot / Nexus adds) -> into Keep
-    #    (grocery/house only — pets and business never mirror to the phone)
+    #    (SYNC_CATEGORIES only — business never mirrors to the phone)
     for nid, row in n_open.items():
         if nid in by_nexus or row["category"] not in SYNC_CATEGORIES:
             continue
