@@ -295,6 +295,16 @@ def query_prices_freshness(con: sqlite3.Connection, now: dt.datetime) -> dict:
     last = row[0] if row else None
     if not last:
         return {"pf": "—", "pfa": "never"}
+    if len(last) == 10:
+        # prices.date is a plain date. Read as a timestamp it became midnight UTC,
+        # so a 7 AM fetch showed as "7:00 PM (22h ago)" the evening before.
+        try:
+            day = dt.date.fromisoformat(last)
+        except ValueError:
+            return {"pf": last, "pfa": "?"}
+        days = (now.astimezone(TZ).date() - day).days
+        pfa = "today" if days <= 0 else "yesterday" if days == 1 else f"{days} days ago"
+        return {"pf": f"{day:%b} {day.day}", "pfa": pfa}
     try:
         when = dt.datetime.fromisoformat(last.replace("Z", "+00:00"))
     except ValueError:
