@@ -141,8 +141,11 @@ def post_if_changed(results, prev):
     """Keyed to_fleet post when the problem set changes; resolve when it clears."""
     sys.path.insert(0, "C:/tools")
     import nexus
-    now = {r["path"]: problems(r) for r in results if problems(r)}
-    before = {r["path"]: problems(r) for r in (prev or []) if problems(r)}
+    # Browser-only problems: verify verdicts are already on the fleet board (nexus_pages).
+    def browser(r):
+        return [p for p in problems(r) if not p.startswith("verify ")]
+    now = {r["path"]: browser(r) for r in results if browser(r)}
+    before = {r["path"]: browser(r) for r in (prev or []) if browser(r)}
     if now == before:
         return "unchanged"
     c = nexus.Client()
