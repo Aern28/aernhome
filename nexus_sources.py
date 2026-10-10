@@ -1079,7 +1079,8 @@ def _schedule_today_compute():
         "tomorrow": {"matt": matt["tomorrow"], "gal": gal["tomorrow"]},
         "later": {"matt": matt["later"], "gal": gal["later"]},
     }
-    has_any = any(out["today"].values()) or any(out["tomorrow"].values())
+    # "later" counts too: a quiet weekend still has a Monday shift for "Next up" (10/10).
+    has_any = any(any(out[b].values()) for b in ("today", "tomorrow", "later"))
     return out if has_any else {}
 
 

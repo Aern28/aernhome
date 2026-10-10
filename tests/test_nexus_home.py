@@ -136,6 +136,20 @@ class Pockets(unittest.TestCase):
         self.assertEqual(p["Reprice"]["note"], "2 cards due")
 
 
+class ScheduleSource(unittest.TestCase):
+    def test_quiet_weekend_keeps_next_week(self):
+        # Live 10/10: today + tomorrow empty threw the whole week away, so Next up vanished.
+        from unittest import mock
+        import nexus_sources as ns
+        later = [ev("L&D", "2026-10-12T07:00", "2026-10-12T19:00")]
+        fake = {"today": [], "tomorrow": [], "later": later}
+        with mock.patch.object(ns, "_schedule_for", return_value=fake), \
+                mock.patch.dict(os.environ, {"CALENDAR_ID_GAL": "x"}):
+            out = ns._schedule_today_compute()
+        self.assertEqual(out["later"]["matt"], later)
+        self.assertEqual(nh.next_up(out, NOW), "Monday 7 am, L&D")
+
+
 class Fleet(unittest.TestCase):
     def test_quiet_when_ok(self):
         self.assertIsNone(nh.fleet_line(("ok", "Fleet: all 30 checks up")))
