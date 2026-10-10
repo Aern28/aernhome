@@ -120,6 +120,11 @@ class Pockets(unittest.TestCase):
         self.assertEqual(notes["Restock"], "Household list")
         self.assertFalse(any(x["alert"] for x in nh.pockets({})))
 
+    def test_movers_ignore_cards_he_does_not_hold(self):
+        p = {x["name"]: x for x in nh.pockets({"movers": {
+            "drops": [], "gainers": [{"card": "Promo", "pct": "+3726%", "flags": ["PLAY"]}]}})}
+        self.assertEqual(p["Movers"]["note"], "No moves on your cards")
+
     def test_live_notes_and_amber(self):
         p = {x["name"]: x for x in nh.pockets({
             "tcg_business": {"tsn": 0, "sr": "$41"}, "tcg_alerts": {"reprice_due": 2, "sales_today": 1},

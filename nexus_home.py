@@ -291,16 +291,18 @@ def pockets(d):
     sealed = d.get("sealed")
     sealed_note = (f"{len(sealed.get('games') or [])} games tracked", False) if sealed else ("Box market", False)
 
+    # Only cards he holds (live 10/10: an unowned promo at +3726% filled the pocket).
     mv = None
     if movers:
-        held_drops = [m for m in movers.get("drops") or [] if "HELD" in (m.get("flags") or [])]
-        if held_drops:
-            m = held_drops[0]
+        def held(rows):
+            return [m for m in rows or [] if "HELD" in (m.get("flags") or [])]
+        if held(movers.get("drops")):
+            m = held(movers["drops"])[0]
             mv = (f"{m.get('card')} {m.get('pct')}", True)
-        elif movers.get("gainers"):
-            m = movers["gainers"][0]
+        elif held(movers.get("gainers")):
+            m = held(movers["gainers"])[0]
             mv = (f"{m.get('card')} {m.get('pct')}", False)
-    mover_note = mv or ("No big moves", False)
+    mover_note = mv or ("No moves on your cards", False)
 
     if restock is None:
         restock_note = ("Household list", False)
