@@ -155,6 +155,55 @@ class ScheduleSource(unittest.TestCase):
         self.assertEqual(nh.next_up(out, NOW), "Monday 7 am, L&D")
 
 
+ICS = "\r\n".join([
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT", "SUMMARY:GEN - PFW L&D Day", "DTSTART:20261012T120000Z", "DTEND:20261013T000000Z", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:GEN - PFW Clinic AM", "DTSTART;TZID=America/Chicago:20261010T080000",
+    "DTEND;TZID=America/Chicago:20261010T120000", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:1:1 with Dr. Resident Name", "DTSTART:20261010T200000Z", "DTEND:20261010T210000Z", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:PTO", "DTSTART;VALUE=DATE:20261011", "DTEND;VALUE=DATE:20261012", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:GEN - PFW Education P", " M", "DTSTART:20261014T180000Z", "DTEND:20261014T220000Z", "END:VEVENT",
+    "END:VCALENDAR", ""])
+
+
+class WorkShifts(unittest.TestCase):
+    def setUp(self):
+        import nexus_sources as ns
+        self.ns = ns
+        self.b = ns._work_shift_buckets(ns._ics_events(ICS), NOW)
+
+    def test_only_shifts_and_pto_never_meetings(self):
+        every = [e["summary"] for bucket in self.b.values() for e in bucket]
+        self.assertEqual(sorted(every), ["Clinic AM", "Education PM", "L&D Day", "PTO"])
+        self.assertFalse(any("Resident" in s for s in every))
+
+    def test_buckets_and_times(self):
+        self.assertEqual([e["summary"] for e in self.b["today"]], ["Clinic AM"])
+        self.assertEqual(self.b["today"][0]["start"], "2026-10-10T08:00:00-05:00")
+        self.assertEqual([(e["summary"], e["allday"]) for e in self.b["tomorrow"]], [("PTO", True)])
+        ld = [e for e in self.b["later"] if e["summary"] == "L&D Day"][0]
+        self.assertEqual((ld["start"], ld["end"]), ("2026-10-12T07:00:00-05:00", "2026-10-12T19:00:00-05:00"))
+        self.assertEqual(nh.next_up({"later": {"matt": self.b["later"]}}, NOW.replace(hour=23)), "Monday 7 am, L&D Day")
+
+    def test_no_link_means_no_fetch_and_no_error(self):
+        from unittest import mock
+        errs = []
+        with mock.patch.object(self.ns, "_work_ics_url", return_value=""), \
+                mock.patch.object(self.ns.requests, "get", side_effect=AssertionError("fetched")):
+            self.assertEqual(self.ns._work_shifts(errs), {"today": [], "tomorrow": [], "later": []})
+        self.assertEqual(errs, [])
+
+    def test_failed_fetch_never_puts_the_link_in_the_error(self):
+        from unittest import mock
+        errs = []
+        secret = "https://example.invalid/private/SECRET-TOKEN/basic.ics"
+        with mock.patch.object(self.ns, "_work_ics_url", return_value=secret), \
+                mock.patch.object(self.ns.requests, "get", side_effect=ConnectionError(f"failed {secret}")):
+            self.ns._work_shifts(errs)
+        self.assertEqual(errs, ["error: work shifts ConnectionError"])
+        self.assertNotIn("SECRET", " ".join(errs))
+
+
 class Fleet(unittest.TestCase):
     def test_quiet_when_ok(self):
         self.assertIsNone(nh.fleet_line(("ok", "Fleet: all 30 checks up")))

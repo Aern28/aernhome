@@ -1073,6 +1073,9 @@ def _schedule_today_compute():
     matt = _schedule_for(os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com"), errs)
     gal_id = os.environ.get("CALENDAR_ID_GAL", "")
     gal = _schedule_for(gal_id, errs) if gal_id else {"today": [], "tomorrow": [], "later": []}
+    # Matt's QGenda shifts come from his work-calendar ICS subscription (shift + PTO only).
+    for bucket, items in _work_shifts(errs).items():
+        matt[bucket] = sorted(matt[bucket] + items, key=lambda e: e.get("start") or "")
     _mark("schedule_today", not errs, "; ".join(errs))
     out = {
         "today": {"matt": matt["today"], "gal": gal["today"]},
@@ -1082,6 +1085,128 @@ def _schedule_today_compute():
     # "later" counts too: a quiet weekend still has a Monday shift for "Next up" (10/10).
     has_any = any(any(out[b].values()) for b in ("today", "tomorrow", "later"))
     return out if has_any else {}
+
+
+# ── Work shifts (QGenda via the work-calendar ICS subscription) ───────────────
+# The link is credential-shaped: anyone holding it reads Aern's work calendar. It is
+# placed by Aern (from Bitwarden "Work Calendar ICS") in a gitignored file, read here,
+# and never logged, echoed or put in an error string. The calendar also carries Outlook
+# meetings, some naming other people, so ONLY "GEN - " shifts and PTO ever leave this
+# function (Aern 10/10).
+WORK_ICS_FILE = os.environ.get("WORK_ICS_FILE", "/data/secrets/work-calendar-ics.url")
+
+
+def _work_ics_url():
+    url = os.environ.get("WORK_ICS_URL", "").strip()
+    if not url and os.path.exists(WORK_ICS_FILE):
+        with open(WORK_ICS_FILE, encoding="utf-8") as f:
+            url = f.read().strip()
+    return url if url.startswith("https://") else ""
+
+
+def _ics_events(text):
+    """Minimal VEVENT reader: unfolds lines, returns [{summary, start, end, allday}] with
+    datetimes in Central. Handles UTC (Z), TZID= and VALUE=DATE; recurring rules are not
+    expanded (QGenda exports each shift as its own event)."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("America/Chicago")
+    lines = []
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        if raw[:1] in (" ", "\t") and lines:
+            lines[-1] += raw[1:]
+        else:
+            lines.append(raw)
+
+    def parse(name_params, value):
+        params = dict(p.split("=", 1) for p in name_params.split(";")[1:] if "=" in p)
+        if params.get("VALUE") == "DATE" or (len(value) == 8 and value.isdigit()):
+            return datetime.datetime.strptime(value, "%Y%m%d").replace(tzinfo=tz), True
+        if value.endswith("Z"):
+            return datetime.datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(
+                tzinfo=datetime.timezone.utc).astimezone(tz), False
+        zone = params.get("TZID")
+        try:
+            z = ZoneInfo(zone) if zone else tz
+        except Exception:
+            z = tz
+        return datetime.datetime.strptime(value, "%Y%m%dT%H%M%S").replace(tzinfo=z).astimezone(tz), False
+
+    out, cur = [], None
+    for ln in lines:
+        if ln == "BEGIN:VEVENT":
+            cur = {}
+        elif ln == "END:VEVENT" and cur is not None:
+            if cur.get("start"):
+                out.append(cur)
+            cur = None
+        elif cur is not None and ":" in ln:
+            head, value = ln.split(":", 1)
+            name = head.split(";", 1)[0].upper()
+            try:
+                if name == "SUMMARY":
+                    cur["summary"] = value.replace("\\,", ",").replace("\\;", ";").strip()
+                elif name == "DTSTART":
+                    cur["start"], cur["allday"] = parse(head, value.strip())
+                elif name == "DTEND":
+                    cur["end"], _ = parse(head, value.strip())
+            except ValueError:
+                cur["start"] = None
+    return out
+
+
+def _shift_label(summary):
+    """'GEN - PFW L&D Day' -> 'L&D Day'; 'PTO' -> 'PTO'. None = not a shift (never shown)."""
+    s = (summary or "").strip()
+    if s.upper().startswith("PTO"):
+        return "PTO"
+    if not s.startswith("GEN - "):
+        return None
+    s = s[len("GEN - "):].strip()
+    return s[len("PFW "):].strip() if s.startswith("PFW ") else s
+
+
+def _work_shift_buckets(events, now):
+    """Bucket filtered shift events like _schedule_for: today / tomorrow / later (8 days)."""
+    out = {"today": [], "tomorrow": [], "later": []}
+    today_d = now.date()
+    for ev in events:
+        label = _shift_label(ev.get("summary"))
+        if not label or not ev.get("start"):
+            continue
+        s, e = ev["start"], ev.get("end") or ev["start"]
+        if ev.get("allday"):
+            day = s.date()
+            item = {"summary": label, "when": "all day", "allday": True,
+                    "start": s.date().isoformat(), "end": e.date().isoformat()}
+        else:
+            day = today_d if (s.date() < today_d <= e.date()) else s.date()
+            item = {"summary": label, "when": s.strftime("%I:%M %p").lstrip("0"), "allday": False,
+                    "start": s.isoformat(), "end": e.isoformat()}
+        delta = (day - today_d).days
+        if delta == 0:
+            out["today"].append(item)
+        elif delta == 1:
+            out["tomorrow"].append(item)
+        elif 1 < delta <= 7:
+            out["later"].append(item)
+    return out
+
+
+def _work_shifts(errs):
+    """Shift buckets from the ICS subscription, or empty when not configured. A configured
+    link that fails adds a type-only error (never the URL)."""
+    empty = {"today": [], "tomorrow": [], "later": []}
+    url = _work_ics_url()
+    if not url:
+        return empty
+    try:
+        r = requests.get(url, timeout=15, headers={"User-Agent": "aernhome Nexus"})
+        r.raise_for_status()
+        from zoneinfo import ZoneInfo
+        return _work_shift_buckets(_ics_events(r.text), datetime.datetime.now(ZoneInfo("America/Chicago")))
+    except Exception as e:
+        errs.append("error: work shifts %s" % type(e).__name__)
+        return empty
 
 
 def _schedule_for(cal_id, errs=None):
