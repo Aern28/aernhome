@@ -63,17 +63,38 @@ def scan():
     return found
 
 
+def worse_than(found, baseline):
+    """Violations beyond the baseline: new kinds, or more of an existing one."""
+    return {k: v for k, v in found.items() if v > baseline.get(k, 0)}
+
+
+def stale_lines(found, baseline):
+    """Baseline lines that got (partly) fixed and must be lowered or deleted."""
+    return {k: v for k, v in baseline.items() if found.get(k, 0) < v}
+
+
 class EinkTemplates(unittest.TestCase):
     def test_no_new_eink_violations(self):
-        found = scan()
-        worse = {k: v for k, v in found.items() if v > BASELINE.get(k, 0)}
+        worse = worse_than(scan(), BASELINE)
         self.assertFalse(worse, "e-ink rule broken (grey text or <12px) beyond the 10/10 baseline: %s. "
                                 "Use #000-#555 on white or #fff on black, and >=12px." % worse)
 
     def test_baseline_is_not_stale(self):
-        found = scan()
-        stale = {k: v for k, v in BASELINE.items() if found.get(k, 0) < v}
+        stale = stale_lines(scan(), BASELINE)
         self.assertFalse(stale, "fixed - lower or delete these BASELINE lines: %s" % stale)
+
+    def test_ratchet_logic(self):
+        # mutation pass 10/10: nothing in the real templates is fixed yet, so prove both
+        # directions of the ratchet on a fixture
+        base = {("a.html", "grey text #666"): 2}
+        self.assertEqual(stale_lines(collections.Counter({("a.html", "grey text #666"): 1}), base),
+                         {("a.html", "grey text #666"): 2})
+        self.assertEqual(stale_lines(collections.Counter(), base), {("a.html", "grey text #666"): 2})
+        self.assertEqual(stale_lines(collections.Counter({("a.html", "grey text #666"): 2}), base), {})
+        self.assertEqual(worse_than(collections.Counter({("a.html", "grey text #666"): 3}), base),
+                         {("a.html", "grey text #666"): 3})
+        self.assertEqual(worse_than(collections.Counter({("b.html", "text 10px"): 1}), base), {("b.html", "text 10px"): 1})
+        self.assertEqual(worse_than(collections.Counter({("a.html", "grey text #666"): 2}), base), {})
 
     def test_scanner_catches_the_real_shapes(self):
         sample = ('<div style="color:#666;font-size:11px">x</div>\n'
