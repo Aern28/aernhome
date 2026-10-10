@@ -317,9 +317,18 @@ def _close_queue_item(item, note, via=None):
         if item.get("todoist_id"):
             todoist_bridge.close_task(item["todoist_id"])
         elif item.get("dir") == "to_aern":
-            todoist_bridge.close_by_content(todoist_bridge.QUEUE_PREFIX + (item.get("ask") or item.get("text", "")))
+            todoist_bridge.close_by_content(todoist_bridge.QUEUE_PREFIX + _todoist_title(
+                item.get("ask"), item.get("options"), item.get("text", "")))
     except Exception:
         pass
+
+
+def _todoist_title(ask, options, text):
+    """The Todoist twin's title. With options, ticking it = the starred option, so the
+    title says which (Aern 10/10); anything else is answered on Nexus."""
+    if ask and options:
+        return "%s [tick = %s]" % (ask, options[0])
+    return ask or text
 
 
 def _clean_ask(body):
@@ -681,7 +690,7 @@ def api_queue_post():
         try:
             import todoist_bridge
             item["todoist_id"] = todoist_bridge.create_task(
-                todoist_bridge.QUEUE_PREFIX + (ask or text), priority=priority)
+                todoist_bridge.QUEUE_PREFIX + _todoist_title(ask, options, text), priority=priority)
         except Exception:
             item["todoist_id"] = None
 
@@ -1019,6 +1028,12 @@ def _sync_todoist_completions():
                     item["status"] = "done"
                     item["resolved_at"] = _now_iso()
                     item["resolved_via"] = "todoist"
+                    # Queue asks (Aern 10/10): ticking an item WITH options in Todoist means
+                    # the starred (first, recommended) option - its title says so.
+                    if item.get("options") and not item.get("choice"):
+                        item["choice"] = item["options"][0]
+                        item["resolution_note"] = "Aern %s: %s (ticked in Todoist)" % (
+                            dt.datetime.now().strftime("%m/%d"), item["options"][0])
                     changed = True
             if changed:
                 save_queue_atomic(doc)
