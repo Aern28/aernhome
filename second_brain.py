@@ -71,6 +71,20 @@ PROJECT_ID_MAX = 80
 QUEUE_TTL_MAX_H = 24 * 90
 # Real to-dos (to_aern, to_fleet) never expire by default; review surfaces do.
 QUEUE_DEFAULT_TTL_H = {"to_review": 24 * 7}
+# Queue asks (Aern 10/10, seat queue-asks): a to_aern item is a DECISION for Aern, so it
+# carries `ask` (one line: what he decides) + `options` (2-4 short answers, recommended
+# first). Replay of 481 to_aern items (9/10-10/10): ~10% carried a question; the rest was
+# reading (-> to_review), seat handoffs (-> to_fleet) or asks phrased as statements.
+#   warn    = stored and flagged ask_missing (default while producers are migrated)
+#   enforce = rejected with 400 and the routing hint
+QUEUE_ASK_MODE = os.getenv("QUEUE_ASK_MODE", "warn").strip().lower()
+ASK_MAX = 200
+OPTION_MAX = 60
+ASK_HINT = ("to_aern is for decisions: send ask (one line) + options (2-4, recommended first). "
+            "Reading/FYI -> dir to_review; work for a seat -> dir to_fleet.")
+# Repeat collapse (10/08: one producer posted 298 identical to_aern items in 6.5h). Same dir,
+# same created_by, same text, still open, within this window -> one item with a count.
+REPEAT_WINDOW_MIN = 60
 # Agenda lines link to a project with an inline tag, e.g. "- [ ] Ship it {p:nexus-canon}".
 AGENDA_TAG_RE = re.compile(r"\{p:([A-Za-z0-9._-]{1,80})\}")
 AGENDA_ITEM_RE = re.compile(r"^(\s*)[-*]\s+\[( |x|X)\]\s?(.*)$")
@@ -303,9 +317,55 @@ def _close_queue_item(item, note, via=None):
         if item.get("todoist_id"):
             todoist_bridge.close_task(item["todoist_id"])
         elif item.get("dir") == "to_aern":
-            todoist_bridge.close_by_content(todoist_bridge.QUEUE_PREFIX + item.get("text", ""))
+            todoist_bridge.close_by_content(todoist_bridge.QUEUE_PREFIX + (item.get("ask") or item.get("text", "")))
     except Exception:
         pass
+
+
+def _clean_ask(body):
+    """(ask, options, error). ask = one line <= ASK_MAX; options = 2-4 distinct short
+    strings, recommended first. Options without an ask, or an ask with fewer than two
+    options, is a malformed request (400), whatever the dir."""
+    ask = " ".join(str(body.get("ask") or "").split())
+    raw = body.get("options")
+    if isinstance(raw, str):
+        raw = [p for p in raw.split("|")]
+    options = []
+    for o in raw or []:
+        o = " ".join(str(o).split())
+        if o and o.lower() not in [x.lower() for x in options]:
+            options.append(o)
+    if not ask and not options:
+        return None, None, None
+    if not ask:
+        return None, None, "options given without an ask"
+    if len(ask) > ASK_MAX:
+        return None, None, "ask is %d chars; keep it to one line (<= %d)" % (len(ask), ASK_MAX)
+    if not 2 <= len(options) <= 4:
+        return None, None, "ask needs 2-4 options (recommended first), got %d" % len(options)
+    if any(len(o) > OPTION_MAX for o in options):
+        return None, None, "each option <= %d chars" % OPTION_MAX
+    return ask, options, None
+
+
+def _find_repeat(doc, direction, created_by, text):
+    """The open item this post repeats (same dir + producer + text, created within
+    REPEAT_WINDOW_MIN), or None."""
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=REPEAT_WINDOW_MIN)
+    norm = " ".join(text.split())
+    for old in reversed(doc["items"]):
+        if (old.get("status") == "open" and old.get("dir") == direction
+                and old.get("created_by") == created_by
+                and " ".join((old.get("text") or "").split()) == norm):
+            try:
+                seen = dt.datetime.fromisoformat(old.get("last_repeat_at") or old.get("created_at"))
+                if seen.tzinfo is None:
+                    seen = seen.replace(tzinfo=dt.timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if seen >= cutoff:
+                return old
+    return None
 
 
 def _close_linked_items(notes_by_project):
@@ -561,6 +621,30 @@ def api_queue_post():
     expires_at = ((dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=ttl_h)).isoformat()
                   if ttl_h else None)
 
+    ask, options, ask_err = _clean_ask(body)
+    if ask_err:
+        return jsonify({"ok": False, "error": ask_err}), 400
+    ask_missing = direction == "to_aern" and not ask
+    if ask_missing:
+        if QUEUE_ASK_MODE == "enforce":
+            return jsonify({"ok": False, "error": "ask required: " + ASK_HINT}), 400
+        warnings.append("ask missing (stored, flagged ask_missing): " + ASK_HINT)
+
+    created_by = body.get("created_by") or "unknown"
+    doc = load_queue()
+    repeat = _find_repeat(doc, direction, created_by, text)
+    if repeat is not None:
+        repeat["repeat_count"] = int(repeat.get("repeat_count") or 1) + 1
+        repeat["last_repeat_at"] = _now_iso()
+        try:
+            save_queue_atomic(doc)
+        except OSError as e:
+            return jsonify({"ok": False, "error": f"write failed: {e}"[:200]}), 500
+        warnings.append("collapsed into open item %s (same producer + text within %d min; seen %d times)"
+                        % (repeat["id"], REPEAT_WINDOW_MIN, repeat["repeat_count"]))
+        return jsonify({"ok": True, "id": repeat["id"], "item": repeat, "superseded": [],
+                        "collapsed": True, "warnings": warnings})
+
     item = {
         "id": _short_id(),
         "dir": direction,
@@ -575,7 +659,7 @@ def api_queue_post():
         "source": (body.get("source") or "").strip(),
         "priority": priority,
         "created_at": _now_iso(),
-        "created_by": body.get("created_by") or "unknown",
+        "created_by": created_by,
         "status": "open",
         "resolved_at": None,
         "project_id": project_id,
@@ -583,19 +667,24 @@ def api_queue_post():
     }
     if project_unknown:
         item["project_unknown"] = True
+    if ask:
+        item["ask"] = ask
+        item["options"] = options
+    if ask_missing:
+        item["ask_missing"] = True
 
     # For-Aern items ride his normal GTD flow: mirror into Todoist (best-effort;
     # a Todoist outage never blocks the queue write). Stored id lets resolve
-    # close the twin precisely.
+    # close the twin precisely. The twin's title is the ASK when there is one:
+    # a question he can answer beats the first line of a data dump.
     if direction == "to_aern":
         try:
             import todoist_bridge
             item["todoist_id"] = todoist_bridge.create_task(
-                todoist_bridge.QUEUE_PREFIX + text, priority=priority)
+                todoist_bridge.QUEUE_PREFIX + (ask or text), priority=priority)
         except Exception:
             item["todoist_id"] = None
 
-    doc = load_queue()
     superseded = []
     if key:
         now = _now_iso()
@@ -635,11 +724,19 @@ def api_queue_resolve():
     if not item_id:
         return jsonify({"ok": False, "error": "id is required"}), 400
     note = (body.get("note") or "").strip()
+    # Queue asks: `choice` = the option Aern picked (a /nexus/aern button or /goodmorning).
+    choice = " ".join(str(body.get("choice") or "").split())
 
     doc = load_queue()
     found = None
     for item in doc["items"]:
         if item.get("id") == item_id:
+            if choice:
+                if item.get("options") and choice not in item["options"]:
+                    return jsonify({"ok": False, "error": "choice must be one of %s" % item["options"]}), 400
+                item["choice"] = choice
+                if not note:
+                    note = "Aern %s: %s" % (dt.datetime.now().strftime("%m/%d"), choice)
             # Note only set when supplied: re-resolving after a reopen must not
             # wipe an existing note. The Todoist twin closes best-effort.
             _close_queue_item(item, note)
