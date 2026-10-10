@@ -94,6 +94,7 @@ CHECK_META = {
     "byos_deps": ("BYOS/Keep deps", "infra"),
     "canon_guard": ("Canon Guard (single-writer)", "tcg"),
     "feed_fresh": ("Nexus Feeds", "infra"),
+    "nexus_pages": ("Nexus Pages (verify)", "infra"),
 }
 
 _STATUS_ICON = {"up": "✅", "warn": "⚠️", "down": "\U0001F534", "unknown": "❔"}
@@ -574,6 +575,28 @@ def check_feed_fresh():
     return ("up", f"{len(st)} sources fresh")
 
 
+_NEXUS_VERIFY_TTL_S = 900
+_nexus_verify_cache = {"at": 0.0, "result": None}
+
+
+def check_nexus_pages():
+    """Every page in nexus_feature_map.json renders, stays Tailscale-only and
+    shows sources inside their freshness bar (nexus_verify.py). 10/09: the
+    smoke test was ALL PASS while /nexus/vault had no mount and
+    currently_reading() could only return []. Renders ~40 pages, so the
+    result is cached for 15 min rather than recomputed every pass."""
+    import nexus_verify  # lazy: renders through the running app
+    now = time.time()
+    if _nexus_verify_cache["result"] is None or now - _nexus_verify_cache["at"] > _NEXUS_VERIFY_TTL_S:
+        _nexus_verify_cache["result"] = nexus_verify.verify()
+        _nexus_verify_cache["at"] = now
+    res = _nexus_verify_cache["result"]
+    line = nexus_verify.summary(res) + " (py /app/nexus_verify.py)"
+    if any(p["render"]["verdict"] != "PASS" for p in res["pages"]):
+        return ("down", line)
+    return ("up", line) if res["worst"] == "PASS" else ("warn", line)
+
+
 SIMPLE_CHECKS = {
     "relay_alive": check_relay_alive,
     "containers": check_containers,
@@ -592,6 +615,7 @@ SIMPLE_CHECKS = {
     "byos_device": check_byos_device,
     "byos_deps": check_byos_deps,
     "feed_fresh": check_feed_fresh,
+    "nexus_pages": check_nexus_pages,
 }
 
 
