@@ -345,6 +345,32 @@ def igdb_search(query):
     }
 
 
+def openlibrary_search(title, author=None, timeout=8):
+    """Best Open Library match for a book: {title, author, cover_url} or {} on
+    any failure. Free, keyless; used to auto-fill the Nexus add-book form the
+    way TMDB/IGDB fill TV/games. Never raises."""
+    title = (title or "").strip()
+    if not title:
+        return {}
+    params = {"title": title, "limit": 1, "fields": "title,author_name,cover_i"}
+    if author:
+        params["author"] = author.strip()
+    try:
+        r = requests.get("https://openlibrary.org/search.json", params=params, timeout=timeout,
+                         headers={"User-Agent": "aernhome-nexus/1.0 (personal book shelf)"})
+        r.raise_for_status()
+        docs = r.json().get("docs") or []
+    except Exception:
+        return {}
+    if not docs:
+        return {}
+    d = docs[0]
+    cover = d.get("cover_i")
+    return {"title": d.get("title"),
+            "author": (d.get("author_name") or [None])[0],
+            "cover_url": f"https://covers.openlibrary.org/b/id/{cover}-L.jpg" if cover else None}
+
+
 def download_poster_image(url, dest_path, timeout=10):
     """Download a TMDB/IGDB poster/cover URL to dest_path. Returns True on success,
     False on any failure (bad url, network error, non-2xx, empty body) — never

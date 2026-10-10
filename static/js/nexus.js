@@ -214,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
       form.querySelectorAll("[name]").forEach((el) => {
         if (el.value !== "") body[el.name] = el.value;
       });
-      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", restock: "/api/nexus/restock", link: "/api/nexus/link", media: "/api/nexus/media", note: "/api/nexus/note", doc: "/api/nexus/doc" };
+      const urls = { goal: "/api/nexus/goal", maintenance: "/api/nexus/maintenance", restock: "/api/nexus/restock", link: "/api/nexus/link", media: "/api/nexus/media", book: "/api/nexus/book", note: "/api/nexus/note", doc: "/api/nexus/doc" };
       const res = await nexusPost(urls[kind], body);
       if (res.ok && kind === "doc" && res.slug) location.href = `/nexus/docs/${res.slug}`;
       else if (res.ok) location.reload();

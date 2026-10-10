@@ -367,6 +367,36 @@ def set_book_status(book_id, status):
                 (status, book_id))
 
 
+def add_book(title, author=None, status="reading", cover_url=None):
+    """Add a book from the Nexus page (10/09: the shelf was a one-time import
+    with no add path, so the reading panel froze on 6/25). Same two-txn shape
+    as add_media: insert + commit, then localize the cover to book_covers/
+    outside any transaction; a failed download keeps the remote url."""
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("empty title")
+    if status not in ("to-read", "reading", "read"):
+        status = "reading"
+    with closing(_conn()) as conn, conn:
+        cur = conn.execute(
+            """INSERT INTO book_status (title, author, status, started, finished, cover_ref)
+               VALUES (?, ?, ?, CASE WHEN ? = 'reading' THEN date('now') END,
+                       CASE WHEN ? = 'read' THEN date('now') END, ?)""",
+            (title, (author or "").strip() or None, status, status, status, cover_url or None))
+        book_id = cur.lastrowid
+    if cover_url and str(cover_url).lower().startswith(("http://", "https://")):
+        try:
+            import nexus_sources as ns
+            rel = "book_covers/added-%d.jpg" % book_id
+            data_dir = os.environ.get("DATA_DIR", "C:/projects/aernhome/data")
+            if ns.download_poster_image(cover_url, os.path.join(data_dir, rel.replace("/", os.sep))):
+                with closing(_conn()) as conn, conn:
+                    conn.execute("UPDATE book_status SET cover_ref = ? WHERE id = ?", (rel, book_id))
+        except Exception:
+            pass
+    return book_id
+
+
 def delete_book(book_id):
     with closing(_conn()) as conn, conn:
         conn.execute("DELETE FROM book_status WHERE id = ?", (book_id,))

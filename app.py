@@ -1385,6 +1385,24 @@ def nexus_media_cover(mid):
     return send_from_directory(os.path.dirname(path), os.path.basename(path))
 
 
+@app.route("/api/nexus/book", methods=["POST"])
+def api_nexus_book_create():
+    """Add a book (title [+ author]); cover + author auto-fill from Open Library,
+    degrading to title-only like the TV/games add."""
+    body = _nexus_json()
+    title = (body.get("title") or "").strip()
+    author = (body.get("author") or "").strip()
+    import nexus_sources as ns
+    hit = ns.openlibrary_search(title, author or None) if title else {}
+    try:
+        bid = ns_writes.add_book(title, author=author or hit.get("author"),
+                                 status=body.get("status", "reading"),
+                                 cover_url=hit.get("cover_url"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "id": bid, "enriched": bool(hit)})
+
+
 @app.route("/api/nexus/book/<int:book_id>/status", methods=["POST"])
 def api_nexus_book_status(book_id):
     body = _nexus_json()
