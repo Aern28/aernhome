@@ -2,6 +2,28 @@
 {% block nexus_title %}Docs{% endblock %}
 
 {% block nexus_content %}
+<!-- Links (moved here from home, nexus-panels 10/09) -->
+<section class="mb-6">
+    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
+        <label class="block text-xs font-medium uppercase tracking-wide text-gray-400 mb-2">Links</label>
+        <div class="flex flex-wrap gap-2 mb-3" data-nx-links>
+            {% for l in links %}
+            <span class="group inline-flex items-center gap-1 bg-dark-bg border border-dark-border rounded-full px-3 py-1 text-sm" data-link="{{ l.id }}">
+                <a href="{{ l.url }}" class="text-gray-200 hover:text-blue-400">{{ l.label }}</a>
+                <button data-nx-action="link-delete" data-id="{{ l.id }}" title="Remove" aria-label="Remove link"
+                        class="px-1 text-gray-400 hover:text-red-400 opacity-60 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100">✕</button>
+            </span>
+            {% endfor %}
+            {% if not links %}<span class="text-sm text-gray-400">No links yet - add the docs you reach for often.</span>{% endif %}
+        </div>
+        <form data-nx-form="link" class="flex flex-wrap gap-2">
+            <input name="label" placeholder="label" class="bg-dark-bg border border-dark-border rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-400 focus:outline-none focus:border-blue-500">
+            <input name="url" placeholder="url (/nexus/fleetdocs/... or http)" class="flex-1 min-w-[200px] bg-dark-bg border border-dark-border rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-400 focus:outline-none focus:border-blue-500">
+            <button type="submit" class="px-3 py-1.5 rounded-md bg-dark-bg border border-dark-border text-gray-300 text-sm hover:border-blue-500">+ link</button>
+            <span data-nx-err class="text-xs text-red-400 self-center"></span>
+        </form>
+    </div>
+</section>
 <!-- New doc -->
 <section class="mb-6">
     <div class="bg-dark-card border border-dark-border rounded-lg p-4">

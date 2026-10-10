@@ -1,0 +1,40 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}More{% endblock %}
+
+{% block nexus_content %}
+<div class="nx-narrow">
+    <a class="nx-doodle" href="/doodle/"><span aria-hidden="true">🖌️</span> Doodle Pop</a>
+
+    <h2 class="nx-h">Everything else</h2>
+    <div class="nx-grid">
+        {% for href, label, icon, desc in sections %}
+        {% if href not in ("/nexus", "/nexus/aern", "/nexus/tcg", "/nexus/books", "/nexus/tv", "/nexus/games") %}
+        <a class="nx-tile" href="{{ href }}">{{ icon }} {{ label }}<small>{{ desc }}</small></a>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <h2 class="nx-h">Pinned notes <a href="/nexus/notes">notes →</a></h2>
+    {% if data.notes %}
+    <div class="nx-card">
+        {% for n in data.notes %}
+        <div class="nx-ev" style="display:block">
+            {% if n.title %}<b>{{ n.title }}</b><br>{% endif %}
+            <span class="nx-empty" style="white-space:pre-wrap">{{ n.body|truncate(240) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}<div class="nx-clear">No pinned notes.</div>{% endif %}
+
+    <h2 class="nx-h">Latest in the feed <a href="/nexus/feed">feed →</a></h2>
+    <div class="nx-card">
+        {% for f in data.feed %}
+        <div class="nx-ch" style="align-items:flex-start">
+            <span class="nx-ev" style="display:block">{{ f.meta.icon }} {{ (f.title or f.body)|truncate(110) }}</span>
+            <span class="nx-age">{{ f.created_at[5:16] }}</span>
+        </div>
+        {% else %}<div class="nx-empty">No briefs yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

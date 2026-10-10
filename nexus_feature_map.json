@@ -287,6 +287,33 @@
    ]
   },
   {
+   "path": "/nexus/more",
+   "title": "More (tab)",
+   "sources": [
+    {
+     "id": "notes_feed",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    },
+    {
+     "id": "feeds",
+     "kind": "fleet_check",
+     "check": "feed_fresh"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/media",
+   "title": "Media (tab)",
+   "sources": [
+    {
+     "id": "media",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
    "path": "/nexus/books",
    "title": "Books",
    "sources": [

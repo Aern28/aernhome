@@ -946,6 +946,7 @@ def _needs_from_todoist():
             out.append({
                 "source_kind": "todoist",
                 "todoist_id": str(t.get("id")),
+                "overdue_days": overdue,
                 "title": str(t.get("content", ""))[:140],
                 "detail": detail,
                 # Todoist API priority is inverted (4=urgent … 1=none)
@@ -1045,14 +1046,18 @@ def _needs_from_tcg_held():
 
 
 def _needs_from_seat():
-    """(d) Seat projects with blocked_on == 'aern'."""
+    """(d) Seat projects with blocked_on == 'aern'. Parked and done projects are
+    left out (canon Q7: board status is the parking lot; 10/09 a parked
+    pokedex-completion still sat at P1 here)."""
     out = []
     try:
         doc = load_seat()
         for p in doc["projects"]:
-            if isinstance(p, dict) and p.get("blocked_on") == "aern":
+            if (isinstance(p, dict) and p.get("blocked_on") == "aern"
+                    and p.get("status") not in ("parked", "done")):
                 out.append({
                     "source_kind": "seat",
+                    "project_id": p.get("id"),
                     "title": p.get("title", p.get("id", "project")),
                     "detail": p.get("next_step") or p.get("detail") or "",
                     "priority": 1,
@@ -1067,7 +1072,12 @@ def _needs_from_seat():
 def api_needs_aern():
     if not _is_nexus_allowed():
         abort(404)
+    return jsonify({"generated_at": _now_iso(), "items": needs_aern_items()})
 
+
+def needs_aern_items():
+    """Everything waiting on Aern, priority-sorted. Shared by /api/needs-aern
+    and the /nexus home "Needs you" block."""
     _sweep_expired()
     _sync_todoist_completions()
 
@@ -1079,8 +1089,7 @@ def api_needs_aern():
     items.extend(_needs_from_todoist())
 
     items.sort(key=lambda i: i.get("priority", 3))
-
-    return jsonify({"generated_at": _now_iso(), "items": items})
+    return items
 
 
 # ── Pages ──────────────────────────────────────────────────────────────────

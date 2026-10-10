@@ -36,6 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
             `<button data-nx-action="capture-dismiss" data-id="${res.id}" class="text-[11px] text-gray-500 hover:text-red-400">✕</button>`;
           li.querySelector("span").textContent = text; // textContent = XSS-safe
           list.prepend(li);
+          // Home (10/09 panels) keeps the inbox in a <details>; show it on add.
+          const box = list.closest("details");
+          if (box) { box.hidden = false; box.open = true; li.className = ""; }
         }
       }
     };
@@ -53,6 +56,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await nexusPost(`/api/nexus/todoist/${t.dataset.id}/close`, {});
       const row = t.closest("li");
       if (res.ok && row) { row.style.opacity = "0.4"; row.style.textDecoration = "line-through"; t.remove(); }
+      else t.disabled = false;
+    }
+
+    else if (action === "queue-resolve") {
+      // Home "Needs you" card: resolve a to_aern queue item (reversible via /api/queue/reopen).
+      t.disabled = true;
+      const res = await nexusPost("/api/queue/resolve", { id: t.dataset.id, note: "resolved from Nexus home" });
+      const row = t.closest("li");
+      if (res.ok && row) { row.style.opacity = "0.4"; t.textContent = "Resolved ✓"; }
       else t.disabled = false;
     }
 

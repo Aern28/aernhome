@@ -1,0 +1,35 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Media{% endblock %}
+
+{% macro shelf(title, href, items, kind) %}
+<div class="nx-card">
+    <div class="nx-ch"><b>{{ title }}</b><a class="nx-age" href="{{ href }}">all →</a></div>
+    {% if items %}
+    <ul class="nx-media">
+        {% for m in items %}
+        <li>
+            {% if kind == 'book' %}
+                {% if m.cover %}<img src="/nexus/cover/{{ m.id }}" alt="" loading="lazy">{% else %}<div class="ph">📕</div>{% endif %}
+            {% elif m.poster_url %}<img src="/nexus/media_cover/{{ m.id }}" alt="" loading="lazy">
+            {% else %}<div class="ph">{{ '📺' if kind == 'tv' else '🎮' }}</div>{% endif %}
+            <div class="tt">{{ m.title }}{% if m.author %}<small>{{ m.author }}</small>{% elif m.progress %}<small>{{ m.progress }}</small>{% endif %}</div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}<div class="nx-empty">Nothing in progress. <a href="{{ href }}" class="nx-age">Add one →</a></div>{% endif %}
+</div>
+{% endmacro %}
+
+{% block nexus_content %}
+<div class="nx-narrow">
+    <h2 class="nx-h">In progress</h2>
+    {{ shelf("📖 Reading", "/nexus/books", data.books, "book") }}
+    {{ shelf("📺 Watching", "/nexus/tv", data.watching, "tv") }}
+    {{ shelf("🎮 Playing", "/nexus/games", data.playing, "game") }}
+    <div class="nx-grid">
+        <a class="nx-tile" href="/nexus/books">📚 Books<small>shelf · add a book</small></a>
+        <a class="nx-tile" href="/nexus/tv">📺 TV<small>watching · watched</small></a>
+        <a class="nx-tile" href="/nexus/games">🎮 Games<small>backlog · playing</small></a>
+    </div>
+</div>
+{% endblock %}

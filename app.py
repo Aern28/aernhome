@@ -129,11 +129,16 @@ def inject_asset_version():
     (npm run build:css) is fetched immediately instead of serving a stale, browser-
     cached copy — which otherwise makes newly added Tailwind classes render unstyled."""
     out = {"served_at": datetime.now(ZoneInfo("America/Chicago")).strftime("%m/%d %H:%M")}
-    for key, rel in (("css_ver", ("css", "app.css")), ("js_ver", ("js", "nexus_sb.js"))):
+    for key, rel in (("css_ver", ("css", "app.css")), ("js_ver", ("js", "nexus_sb.js")),
+                     ("panels_ver", ("css", "nexus-panels.css")), ("nexusjs_ver", ("js", "nexus.js"))):
         try:
             out[key] = int(os.path.getmtime(os.path.join(app.static_folder, *rel)))
         except OSError:
             out[key] = ""
+    # Bottom tab bar on every Nexus page (nexus-panels 10/09).
+    import nexus_panels
+    out["nexus_tabs"] = nexus_panels.TABS
+    out["nexus_tab"] = nexus_panels.tab_for(request.path) if request else "home"
     return out
 
 
@@ -1174,27 +1179,58 @@ def nexus_home():
     """
     if not _is_nexus_allowed():
         abort(404)
-    import nexus_sources as ns
+    # nexus-panels (Aern grill 10/09): Needs you, then Your day, then quiet chips.
+    # Every card reads a nexus_contract envelope, so its corner shows age + source
+    # and a dead source renders red instead of an empty "all clear".
+    import nexus_contract as nc
+    import nexus_panels as npl
+    import second_brain
+    env = {n: nc.envelope(n) for n in ("schedule_today", "todoist_today", "oura_summary",
+                                         "tcg_alerts", "infra_summary", "goals_summary",
+                                         "maintenance_due")}
+    fresh = {n: npl.freshness(e, HOME_STALE_H.get(n)) for n, e in env.items()}
+    try:
+        checks = fleet.load_state().get("checks", {})
+    except Exception:
+        checks = {}
+    try:
+        needs = npl.needs_view(second_brain.needs_aern_items())
+    except Exception as e:
+        print(f"[nexus] needs-aern failed: {e}")
+        needs = {"items": [], "more": 0, "sessions": [], "today": [], "error": True}
     data = {
-        "schedule": ns.schedule_today(),
-        "oura": ns.oura_summary(),
-        "goals": ns.goals_summary(),
-        "tasks": ns.todoist_today(),
-        "maintenance": ns.maintenance_due(),
-        "tcg": ns.tcg_alerts(),
-        # prefer the canonical book_status (once seeded); fall back to live Obsidian
-        "books": ns_writes.reading_books() or ns.currently_reading(),
-        "watching": ns_writes.watching_media(),
-        "playing": ns_writes.watching_media(kind="game"),
-        "infra": ns.infra_summary(),
+        "env": env, "fresh": fresh, "needs": needs,
+        "status": npl.status_line(checks),
+        "days": npl.schedule_view(env["schedule_today"]["data"]),
+        "captures": ns_writes.list_capture(limit=8),
     }
-    data["captures"] = ns_writes.list_capture(limit=8)
-    data["vault_recent"] = ns._cached("vault_recent", 300, lambda: vault.recent_notes(5))
-    data["links"] = ns_writes.list_links()
-    data["notes"] = ns_writes.pinned_notes()
-    # source-diverse teaser so once-daily digests aren't buried under Aernbot's volume
-    data["feed"] = [{"meta": _feed_meta(f["source"]), **f} for f in ns_writes.latest_feed_diverse(5)]
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
+
+
+# Freshness bars for the home cards (hours); same numbers as nexus_feature_map.json.
+HOME_STALE_H = {"schedule_today": 1, "todoist_today": 1, "oura_summary": 48,
+                "tcg_alerts": 30, "infra_summary": 2}
+
+
+@app.route("/nexus/media")
+def nexus_media():
+    """Media tab: what Aern is reading, watching and playing (moved off home 10/09)."""
+    if not _is_nexus_allowed():
+        abort(404)
+    data = {"books": ns_writes.reading_books(),
+            "watching": ns_writes.watching_media(),
+            "playing": ns_writes.watching_media(kind="game")}
+    return render_template("nexus_media.html", sections=NEXUS_SECTIONS, active="/nexus/media", data=data)
+
+
+@app.route("/nexus/more")
+def nexus_more():
+    """More tab: every other Nexus page, plus the bits that left home (pinned notes, feed, Doodle Pop)."""
+    if not _is_nexus_allowed():
+        abort(404)
+    data = {"notes": ns_writes.pinned_notes(),
+            "feed": [{"meta": _feed_meta(f["source"]), **f} for f in ns_writes.latest_feed_diverse(5)]}
+    return render_template("nexus_more.html", sections=NEXUS_SECTIONS, active="/nexus/more", data=data)
 
 
 # ── Nexus section pages (all Tailscale-only) ──────────────────────────────────
@@ -1512,7 +1548,8 @@ def nexus_docs():
     tag = (request.args.get("tag") or "").strip().lower() or None
     return render_template("nexus_docs.html", sections=NEXUS_SECTIONS, active="/nexus/docs",
                            docs=ns_writes.list_docs(tag=tag),
-                           all_tags=ns_writes.all_doc_tags(), active_tag=tag)
+                           all_tags=ns_writes.all_doc_tags(), active_tag=tag,
+                           links=ns_writes.list_links())
 
 
 @app.route("/nexus/docs/<slug>")
