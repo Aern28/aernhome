@@ -7,7 +7,6 @@
       {"id": "feeds", "kind": "fleet_check", "check": "feed_fresh"},
       {"id": "health_rows", "kind": "sqlite_max", "db": "{DATA_DIR}/dashboard.db", "sql": "SELECT MAX(checked_at) FROM health_checks", "stale_after_h": 2},
       {"id": "goals_capture_notes", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"},
-      {"id": "reading_panel", "kind": "sqlite_max", "db": "{DATA_DIR}/nexus.db", "sql": "SELECT MAX(updated_at) FROM book_status", "stale_after_h": 1080},
       {"id": "currently_reading_vault", "kind": "nonempty", "call": "nexus_sources:currently_reading", "fallback": true, "note": "Reads the Obsidian Books folder at a Phoenix path; the vault mount was retired 2026-08-06, so this can only return []. Home also shows nexus.db reading_books - this leg is dead code."}
     ]},
     {"path": "/nexus/aern", "title": "Aern (agenda + needs)", "sources": [
@@ -57,7 +56,7 @@
     ]},
     {"path": "/nexus/goals", "title": "Goals", "sources": [{"id": "goals", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
     {"path": "/nexus/books", "title": "Books", "sources": [
-      {"id": "books", "kind": "sqlite_max", "db": "{DATA_DIR}/nexus.db", "sql": "SELECT MAX(updated_at) FROM book_status", "stale_after_h": 1080, "note": "Books were a one-time import from Obsidian/Calibre (nexus_books_import.py); nothing has fed book_status since 6/25. Watching/playing stay live because they are edited in Nexus."},
+      {"id": "books", "kind": "user_store", "db": "{DATA_DIR}/nexus.db", "note": "Hand-entered since 5fd22b2 (add-book form); a long read is not staleness, so no freshness bar."},
       {"id": "currently_reading_vault", "kind": "nonempty", "call": "nexus_sources:currently_reading", "fallback": true}
     ]},
     {"path": "/nexus/tv", "title": "TV", "sources": [{"id": "media", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
