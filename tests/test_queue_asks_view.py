@@ -17,6 +17,8 @@ QUEUE = {"items": [
      "repeat_count": 3, "created_by": "trainer-claude", "priority": 2},
     {"id": "b2", "dir": "to_aern", "status": "open", "text": "Old-style item", "source": "x.log",
      "ask_missing": True, "created_by": "aernbot-bizmail"},
+    {"id": "e5", "dir": "to_aern", "status": "open", "text": "Posted before asks existed",
+     "created_by": "phoenix-claude"},
     {"id": "c3", "dir": "to_fleet", "status": "open", "text": "not for Aern"},
     {"id": "d4", "dir": "to_aern", "status": "resolved", "text": "closed"},
 ]}
@@ -31,7 +33,11 @@ class NeedsFromQueue(unittest.TestCase):
         self.items = {i["id"]: i for i in sb._needs_from_queue()}
 
     def test_only_open_to_aern(self):
-        self.assertEqual(set(self.items), {"a1", "b2"})
+        self.assertEqual(set(self.items), {"a1", "b2", "e5"})
+
+    def test_legacy_item_without_flag_is_still_missing_an_ask(self):
+        self.assertTrue(self.items["e5"]["ask_missing"])
+        self.assertEqual(self.items["e5"]["created_by"], "phoenix-claude")
 
     def test_ask_is_headline_text_is_detail(self):
         a = self.items["a1"]

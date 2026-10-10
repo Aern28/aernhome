@@ -1080,7 +1080,9 @@ def _needs_from_queue():
                     "ask": ask,
                     "options": item.get("options") or [],
                     "repeat_count": int(item.get("repeat_count") or 1),
-                    "ask_missing": bool(item.get("ask_missing")),
+                    # Derived, not stored: items posted before asks existed have no
+                    # ask_missing flag but are just as unanswerable.
+                    "ask_missing": not ask,
                     "created_by": item.get("created_by") or "",
                     "priority": item.get("priority") if item.get("priority") in VALID_PRIORITY else 2,
                     "ref": item.get("source") or "/nexus/queue",
