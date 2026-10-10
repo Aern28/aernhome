@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import nexus_verify as nv  # noqa: E402
 
-KINDS = {"connector", "fleet_check", "file_age", "glob_newest", "sqlite_max", "json_field", "dir_present", "nonempty", "user_store"}
+KINDS = {"agenda_board", "connector", "fleet_check", "file_age", "glob_newest", "sqlite_max", "json_field", "dir_present", "nonempty", "user_store"}
 
 
 class MapIntegrity(unittest.TestCase):
@@ -158,6 +158,32 @@ class FallbackDoesNotSetVerdict(unittest.TestCase):
         self.assertEqual(res["pages"][0]["verdict"], "PASS")
         self.assertEqual(res["pages"][0]["sources"][0]["verdict"], "DEAD")
         self.assertEqual(res["worst"], "PASS")
+
+
+class AgendaBoard(unittest.TestCase):
+    NOW = datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc)
+
+    def line(self, pid, found=True, status="active", checked=False):
+        return {"kind": "item", "checked": checked,
+                "auto_done": checked is False and found and status == "done",
+                "projects": [{"id": pid, "found": found, "status": status if found else "unknown"}]}
+
+    def test_fresh_done_is_grace(self):
+        projects = {"a": {"status": "done", "status_changed_at": "2026-10-10T05:00:00+00:00"}}
+        self.assertEqual(nv.agenda_board_findings({"daily": [self.line("a", status="done")]}, projects, self.NOW), ([], []))
+
+    def test_old_done_is_carried(self):
+        projects = {"a": {"status": "done", "status_changed_at": "2026-10-08T05:00:00+00:00"}}
+        self.assertEqual(nv.agenda_board_findings({"daily": [self.line("a", status="done")]}, projects, self.NOW)[1], ["daily: a"])
+
+    def test_done_without_stamp_counts_as_old(self):
+        projects = {"a": {"status": "done"}}
+        self.assertEqual(nv.agenda_board_findings({"weekly": [self.line("a", status="done")]}, projects, self.NOW)[1], ["weekly: a"])
+
+    def test_unknown_id_and_checked_lines(self):
+        lines = [self.line("ghost", found=False), self.line("b", status="done", checked=True)]
+        unknown, carried = nv.agenda_board_findings({"daily": lines}, {"b": {"status": "done"}}, self.NOW)
+        self.assertEqual((unknown, carried), (["daily: ghost"], []))
 
 
 class Summary(unittest.TestCase):

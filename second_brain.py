@@ -260,10 +260,17 @@ def _clean_project(raw, existing=None):
     status = raw.get("status", existing.get("status", "active"))
     if status not in VALID_PROJECT_STATUS:
         status = existing.get("status", "active")
+    # When the status last changed - server-stamped, never taken from the caller,
+    # so nexus_verify can tell "just closed" (struck through until /goodmorning
+    # ticks it) from "closed long ago and its agenda line was carried anyway".
+    changed_at = existing.get("status_changed_at")
+    if not existing or status != existing.get("status"):
+        changed_at = _now_iso()
     return {
         "id": str(pid),
         "title": title,
         "status": status,
+        "status_changed_at": changed_at,
         "detail": raw.get("detail", existing.get("detail", "")) or "",
         "next_step": raw.get("next_step", existing.get("next_step", "")) or "",
         "blocked_on": raw.get("blocked_on", existing.get("blocked_on")),

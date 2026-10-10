@@ -138,6 +138,8 @@ def probe(src, fleet_checks):
             if not os.path.isdir(d):
                 return "DEAD", f"{d} not mounted"
             return ("PASS", f"{d}: {len(os.listdir(d))} entries") if os.listdir(d) else ("DEAD", f"{d} empty")
+        if kind == "agenda_board":
+            return _probe_agenda_board()
         if kind == "connector":
             import nexus_contract as nc
             env = nc.envelope(src["name"])
@@ -157,6 +159,47 @@ def probe(src, fleet_checks):
         return "UNKNOWN", f"unknown source kind {kind!r}"
     except Exception as e:  # a probe bug must not hide the other sources
         return "UNKNOWN", f"probe crashed: {e}"[:160]
+
+
+AGENDA_DONE_GRACE_H = 18  # a project closed after one /goodmorning is ticked by the next
+
+
+def agenda_board_findings(lines_by_which, projects, now=None):
+    """Unchecked agenda lines that disagree with the board.
+    lines_by_which: {"daily": [...], "weekly": [...]} from second_brain._agenda_lines.
+    Returns (unknown, carried_done): "which: <id>" strings."""
+    now = now or datetime.now(timezone.utc)
+    unknown, carried = [], []
+    for which, lines in lines_by_which.items():
+        for ln in lines or []:
+            if ln.get("kind") != "item" or ln.get("checked") is not False:
+                continue
+            for link in ln.get("projects", []):
+                if not link["found"]:
+                    unknown.append(f"{which}: {link['id']}")
+            if ln.get("auto_done"):
+                for link in ln["projects"]:
+                    since = _parse_ts((projects.get(link["id"]) or {}).get("status_changed_at"))
+                    if since is None or (now - since).total_seconds() / 3600 > AGENDA_DONE_GRACE_H:
+                        carried.append(f"{which}: {link['id']}")
+    return sorted(set(unknown)), sorted(set(carried))
+
+
+def _probe_agenda_board():
+    import second_brain as sb
+    projects = sb._project_index()
+    doc = sb.load_agenda()
+    lines = {w: sb._agenda_lines((doc.get(w) or {}).get("content"), projects) for w in ("daily", "weekly")}
+    tagged = sum(1 for ls in lines.values() for ln in ls if ln.get("projects"))
+    unknown, carried = agenda_board_findings(lines, projects)
+    if not unknown and not carried:
+        return "PASS", f"{tagged} tagged agenda lines agree with the board"
+    parts = []
+    if carried:
+        parts.append(f"unticked lines for projects done >{AGENDA_DONE_GRACE_H}h: {', '.join(carried)}")
+    if unknown:
+        parts.append(f"tags with no board project: {', '.join(unknown)}")
+    return "STALE", "; ".join(parts)[:300]
 
 
 def _get_app():
