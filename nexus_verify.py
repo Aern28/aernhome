@@ -138,6 +138,18 @@ def probe(src, fleet_checks):
             if not os.path.isdir(d):
                 return "DEAD", f"{d} not mounted"
             return ("PASS", f"{d}: {len(os.listdir(d))} entries") if os.listdir(d) else ("DEAD", f"{d} empty")
+        if kind == "connector":
+            import nexus_contract as nc
+            env = nc.envelope(src["name"])
+            reason, warning = env["empty_reason"], env["warning"]
+            if reason and reason != "none_due":
+                return "DEAD", f"{src['name']}: {reason}"
+            if warning:
+                return "STALE", f"{src['name']}: {warning}"
+            what = f"{src['name']} ({'empty: none due' if reason else 'has data'})"
+            if env["as_of"]:
+                return _fresh(_parse_ts(env["as_of"]), src, what)
+            return "PASS", f"{what}, {env['freshness']} source, no as_of"
         if kind == "nonempty":
             mod, fn = src["call"].split(":")
             out = getattr(importlib.import_module(mod), fn)()

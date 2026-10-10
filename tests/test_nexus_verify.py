@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import nexus_verify as nv  # noqa: E402
 
-KINDS = {"fleet_check", "file_age", "glob_newest", "sqlite_max", "json_field", "dir_present", "nonempty", "user_store"}
+KINDS = {"connector", "fleet_check", "file_age", "glob_newest", "sqlite_max", "json_field", "dir_present", "nonempty", "user_store"}
 
 
 class MapIntegrity(unittest.TestCase):

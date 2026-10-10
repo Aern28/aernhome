@@ -54,6 +54,30 @@ def _cached(key, ttl, producer):
     return value
 
 
+# Why a connector last came back empty. The connectors below degrade to {} / []
+# on any failure (never raise, by design for Flask routes), which made "the API
+# is down" look exactly like "nothing due today". Each live connector records
+# its outcome here; nexus_contract.py reads it to fill empty_reason.
+_HEALTH = {}
+
+
+def _mark(key, ok, why=""):
+    """Record a connector's last outcome. why: 'source_missing: ...' or 'error: ...'."""
+    _HEALTH[key] = {"ok": bool(ok), "why": why, "at": time.time()}
+
+
+def health(key):
+    """Last recorded outcome for a connector key, or None if it never ran."""
+    return _HEALTH.get(key)
+
+
+def cache_time(key):
+    """Epoch seconds the cached value for `key` was produced, or None."""
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+    return hit[0] if hit else None
+
+
 def cache_clear(key=None):
     """Drop one cache entry (or all). Call after a write that invalidates a
     cached read (e.g. closing a Todoist task should refresh the task list)."""
@@ -117,26 +141,38 @@ def _todoist_today_compute():
     """
     token = _get_todoist_token()
     if not token:
+        _mark("todoist_today", False, "source_missing: no Todoist token")
         return []
 
+    # v1 pages its results (next_cursor); reading only page one silently dropped
+    # due tasks once the account passed one page (10/09). Follow the cursor, capped.
+    tasks, cursor, pages = [], None, 0
     try:
-        resp = requests.get(
-            "https://api.todoist.com/api/v1/tasks",
-            headers={"Authorization": "Bearer %s" % token},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
+        while True:
+            resp = requests.get(
+                "https://api.todoist.com/api/v1/tasks",
+                headers={"Authorization": "Bearer %s" % token},
+                params={"limit": 200, **({"cursor": cursor} if cursor else {})},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            pages += 1
+            if isinstance(data, list):  # older bare-list shape: no paging
+                tasks.extend(data)
+                cursor = None
+            elif isinstance(data, dict):
+                tasks.extend(data.get("results") or data.get("items") or [])
+                cursor = data.get("next_cursor")
+            else:
+                _mark("todoist_today", False, "error: unexpected payload %s" % type(data).__name__)
+                return []
+            if not cursor or pages >= 10:
+                break
+    except Exception as e:
+        _mark("todoist_today", False, "error: %s" % type(e).__name__)
         return []
-
-    # v1 may return a bare list or a paginated {"results": [...]} envelope.
-    if isinstance(data, dict):
-        tasks = data.get("results") or data.get("items") or []
-    elif isinstance(data, list):
-        tasks = data
-    else:
-        return []
+    _mark("todoist_today", True, "partial: stopped at 10 pages" if cursor else "")
 
     today = datetime.date.today()
     out = []
@@ -967,6 +1003,7 @@ def oura_summary(ttl=1800):
 def _oura_summary_compute():
     token = (os.environ.get("OURA_TOKEN") or "").strip()
     if not token:
+        _mark("oura_summary", False, "source_missing: no OURA_TOKEN")
         return {}
     headers = {"Authorization": "Bearer %s" % token}
     today = datetime.date.today()
@@ -992,6 +1029,7 @@ def _oura_summary_compute():
     out = {"readiness": _latest("daily_readiness"),
            "sleep": _latest("daily_sleep"),
            "activity": _latest("daily_activity")}
+    _mark("oura_summary", any(out.values()), "" if any(out.values()) else "error: no scored day in the last 3 days (API error or ring not synced)")
     return out if any(out.values()) else {}
 
 
@@ -1009,9 +1047,11 @@ def schedule_today(ttl=900):
 
 
 def _schedule_today_compute():
-    matt = _schedule_for(os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com"))
+    errs = []
+    matt = _schedule_for(os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com"), errs)
     gal_id = os.environ.get("CALENDAR_ID_GAL", "")
-    gal = _schedule_for(gal_id) if gal_id else {"today": [], "tomorrow": []}
+    gal = _schedule_for(gal_id, errs) if gal_id else {"today": [], "tomorrow": []}
+    _mark("schedule_today", not errs, "; ".join(errs))
     out = {
         "today": {"matt": matt["today"], "gal": gal["today"]},
         "tomorrow": {"matt": matt["tomorrow"], "gal": gal["tomorrow"]},
@@ -1020,20 +1060,23 @@ def _schedule_today_compute():
     return out if has_any else {}
 
 
-def _schedule_for(cal_id):
+def _schedule_for(cal_id, errs=None):
     """Today + tomorrow items for a single calendar id. Never raises;
     returns {"today": [], "tomorrow": []} on any failure or missing config."""
     empty = {"today": [], "tomorrow": []}
     sa_path = os.environ.get(
         "GOOGLE_CALENDAR_SA",
         "/workspace/.credentials/claudendar-service-account.json")
+    errs = errs if errs is not None else []
     if not cal_id or not os.path.exists(sa_path):
+        errs.append("source_missing: %s" % ("no calendar id" if not cal_id else "service-account json"))
         return empty
     try:
         from zoneinfo import ZoneInfo
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
     except Exception:
+        errs.append("source_missing: google client libs")
         return empty
     try:
         tz = ZoneInfo("America/Chicago")
@@ -1059,7 +1102,9 @@ def _schedule_for(cal_id):
             ).execute().get("items", [])
         finally:
             socket.setdefaulttimeout(_prev_to)
-    except Exception:
+    except Exception as e:
+        who = "matt" if cal_id == os.environ.get("CALENDAR_ID", "mcarroll203@gmail.com") else "gal"
+        errs.append("error: %s calendar %s" % (who, type(e).__name__))
         return empty
 
     today_d, tom_d = now.date(), now.date() + datetime.timedelta(days=1)

@@ -1,128 +1,513 @@
 {
-  "_comment": "Nexus feature map: every GET page/API -> the sources it shows -> how fresh each must be. Read by nexus_verify.py (PASS/STALE/DEAD/DRIFT) and by the steward. A new GET route must land here (pages) or in excluded, or nexus_verify reports DRIFT. Source kinds: fleet_check (reuse a fleet.py check, no duplicate logic), file_age, glob_newest, sqlite_max (SQL returns one UTC timestamp), json_field (file + dotted key holding an ISO timestamp), dir_present, nonempty (module:function must return something non-empty - catches 'empty = all clear'), user_store (Aern-entered data: no freshness, page must render). stale_after_h null = no freshness bar. fallback: true = the page uses this source only when its primary is empty; it is probed and reported but does not set the page verdict. cf_expect: a Cloudflare-shaped request must get 404 (default) or, with \"decoy\", a 200 whose tiny body differs from the internal one (/api/restock answers {status: ok} with no data).",
-  "version": 1,
-  "pages": [
-    {"path": "/nexus", "title": "Home", "sources": [
-      {"id": "tcg_prices", "kind": "fleet_check", "check": "price_fresh"},
-      {"id": "feeds", "kind": "fleet_check", "check": "feed_fresh"},
-      {"id": "health_rows", "kind": "sqlite_max", "db": "{DATA_DIR}/dashboard.db", "sql": "SELECT MAX(checked_at) FROM health_checks", "stale_after_h": 2},
-      {"id": "goals_capture_notes", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"},
-      {"id": "currently_reading_vault", "kind": "nonempty", "call": "nexus_sources:currently_reading", "fallback": true, "note": "Reads the Obsidian Books folder at a Phoenix path; the vault mount was retired 2026-08-06, so this can only return []. Home also shows nexus.db reading_books - this leg is dead code."}
-    ]},
-    {"path": "/nexus/aern", "title": "Aern (agenda + needs)", "sources": [
-      {"id": "agenda_daily", "kind": "json_field", "file": "{DATA_DIR}/agenda.json", "field": "daily.updated_at", "stale_after_h": 26},
-      {"id": "agenda_weekly", "kind": "json_field", "file": "{DATA_DIR}/agenda.json", "field": "weekly.updated_at", "stale_after_h": 192}
-    ]},
-    {"path": "/nexus/seat", "title": "Seat board", "sources": [
-      {"id": "seat", "kind": "json_field", "file": "{DATA_DIR}/seat.json", "field": "updated_at", "stale_after_h": 72}
-    ]},
-    {"path": "/nexus/queue", "title": "Queue", "sources": [
-      {"id": "queue", "kind": "file_age", "file": "{DATA_DIR}/queue.json", "stale_after_h": 48}
-    ]},
-    {"path": "/nexus/fleet", "title": "Fleet board", "sources": [
-      {"id": "fleet_state", "kind": "json_field", "file": "{DATA_DIR}/fleet_state.json", "field": "generated_at", "stale_after_h": 0.5}
-    ]},
-    {"path": "/nexus/infra", "title": "Infra", "sources": [
-      {"id": "health_rows", "kind": "sqlite_max", "db": "{DATA_DIR}/dashboard.db", "sql": "SELECT MAX(checked_at) FROM health_checks", "stale_after_h": 2},
-      {"id": "nas_stats", "kind": "file_age", "file": "{DATA_DIR}/nas_stats.json", "stale_after_h": 1},
-      {"id": "host_stats", "kind": "file_age", "file": "{DATA_DIR}/host_stats.json", "stale_after_h": 1}
-    ]},
-    {"path": "/nexus/tcg", "title": "TCG", "sources": [
-      {"id": "tcg_prices", "kind": "fleet_check", "check": "price_fresh"},
-      {"id": "daily_chain", "kind": "fleet_check", "check": "daily_chain"}
-    ]},
-    {"path": "/nexus/signals", "title": "Signals", "sources": [
-      {"id": "sealed_index", "kind": "glob_newest", "glob": "/tcg/reports/sealed_index_*.json", "stale_after_h": 30},
-      {"id": "movers", "kind": "glob_newest", "glob": "/tcg/reports/movers_*.md", "stale_after_h": 30}
-    ]},
-    {"path": "/nexus/inventory", "title": "Inventory (live listings)", "sources": [
-      {"id": "live_inventory", "kind": "file_age", "file": "{DATA_DIR}/live_inventory.json", "stale_after_h": 336, "note": "Snapshot of a TCGplayer MyPricing export, refreshed by /inventory-update after a listing change - event-driven, so 14d is a nudge, not an outage."}
-    ]},
-    {"path": "/nexus/wants", "title": "Wants board", "sources": [
-      {"id": "board", "kind": "file_age", "file": "/tcg/boards/wants.html", "stale_after_h": 30}
-    ]},
-    {"path": "/nexus/vintage", "title": "Vintage board", "sources": [
-      {"id": "board", "kind": "file_age", "file": "/tcg/boards/vintage.html", "stale_after_h": 30}
-    ]},
-    {"path": "/nexus/theories", "title": "Theories board", "sources": [
-      {"id": "board", "kind": "file_age", "file": "/tcg/boards/theories.html", "stale_after_h": 30}
-    ]},
-    {"path": "/nexus/feed", "title": "Feed", "sources": [
-      {"id": "feeds", "kind": "fleet_check", "check": "feed_fresh"}
-    ]},
-    {"path": "/nexus/house", "title": "House", "sources": [
-      {"id": "keep_sync", "kind": "fleet_check", "check": "keep_sync"},
-      {"id": "maintenance", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}
-    ]},
-    {"path": "/nexus/goals", "title": "Goals", "sources": [{"id": "goals", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/books", "title": "Books", "sources": [
-      {"id": "books", "kind": "user_store", "db": "{DATA_DIR}/nexus.db", "note": "Hand-entered since 5fd22b2 (add-book form); a long read is not staleness, so no freshness bar."},
-      {"id": "currently_reading_vault", "kind": "nonempty", "call": "nexus_sources:currently_reading", "fallback": true}
-    ]},
-    {"path": "/nexus/tv", "title": "TV", "sources": [{"id": "media", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/games", "title": "Games", "sources": [{"id": "media", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/dex", "title": "Dex", "sources": [{"id": "dex", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/notes", "title": "Notes", "sources": [{"id": "notes", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/docs", "title": "Docs", "sources": [{"id": "docs", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/ledger", "title": "Ledger", "sources": [{"id": "ledger", "kind": "user_store", "db": "{DATA_DIR}/nexus.db"}]},
-    {"path": "/nexus/travel", "title": "Travel", "sources": [{"id": "trips", "kind": "dir_present", "dir": "/app/travel"}]},
-    {"path": "/nexus/fleetdocs", "title": "Fleet docs", "sources": [
-      {"id": "fleetdocs_mount", "kind": "dir_present", "dir": "/fleetdocs"},
-      {"id": "fleetdocs_git", "kind": "file_age", "file": "/fleetdocs/.git", "stale_after_h": 48}
-    ]},
-    {"path": "/api/seat", "title": "API seat", "sources": []},
-    {"path": "/api/queue", "title": "API queue", "sources": []},
-    {"path": "/api/agenda", "title": "API agenda", "sources": []},
-    {"path": "/api/agenda/view", "title": "API agenda view", "sources": []},
-    {"path": "/api/needs-aern", "title": "API needs-aern", "sources": []},
-    {"path": "/api/fleet", "title": "API fleet", "sources": []},
-    {"path": "/api/facts", "title": "API facts", "sources": []},
-    {"path": "/api/finance-verdict", "title": "API finance verdict", "sources": []},
-    {"path": "/api/tcg-ops", "title": "API tcg-ops", "sources": []},
-    {"path": "/api/thread-note", "title": "Thread note", "sources": []},
-    {"path": "/api/restock", "title": "API restock", "cf_expect": "decoy", "sources": []},
-    {"path": "/api/nexus/dex", "title": "API dex", "sources": []},
-    {"path": "/api/tcg/watch-terms", "title": "API watch terms", "sources": [
-      {"id": "inventory_ro", "kind": "file_age", "file": "/tcg/inventory-ro.db", "stale_after_h": 3}
-    ]},
-    {"path": "/api/ledger", "title": "API ledger", "sources": []}
-  ],
-  "excluded": {
-    "/": "public dashboard (aern.dev), not Nexus",
-    "/meal-planner": "public page",
-    "/stretch-tracker": "public page",
-    "/projects": "public page",
-    "/podcast": "public podcast",
-    "/podcast/feed.xml": "public podcast",
-    "/podcast/<path:filename>": "asset",
-    "/feed.xml": "public feed",
-    "/robots.txt": "asset",
-    "/sw.js": "asset",
-    "/manifest.webmanifest": "asset",
-    "/static/<path:filename>": "asset",
-    "/doodle": "Doodle Pop proxy",
-    "/doodle/": "Doodle Pop proxy",
-    "/doodle/<path:sub>": "Doodle Pop proxy",
-    "/travel/<slug>/": "per-trip static page",
-    "/travel/<slug>/<path:filename>": "asset",
-    "/api/health": "public dashboard health",
-    "/api/stats": "public dashboard stats",
-    "/api/tcg-stats": "TRMNL plugin data",
-    "/api/season": "TRMNL plugin data",
-    "/api/setup": "BYOS device protocol",
-    "/api/display": "BYOS device protocol",
-    "/api/wall": "BYOS wall (GET+POST)",
-    "/byos/img/<path:fname>": "BYOS asset",
-    "/byos/screen/<name>": "BYOS render",
-    "/byos/preview/<name>.png": "BYOS render",
-    "/nexus/card_image/<int:pid>": "asset",
-    "/nexus/cover/<int:book_id>": "asset",
-    "/nexus/media_cover/<int:mid>": "asset",
-    "/nexus/docs/<slug>": "per-item page (parent mapped)",
-    "/nexus/feed/<source>": "per-item page (parent mapped)",
-    "/nexus/ledger/<ym>": "per-item page (parent mapped)",
-    "/nexus/vault/<path:relpath>": "per-item page (parent mapped)",
-    "/nexus/fleetdocs/<path:relpath>": "per-item page (parent mapped)",
-    "/nexus/vault": "302 to /nexus/fleetdocs since the vault mount retired 2026-08-06 (vault.py)"
+ "_comment": "Nexus feature map: every GET page/API -> the sources it shows -> how fresh each must be. Read by nexus_verify.py (PASS/STALE/DEAD/DRIFT) and by the steward. A new GET route must land here (pages) or in excluded, or nexus_verify reports DRIFT. Source kinds: connector (nexus_contract.envelope(name): DEAD on error/source_missing, STALE on a warning or an old as_of - preferred for anything nexus_sources serves), fleet_check (reuse a fleet.py check, no duplicate logic), file_age, glob_newest, sqlite_max (SQL returns one UTC timestamp), json_field (file + dotted key holding an ISO timestamp), dir_present, nonempty (module:function must return something non-empty - catches 'empty = all clear'), user_store (Aern-entered data: no freshness, page must render). stale_after_h null = no freshness bar. fallback: true = the page uses this source only when its primary is empty; it is probed and reported but does not set the page verdict. cf_expect: a Cloudflare-shaped request must get 404 (default) or, with \"decoy\", a 200 whose tiny body differs from the internal one (/api/restock answers {status: ok} with no data).",
+ "version": 2,
+ "pages": [
+  {
+   "path": "/nexus",
+   "title": "Home",
+   "sources": [
+    {
+     "id": "todoist_today",
+     "kind": "connector",
+     "name": "todoist_today",
+     "stale_after_h": 1
+    },
+    {
+     "id": "schedule_today",
+     "kind": "connector",
+     "name": "schedule_today",
+     "stale_after_h": 1
+    },
+    {
+     "id": "oura_summary",
+     "kind": "connector",
+     "name": "oura_summary",
+     "stale_after_h": 48
+    },
+    {
+     "id": "tcg_alerts",
+     "kind": "connector",
+     "name": "tcg_alerts",
+     "stale_after_h": 30
+    },
+    {
+     "id": "infra_summary",
+     "kind": "connector",
+     "name": "infra_summary",
+     "stale_after_h": 2
+    },
+    {
+     "id": "feeds",
+     "kind": "fleet_check",
+     "check": "feed_fresh"
+    },
+    {
+     "id": "goals_summary",
+     "kind": "connector",
+     "name": "goals_summary"
+    },
+    {
+     "id": "maintenance_due",
+     "kind": "connector",
+     "name": "maintenance_due"
+    },
+    {
+     "id": "currently_reading",
+     "kind": "connector",
+     "name": "currently_reading",
+     "fallback": true,
+     "note": "Obsidian leg; vault mount retired 2026-08-06. Only used when nexus.db has no reading book - dead code, candidate for removal."
+    },
+    {
+     "id": "reading_books",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/aern",
+   "title": "Aern (agenda + needs)",
+   "sources": [
+    {
+     "id": "agenda_daily",
+     "kind": "json_field",
+     "file": "{DATA_DIR}/agenda.json",
+     "field": "daily.updated_at",
+     "stale_after_h": 26
+    },
+    {
+     "id": "agenda_weekly",
+     "kind": "json_field",
+     "file": "{DATA_DIR}/agenda.json",
+     "field": "weekly.updated_at",
+     "stale_after_h": 192
+    }
+   ]
+  },
+  {
+   "path": "/nexus/seat",
+   "title": "Seat board",
+   "sources": [
+    {
+     "id": "seat",
+     "kind": "json_field",
+     "file": "{DATA_DIR}/seat.json",
+     "field": "updated_at",
+     "stale_after_h": 72
+    }
+   ]
+  },
+  {
+   "path": "/nexus/queue",
+   "title": "Queue",
+   "sources": [
+    {
+     "id": "queue",
+     "kind": "file_age",
+     "file": "{DATA_DIR}/queue.json",
+     "stale_after_h": 48
+    }
+   ]
+  },
+  {
+   "path": "/nexus/fleet",
+   "title": "Fleet board",
+   "sources": [
+    {
+     "id": "fleet_state",
+     "kind": "json_field",
+     "file": "{DATA_DIR}/fleet_state.json",
+     "field": "generated_at",
+     "stale_after_h": 0.5
+    }
+   ]
+  },
+  {
+   "path": "/nexus/infra",
+   "title": "Infra",
+   "sources": [
+    {
+     "id": "infra_summary",
+     "kind": "connector",
+     "name": "infra_summary",
+     "stale_after_h": 2
+    },
+    {
+     "id": "nas_stats",
+     "kind": "file_age",
+     "file": "{DATA_DIR}/nas_stats.json",
+     "stale_after_h": 1
+    },
+    {
+     "id": "host_stats",
+     "kind": "file_age",
+     "file": "{DATA_DIR}/host_stats.json",
+     "stale_after_h": 1
+    }
+   ]
+  },
+  {
+   "path": "/nexus/tcg",
+   "title": "TCG",
+   "sources": [
+    {
+     "id": "tcg_alerts",
+     "kind": "connector",
+     "name": "tcg_alerts",
+     "stale_after_h": 30
+    },
+    {
+     "id": "tcg_business",
+     "kind": "connector",
+     "name": "tcg_business",
+     "stale_after_h": 30
+    },
+    {
+     "id": "direct_progress",
+     "kind": "connector",
+     "name": "direct_progress",
+     "stale_after_h": 30
+    },
+    {
+     "id": "daily_chain",
+     "kind": "fleet_check",
+     "check": "daily_chain"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/signals",
+   "title": "Signals",
+   "sources": [
+    {
+     "id": "sealed_index",
+     "kind": "glob_newest",
+     "glob": "/tcg/reports/sealed_index_*.json",
+     "stale_after_h": 30
+    },
+    {
+     "id": "movers",
+     "kind": "glob_newest",
+     "glob": "/tcg/reports/movers_*.md",
+     "stale_after_h": 30
+    }
+   ]
+  },
+  {
+   "path": "/nexus/inventory",
+   "title": "Inventory (live listings)",
+   "sources": [
+    {
+     "id": "live_inventory",
+     "kind": "file_age",
+     "file": "{DATA_DIR}/live_inventory.json",
+     "stale_after_h": 336,
+     "note": "Snapshot of a TCGplayer MyPricing export, refreshed by /inventory-update after a listing change - event-driven, so 14d is a nudge, not an outage."
+    }
+   ]
+  },
+  {
+   "path": "/nexus/wants",
+   "title": "Wants board",
+   "sources": [
+    {
+     "id": "board",
+     "kind": "file_age",
+     "file": "/tcg/boards/wants.html",
+     "stale_after_h": 30
+    }
+   ]
+  },
+  {
+   "path": "/nexus/vintage",
+   "title": "Vintage board",
+   "sources": [
+    {
+     "id": "board",
+     "kind": "file_age",
+     "file": "/tcg/boards/vintage.html",
+     "stale_after_h": 30
+    }
+   ]
+  },
+  {
+   "path": "/nexus/theories",
+   "title": "Theories board",
+   "sources": [
+    {
+     "id": "board",
+     "kind": "file_age",
+     "file": "/tcg/boards/theories.html",
+     "stale_after_h": 30
+    }
+   ]
+  },
+  {
+   "path": "/nexus/feed",
+   "title": "Feed",
+   "sources": [
+    {
+     "id": "feeds",
+     "kind": "fleet_check",
+     "check": "feed_fresh"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/house",
+   "title": "House",
+   "sources": [
+    {
+     "id": "keep_sync",
+     "kind": "fleet_check",
+     "check": "keep_sync"
+    },
+    {
+     "id": "maintenance_due",
+     "kind": "connector",
+     "name": "maintenance_due"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/goals",
+   "title": "Goals",
+   "sources": [
+    {
+     "id": "goals",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/books",
+   "title": "Books",
+   "sources": [
+    {
+     "id": "books",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db",
+     "note": "Hand-entered since 5fd22b2 (add-book form); a long read is not staleness, so no freshness bar."
+    },
+    {
+     "id": "currently_reading",
+     "kind": "connector",
+     "name": "currently_reading",
+     "fallback": true
+    }
+   ]
+  },
+  {
+   "path": "/nexus/tv",
+   "title": "TV",
+   "sources": [
+    {
+     "id": "media",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/games",
+   "title": "Games",
+   "sources": [
+    {
+     "id": "media",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/dex",
+   "title": "Dex",
+   "sources": [
+    {
+     "id": "dex",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/notes",
+   "title": "Notes",
+   "sources": [
+    {
+     "id": "notes",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/docs",
+   "title": "Docs",
+   "sources": [
+    {
+     "id": "docs",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/ledger",
+   "title": "Ledger",
+   "sources": [
+    {
+     "id": "ledger",
+     "kind": "user_store",
+     "db": "{DATA_DIR}/nexus.db"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/travel",
+   "title": "Travel",
+   "sources": [
+    {
+     "id": "trips",
+     "kind": "dir_present",
+     "dir": "/app/travel"
+    }
+   ]
+  },
+  {
+   "path": "/nexus/fleetdocs",
+   "title": "Fleet docs",
+   "sources": [
+    {
+     "id": "fleetdocs_mount",
+     "kind": "dir_present",
+     "dir": "/fleetdocs"
+    },
+    {
+     "id": "fleetdocs_git",
+     "kind": "file_age",
+     "file": "/fleetdocs/.git",
+     "stale_after_h": 48
+    }
+   ]
+  },
+  {
+   "path": "/api/seat",
+   "title": "API seat",
+   "sources": []
+  },
+  {
+   "path": "/api/queue",
+   "title": "API queue",
+   "sources": []
+  },
+  {
+   "path": "/api/agenda",
+   "title": "API agenda",
+   "sources": []
+  },
+  {
+   "path": "/api/agenda/view",
+   "title": "API agenda view",
+   "sources": []
+  },
+  {
+   "path": "/api/needs-aern",
+   "title": "API needs-aern",
+   "sources": []
+  },
+  {
+   "path": "/api/fleet",
+   "title": "API fleet",
+   "sources": []
+  },
+  {
+   "path": "/api/facts",
+   "title": "API facts",
+   "sources": []
+  },
+  {
+   "path": "/api/finance-verdict",
+   "title": "API finance verdict",
+   "sources": []
+  },
+  {
+   "path": "/api/tcg-ops",
+   "title": "API tcg-ops",
+   "sources": []
+  },
+  {
+   "path": "/api/thread-note",
+   "title": "Thread note",
+   "sources": []
+  },
+  {
+   "path": "/api/restock",
+   "title": "API restock",
+   "cf_expect": "decoy",
+   "sources": []
+  },
+  {
+   "path": "/api/nexus/dex",
+   "title": "API dex",
+   "sources": []
+  },
+  {
+   "path": "/api/tcg/watch-terms",
+   "title": "API watch terms",
+   "sources": [
+    {
+     "id": "inventory_ro",
+     "kind": "file_age",
+     "file": "/tcg/inventory-ro.db",
+     "stale_after_h": 3
+    }
+   ]
+  },
+  {
+   "path": "/api/ledger",
+   "title": "API ledger",
+   "sources": []
   }
+ ],
+ "excluded": {
+  "/": "public dashboard (aern.dev), not Nexus",
+  "/meal-planner": "public page",
+  "/stretch-tracker": "public page",
+  "/projects": "public page",
+  "/podcast": "public podcast",
+  "/podcast/feed.xml": "public podcast",
+  "/podcast/<path:filename>": "asset",
+  "/feed.xml": "public feed",
+  "/robots.txt": "asset",
+  "/sw.js": "asset",
+  "/manifest.webmanifest": "asset",
+  "/static/<path:filename>": "asset",
+  "/doodle": "Doodle Pop proxy",
+  "/doodle/": "Doodle Pop proxy",
+  "/doodle/<path:sub>": "Doodle Pop proxy",
+  "/travel/<slug>/": "per-trip static page",
+  "/travel/<slug>/<path:filename>": "asset",
+  "/api/health": "public dashboard health",
+  "/api/stats": "public dashboard stats",
+  "/api/tcg-stats": "TRMNL plugin data",
+  "/api/season": "TRMNL plugin data",
+  "/api/setup": "BYOS device protocol",
+  "/api/display": "BYOS device protocol",
+  "/api/wall": "BYOS wall (GET+POST)",
+  "/byos/img/<path:fname>": "BYOS asset",
+  "/byos/screen/<name>": "BYOS render",
+  "/byos/preview/<name>.png": "BYOS render",
+  "/nexus/card_image/<int:pid>": "asset",
+  "/nexus/cover/<int:book_id>": "asset",
+  "/nexus/media_cover/<int:mid>": "asset",
+  "/nexus/docs/<slug>": "per-item page (parent mapped)",
+  "/nexus/feed/<source>": "per-item page (parent mapped)",
+  "/nexus/ledger/<ym>": "per-item page (parent mapped)",
+  "/nexus/vault/<path:relpath>": "per-item page (parent mapped)",
+  "/nexus/fleetdocs/<path:relpath>": "per-item page (parent mapped)",
+  "/nexus/vault": "302 to /nexus/fleetdocs since the vault mount retired 2026-08-06 (vault.py)"
+ }
 }
