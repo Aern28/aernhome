@@ -248,6 +248,21 @@ function sbWireQueueResolve() {
             t.disabled = false;
         }
     });
+    // Queue asks: tapping an option resolves the item with that choice; the
+    // server writes "Aern MM/DD: <choice>" as the note.
+    document.addEventListener('click', async (e) => {
+        const t = e.target.closest('[data-sb-action="queue-choose"]');
+        if (!t) return;
+        const group = t.closest('.nx-opts');
+        group.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+        const res = await sbPostJson('/api/queue/resolve', { id: t.dataset.id, choice: t.dataset.choice });
+        if (res.ok) {
+            sbLoadAll();
+        } else {
+            group.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+            alert(res.error || 'Could not record that choice.');
+        }
+    });
     // Todoist tasks in the /nexus/aern Today group close through the same
     // endpoint the home Today card uses.
     document.addEventListener('click', async (e) => {
@@ -274,7 +289,11 @@ function sbRenderAernItem(item) {
     div.className = `bg-dark-card border border-dark-border rounded-lg p-4 sm:p-5 ${border}`;
     // Queue items get a tap-to-clear (resolve) button; other sources keep their
     // ref link (those clear at the source, not from this lane).
-    const action = (item.source_kind === 'queue' && item.id)
+    const opts = (item.source_kind === 'queue' && item.id && Array.isArray(item.options)) ? item.options : [];
+    const action = opts.length
+        // Queue asks: one button per option, the first is the recommendation.
+        ? `<div class="nx-opts">${opts.map((o, i) => `<button data-sb-action="queue-choose" data-id="${sbEscapeHtml(item.id)}" data-choice="${sbEscapeHtml(o)}" class="nx-opt${i === 0 ? ' nx-opt-rec' : ''}">${i === 0 ? '★ ' : ''}${sbEscapeHtml(o)}</button>`).join('')}</div>`
+        : (item.source_kind === 'queue' && item.id)
         ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="self-start shrink-0 px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">${item.effort === 'read' ? '✓ Read' : 'Done'}</button>`
         : (item.source_kind === 'todoist' && item.todoist_id)
         ? `<button data-sb-action="todoist-close" data-id="${sbEscapeHtml(item.todoist_id)}" class="self-start shrink-0 px-3 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs">Done</button>`
@@ -285,7 +304,7 @@ function sbRenderAernItem(item) {
     div.innerHTML = `
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div class="min-w-0">
-                <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}${item.id ? ` · <span class="font-mono normal-case text-gray-400">#${sbEscapeHtml(item.id)}</span>` : ''}</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}${item.id ? ` · <span class="font-mono normal-case text-gray-400">#${sbEscapeHtml(item.id)}</span>` : ''}${item.repeat_count > 1 ? ` <span class="nx-tag">×${sbEscapeHtml(item.repeat_count)}</span>` : ''}${item.ask_missing ? ` <span class="nx-tag nx-tag-warn">no ask · ${sbEscapeHtml(item.created_by || 'unknown')}</span>` : ''}</div>
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
                 ${item.detail ? `<div class="text-sm text-gray-300 mt-1 break-words">${sbEscapeHtml(item.detail)}</div>` : ''}
             </div>

@@ -1067,12 +1067,21 @@ def _needs_from_queue():
                 pid = item.get("project_id")
                 if pid and (projects.get(pid) or {}).get("status") == "parked":
                     continue
+                # Queue asks (10/10): the ask is the headline and the text becomes
+                # the detail; options render as one button each on /nexus/aern.
+                ask = item.get("ask") or ""
                 out.append({
                     "source_kind": "queue",
                     "id": item.get("id"),
                     "effort": item.get("effort"),
-                    "title": item.get("text", "")[:140],
-                    "detail": f"source: {item.get('source')}" if item.get("source") else "",
+                    "title": (ask or item.get("text", ""))[:140],
+                    "detail": (item.get("text", "")[:300] if ask
+                               else (f"source: {item.get('source')}" if item.get("source") else "")),
+                    "ask": ask,
+                    "options": item.get("options") or [],
+                    "repeat_count": int(item.get("repeat_count") or 1),
+                    "ask_missing": bool(item.get("ask_missing")),
+                    "created_by": item.get("created_by") or "",
                     "priority": item.get("priority") if item.get("priority") in VALID_PRIORITY else 2,
                     "ref": item.get("source") or "/nexus/queue",
                 })

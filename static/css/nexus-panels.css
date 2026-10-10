@@ -104,4 +104,14 @@
 .nx-media .tt { min-width: 0; font-size: 13.5px; color: var(--nx-fg); }
 .nx-media .tt small { display: block; color: var(--nx-muted); font-size: 12px; }
 
+/* Queue asks on /nexus/aern (10/10): one button per option, the first is the recommendation.
+   44px tall for a thumb; they wrap under the text on a phone. */
+.nx-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.nx-opt { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--nx-card); border: 1px solid var(--nx-line); color: var(--nx-fg); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.nx-opt-rec { border-color: var(--nx-need); color: var(--nx-need); font-weight: 600; }
+.nx-opt:disabled { opacity: .5; cursor: progress; }
+.nx-opt:focus-visible { outline: 2px solid var(--nx-fg); outline-offset: 2px; }
+.nx-tag { display: inline-block; text-transform: none; letter-spacing: 0; padding: 0 6px; border-radius: 6px; border: 1px solid var(--nx-line); color: var(--nx-fg); }
+.nx-tag-warn { border-style: dashed; color: var(--nx-muted); }
+
 @media (prefers-reduced-motion: no-preference) { .nx-need, .nx-chip { transition: opacity .2s; } }
