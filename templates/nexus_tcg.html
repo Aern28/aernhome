@@ -1,217 +1,115 @@
-{% extends "nexus_base.html" %}
-{% block nexus_title %}TCG{% endblock %}
+<!DOCTYPE html>
+{#- Nexus TCG tab: a glance page (Aern 10/10). What needs you in the shop, then Sell / Buy /
+    Stock in the binder's colours. Reprice and order work stay in TCG.bat or the linked pages.
+    View-model: app.py nexus_tcg + nexus_home.py (held_orders, held_movers, sealed_buys). -#}
+<html lang="en">
+<head>
+{% include "_nh_head.html" %}
+</head>
+<body class="nh">
+<div class="nh-wrap">
+{% include "_nh_nav.html" %}
 
-{% block nexus_content %}
-<!-- The Verdict — client-fetched from /api/finance-verdict, a short
-     rule-based editorial summary (not a data dump) written monthly by
-     aern-finance/finance_verdict.py. Starts hidden; JS reveals it only when
-     the file exists, so a missing verdict degrades gracefully to nothing
-     rather than an empty/broken card. -->
-<section id="verdict-section" class="mb-6 hidden">
-    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <h3 class="text-lg font-semibold text-white">📋 The Verdict</h3>
-        <span class="text-xs text-gray-400">as of <span id="verdict-as-of">—</span></span>
+{% set t = data.tcg %}{% set b = data.biz %}
+<header class="nh-head">
+    <div class="nh-title">
+        <h1>TCG</h1>
+        {% if data.verdict %}<span class="nh-weather">{{ data.verdict.headline }}{% if data.verdict.stale %} (stale, run /finance-check){% endif %}</span>{% endif %}
     </div>
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <div id="verdict-headline" class="text-xl font-bold text-white mb-3">—</div>
-        <ul id="verdict-list" class="space-y-2">
-            <li class="text-sm text-gray-400">Loading…</li>
+    <p class="nh-next">Inventory worth <strong>${{ '{:,.0f}'.format(t.inventory_value or 0) }}</strong>{% if b.pf %}. Prices fetched {{ b.pfa }}{% endif %}.</p>
+</header>
+
+{% if data.held %}
+<section class="nh-sec" aria-labelledby="held-h">
+    <h2 id="held-h">Waiting on you <span class="nh-count">({{ data.held|length }})</span></h2>
+    <div class="nh-ask">
+        <p class="nh-ask-q">{{ data.held|length }} held order{{ 's' if data.held|length != 1 }}. Release on Ashaman.</p>
+        <ul class="nh-rows">
+            {% for h in data.held %}
+            <li><span class="nh-task">Order {{ h.id }}</span><span class="nh-when">{% if h.value %}${{ '%.2f'|format(h.value) }}, {% endif %}held {{ h.age }}</span></li>
+            {% endfor %}
         </ul>
-        <div id="verdict-stale-note" class="hidden bg-dark-card border-l-4 border-l-amber-500 border border-dark-border rounded-lg px-4 py-2 mt-3 text-xs text-amber-300">
-            Stale — run <code class="text-amber-300">/finance-check</code>.
-        </div>
     </div>
 </section>
-
-<!-- Headline stats -->
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-        <div class="text-2xl font-bold text-emerald-400">${{ '%.2f'|format(tcg.inventory_value) }}</div>
-        <div class="text-[11px] uppercase tracking-wide text-gray-400">inventory value</div>
-    </div>
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-        <div class="text-2xl font-bold text-white">{{ biz.sr if biz.sr else '$0' }}</div>
-        <div class="text-[11px] uppercase tracking-wide text-gray-400">7-day sales{% if biz.sn %} · {{ biz.sn }} ord{% endif %}</div>
-    </div>
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-        <div class="text-2xl font-bold {% if biz.tsn %}text-amber-400{% else %}text-white{% endif %}">{{ biz.tsn if biz.tsn is not none else 0 }}</div>
-        <div class="text-[11px] uppercase tracking-wide text-gray-400">to ship{% if biz.tsv %} · {{ biz.tsv }}{% endif %}</div>
-    </div>
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-        <div class="text-2xl font-bold {% if tcg.reprice_due %}text-amber-400{% else %}text-white{% endif %}">{{ tcg.reprice_due }}</div>
-        <div class="text-[11px] uppercase tracking-wide text-gray-400">reprice due</div>
-    </div>
-</div>
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-    <!-- Reprice radar: named movers -->
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <h3 class="text-base font-semibold text-white mb-3">📈 Reprice radar <span class="text-xs font-normal text-gray-400">(OP in stock, 24h)</span></h3>
-        {% if biz.mvu or biz.mvd %}
-        <ul class="space-y-2">
-            {% for m in biz.mvu %}
-            <li class="flex items-center justify-between gap-2 text-sm">
-                <span class="text-gray-200 truncate">{{ m.n }}</span>
-                <span class="shrink-0 flex items-center gap-2">
-                    <span class="text-gray-300">{{ m.p }}</span>
-                    <span class="text-emerald-400 font-medium w-12 text-right">{{ m.d }}</span>
-                </span>
-            </li>
-            {% endfor %}
-            {% if biz.mvd %}
-            <li class="flex items-center justify-between gap-2 text-sm">
-                <span class="text-gray-200 truncate">{{ biz.mvd.n }}</span>
-                <span class="shrink-0 flex items-center gap-2">
-                    <span class="text-gray-300">{{ biz.mvd.p }}</span>
-                    <span class="text-red-400 font-medium w-12 text-right">{{ biz.mvd.d }}</span>
-                </span>
-            </li>
-            {% endif %}
-        </ul>
-        {% else %}
-        <p class="text-sm text-gray-400">No OP cards in stock moved &gt;5% today.</p>
-        {% endif %}
-    </div>
-
-    <!-- Open singles positions -->
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <h3 class="text-base font-semibold text-white mb-3">💹 Open positions</h3>
-        {% if biz.pos %}
-        <ul class="space-y-2">
-            {% for p in biz.pos %}
-            <li class="text-sm">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-gray-200 truncate">{{ p.name }}</span>
-                    <span class="shrink-0 flex items-center gap-2">
-                        <span class="text-gray-300">{{ p.cur }}</span>
-                        <span class="font-medium w-14 text-right {% if p.plp_neg %}text-red-400{% else %}text-emerald-400{% endif %}">{{ p.plp }}</span>
-                    </span>
-                </div>
-                <div class="text-xs text-gray-400">{{ p.ref }} · day {{ p.day }}/{{ p.total }} · stop {{ p.stop }}{% if p.cat %} · 📅 {{ p.cat }}{% endif %}</div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-sm text-gray-400">No open singles positions.</p>
-        {% endif %}
-    </div>
-
-    <!-- Grail watch -->
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <h3 class="text-base font-semibold text-white mb-3">🏆 Grail watch</h3>
-        {% if tcg.grail_hits %}
-        <ul class="space-y-1">
-            {% for h in tcg.grail_hits %}
-            <li class="text-sm text-amber-300">{{ h.name }} — target ${{ '%.0f'|format(h.target) }}, now ${{ '%.0f'|format(h.last_price) }}</li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-sm text-gray-400">No grail targets hit right now.</p>
-        {% endif %}
-    </div>
-
-    <!-- Sales + freshness -->
-    <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-        <h3 class="text-base font-semibold text-white mb-3">🧾 Last 7 days</h3>
-        <div class="grid grid-cols-3 gap-2 text-center mb-3">
-            <div><div class="text-lg font-bold text-white">{{ biz.sr if biz.sr else '$0' }}</div><div class="text-[11px] uppercase tracking-wide text-gray-400">revenue</div></div>
-            <div><div class="text-lg font-bold text-white">{{ biz.sn if biz.sn is not none else 0 }}</div><div class="text-[11px] uppercase tracking-wide text-gray-400">orders</div></div>
-            <div><div class="text-lg font-bold {% if biz.sd and '↓' in biz.sd %}text-red-400{% elif biz.sd %}text-emerald-400{% else %}text-gray-400{% endif %}">{{ biz.sd if biz.sd else '—' }}</div><div class="text-[11px] uppercase tracking-wide text-gray-400">vs prior</div></div>
-        </div>
-        {% if biz.pf %}<div class="text-xs text-gray-400">Prices fetched {{ biz.pf }} · {{ biz.pfa }}</div>{% endif %}
-        {% for e in tcg.events %}<div class="text-xs text-gray-400">{{ e }}</div>{% endfor %}
-    </div>
-
-</div>
-
-<!-- TCGplayer Direct progress (official criteria, trailing-30d basis) -->
-{% if direct %}
-{% macro dbar(label, now, target, pct, note) %}
-<div>
-    <div class="flex items-baseline justify-between text-sm mb-1">
-        <span class="text-gray-300">{{ label }}</span>
-        <span class="text-gray-200"><span class="font-bold text-white">{{ now }}</span> / {{ target }}</span>
-    </div>
-    <div class="h-2 bg-dark-bg rounded-full overflow-hidden">
-        <div class="h-full {% if pct >= 100 %}bg-emerald-500{% else %}bg-blue-500{% endif %}" style="width: {{ pct }}%"></div>
-    </div>
-    <div class="text-[11px] text-gray-400 mt-1">{{ pct }}% · {{ note }}</div>
-</div>
-{% endmacro %}
-<div class="bg-dark-card border border-dark-border rounded-lg p-4 mt-4 mb-5">
-    <div class="flex items-center justify-between mb-3">
-        <h3 class="text-base font-semibold text-white">🎯 TCGplayer Direct</h3>
-        <span class="text-xs text-gray-400">trailing 30d</span>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {{ dbar('Eligible SKUs', '{:,}'.format(direct.elig_skus), '{:,}'.format(direct.sku_target), direct.sku_pct,
-                '{:,}'.format(direct.sku_target - direct.elig_skus) ~ ' to go · MTG/Pkmn/YGO only') }}
-        {{ dbar('Sales / month', direct.mo_orders, direct.sales_target, direct.sales_pct,
-                (direct.sales_target - direct.mo_orders) ~ ' to go') if direct.mo_orders < direct.sales_target else dbar('Sales / month', direct.mo_orders, direct.sales_target, direct.sales_pct, 'met ✓') }}
-        {{ dbar('Avg $/week', '$' ~ '%.0f'|format(direct.wk_avg), '$' ~ '%.0f'|format(direct.rev_target), direct.rev_pct, 'monthly average') }}
-    </div>
-    <div class="text-[11px] text-gray-400 mt-3 pt-3 border-t border-dark-border">
-        Account gates: <span class="text-emerald-400">Level 4 ✓</span> · <span class="text-emerald-400">99.5% feedback ✓</span> — met.
-        {% if direct.all_skus > direct.elig_skus %}<span class="text-gray-400">({{ '{:,}'.format(direct.all_skus - direct.elig_skus) }} non-eligible SKUs not counted.)</span>{% endif %}
-    </div>
-</div>
 {% endif %}
 
-<!-- Ops strip — client-fetched from /api/tcg-ops, refreshed every 30s (same
-     pattern as nexus_fleet.js). Nothing here depends on server-rendered
-     context beyond the shared nexus_base layout. -->
-<section class="mt-4 mb-6">
-    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <h3 class="text-lg font-semibold text-white">🧮 Ops</h3>
-        <span class="text-xs text-gray-400">Server snapshot: <span id="tcgops-generated-at">—</span></span>
-    </div>
+<div class="nh-main nh-tcg">
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-            <div id="tcgops-orders30-count" class="text-2xl font-bold text-white">—</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">orders (30d)</div>
-            <div id="tcgops-orders30-detail" class="text-xs text-gray-400 mt-1 break-words">—</div>
-        </div>
-        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-            <div id="tcgops-held-count" class="text-2xl font-bold text-white">—</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">held orders</div>
-        </div>
-        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-            <div id="tcgops-autoprocess-status" class="text-2xl font-bold text-white">—</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">autoprocess</div>
-            <div id="tcgops-autoprocess-detail" class="text-xs text-gray-400 mt-1 break-words line-clamp-3">—</div>
-        </div>
-        <div class="bg-dark-card border border-dark-border rounded-lg p-4 text-center">
-            <div id="tcgops-mirror-age" class="text-2xl font-bold text-white">—</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">mirror age</div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Held orders -->
-        <div id="tcgops-held-card" class="bg-dark-card border border-dark-border rounded-lg p-4">
-            <h3 class="text-base font-semibold text-white mb-3">🛑 Held orders</h3>
-            <ul id="tcgops-held-list" class="space-y-2">
-                <li class="text-sm text-gray-400">Loading…</li>
-            </ul>
-        </div>
-
-        <!-- Price freshness per game -->
-        <div class="bg-dark-card border border-dark-border rounded-lg p-4">
-            <h3 class="text-base font-semibold text-white mb-3">📅 Price freshness</h3>
-            <ul id="tcgops-price-list" class="space-y-1">
-                <li class="text-sm text-gray-400">Loading…</li>
-            </ul>
-        </div>
-    </div>
+<section class="nh-sec nh-lane nh-lane-sell" aria-labelledby="sell-h">
+    <h2 id="sell-h">Sell</h2>
+    <ul class="nh-rows">
+        <li><span class="nh-task">To ship</span><span class="nh-num">{{ b.tsn if b.tsn is not none else 0 }}{% if b.tsv %} ({{ b.tsv }}){% endif %}</span></li>
+        <li><span class="nh-task">This week</span><span class="nh-num">{{ b.sr or '$0' }}{% if b.sn %}, {{ b.sn }} order{{ 's' if b.sn != 1 }}{% endif %}{% if b.sd %} ({{ b.sd }} vs the week before){% endif %}</span></li>
+        <li><span class="nh-task">Sold today</span><span class="nh-num">{{ t.sales_today or 0 }}</span></li>
+    </ul>
+    <h3 class="nh-h3">Reprice radar</h3>
+    {% if data.radar %}
+    <ul class="nh-rows">
+        {% for m in data.radar %}
+        <li><span class="nh-task">{{ m.n }}</span><span class="nh-num">{{ m.p }} <span class="{{ 'nh-down' if m.d and m.d.startswith('-') else 'nh-up' }}">{{ m.d }}</span></span></li>
+        {% endfor %}
+    </ul>
+    <p class="nh-caption">One Piece cards in stock that moved more than 5% in a day. Reprice from TCG.bat: preview, then commit. Bandai only goes up.</p>
+    {% else %}
+    <p class="nh-quiet">No One Piece card in stock moved more than 5% today.</p>
+    {% endif %}
+    {% if data.direct %}<p class="nh-caption">{{ data.direct }}</p>{% endif %}
 </section>
 
-<p class="text-xs text-gray-400 mt-4">Full operations — reprice, orders, scanning — live in the
-    <span class="text-gray-300">TCG Command Center</span> (<code class="text-gray-300">Desktop\TCG.bat</code>).
-    This view is read-only at-a-glance.</p>
-{% endblock %}
+<section class="nh-sec nh-lane nh-lane-buy" aria-labelledby="buy-h">
+    <h2 id="buy-h">Buy</h2>
+    <ul class="nh-rows">
+        <li><a class="nh-task" href="/nexus/wants">Want board</a>
+            <span class="nh-num{{ ' nh-alert' if data.wants and data.wants.hits }}">{% if data.wants is none %}open the board{% elif data.wants.hits %}{{ data.wants.hits }} hit{{ 's' if data.wants.hits != 1 }} on targets{% else %}no hits{% endif %}</span></li>
+    </ul>
+    <h3 class="nh-h3">Your cards that moved{% if data.movers_date %} <span class="nh-sub">({{ data.movers_date }})</span>{% endif %}</h3>
+    {% if data.movers %}
+    <ul class="nh-rows">
+        {% for m in data.movers %}
+        <li><span class="nh-task">{{ m.card }}{% if m.set %} <span class="nh-sub">{{ m.set }}</span>{% endif %}</span><span class="nh-num">{{ m.cur }} <span class="{{ 'nh-down' if m.down else 'nh-up' }}">{{ m.pct }}</span></span></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="nh-quiet">No big moves on cards you hold.</p>
+    {% endif %}
+    <h3 class="nh-h3">Sealed worth a look</h3>
+    {% if data.sealed %}
+    <ul class="nh-rows">
+        {% for s in data.sealed %}
+        <li><a class="nh-task" href="{{ s.url }}" target="_blank" rel="noopener">{{ s.name }}</a><span class="nh-num">pay up to ${{ '%.0f'|format(s.max_landed) }}</span></li>
+        {% endfor %}
+    </ul>
+    <p class="nh-caption">Hololive, One Piece and Gundam boxes at 125% of MSRP or more and flat or rising over 30 and 90 days. "Pay up to" is the most you can spend landed and still clear the {{ data.sealed_ratio }}x gate.</p>
+    {% else %}
+    <p class="nh-quiet">No tracked box clears the gate today.</p>
+    {% endif %}
+</section>
 
-{% block nexus_scripts %}
-<script src="/static/js/nexus_tcg_ops.js"></script>
-{% endblock %}
+<section class="nh-sec nh-lane nh-lane-stock" aria-labelledby="stock-h">
+    <h2 id="stock-h">Stock</h2>
+    <h3 class="nh-h3">Open positions</h3>
+    {% if data.positions %}
+    <ul class="nh-rows">
+        {% for p in data.positions %}
+        <li><span class="nh-task">{{ p.name }}<span class="nh-sub nh-block-sub">day {{ p.day }} of {{ p.total }}, stop {{ p.stop }}{% if p.cat %}, {{ p.cat }}{% endif %}</span></span>
+            <span class="nh-num">{{ p.cur }} <span class="{{ 'nh-down' if p.plp_neg else 'nh-up' }}">{{ p.plp }}</span></span></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="nh-quiet">No open singles positions.</p>
+    {% endif %}
+    <p class="nh-links"><a href="/nexus/inventory">Live listings</a> <a href="/nexus/signals">All signals</a> <a href="/nexus/vintage">Vintage</a> <a href="/nexus/theories">Theories</a></p>
+</section>
+
+</div>
+
+<footer class="nh-foot">
+    {% if data.autoprocess %}<p class="nh-fleet">AutoProcess: {{ data.autoprocess.detail or data.autoprocess.status }}</p>{% endif %}
+    <p><a href="/nexus/more">Every Nexus page</a></p>
+</footer>
+
+</div>
+{% include "_nh_bottom.html" %}
+<script src="/static/js/nexus.js?v={{ nexusjs_ver }}"></script>
+</body>
+</html>

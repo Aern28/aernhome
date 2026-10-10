@@ -139,6 +139,26 @@ body.nh { background: var(--ground); color: var(--ink); font-family: "Atkinson H
 .nh-pnote.alert { color: var(--pocket-alert); font-weight: 700; }
 .nh-caption { margin: 0; font-size: 14px; color: var(--muted); }
 
+/* TCG tab: three lanes in the binder's row colours (sell teal, buy indigo, stock plum). */
+.nh-tcg > .nh-lane { flex: 1 1 320px; min-width: 0; }
+.nh-lane > h2 { padding-left: 12px; border-left: 5px solid var(--line); }
+.nh-lane-sell > h2 { border-left-color: var(--sell-lip); }
+.nh-lane-buy > h2 { border-left-color: var(--buy-lip); }
+.nh-lane-stock > h2 { border-left-color: var(--home-lip); }
+.nh-h3 { margin: 8px 0 0; font-size: 16px; font-weight: 700; }
+.nh-sub { color: var(--muted); font-weight: 400; font-size: 14px; }
+.nh-block-sub { display: block; }
+.nh-rows { list-style: none; margin: 0; padding: 0; }
+.nh-rows li { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.nh-rows a.nh-task { color: var(--teal); min-height: 44px; display: flex; align-items: center; }
+.nh-rows .nh-task { flex: 1 0 7em; }
+.nh-num { flex: 0 1 auto; text-align: right; }
+.nh-up, .nh-down { font-weight: 700; }
+.nh-alert { color: var(--amber-text); font-weight: 700; }
+.nh-ask .nh-rows li { border-bottom-color: var(--amber-line); }
+.nh-links { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 4px 0 0; }
+.nh-links a { min-height: 44px; display: inline-flex; align-items: center; }
+
 .nh-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; padding-top: 14px;
   border-top: 1px solid var(--line); font-size: 15px; color: var(--muted); }
 .nh-foot p { margin: 0; }

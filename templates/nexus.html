@@ -3,41 +3,12 @@
     nexus-home.css). Standalone page: base.html hard-codes the dark Tailwind shell. -#}
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nexus</title>
-<link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#EEF2F0" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#18201E" media="(prefers-color-scheme: dark)">
-<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
-<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Nexus">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="/static/css/nexus-home.css?v={{ home_ver }}">
+{% include "_nh_head.html" %}
 </head>
 <body class="nh">
 <div class="nh-wrap">
 
-<nav class="nh-nav" aria-label="Nexus sections">
-    <span class="nh-brand">Nexus</span>
-    <div class="nh-tabs">
-    {% for key, href, label in nexus_tabs %}
-        <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
-    </div>
-    <button type="button" class="nh-cap-toggle" aria-label="Capture a thought or task" aria-controls="nh-cap" aria-expanded="false"
-            onclick="var f=document.getElementById('nh-cap');var o=f.classList.toggle('open');this.setAttribute('aria-expanded',o);if(o)f.querySelector('input').focus();">
-        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-    </button>
-    <form id="nh-cap" class="nh-cap" data-nx-capture>
-        <label for="nx-capture" class="nh-sr">Capture a thought or task</label>
-        <input id="nx-capture" type="text" autocomplete="off" placeholder="Capture a thought or task">
-    </form>
-</nav>
+{% include "_nh_nav.html" %}
 
 <header class="nh-head">
     <div class="nh-title">
@@ -157,11 +128,7 @@
 
 </div>
 
-<nav class="nh-bottom" aria-label="Nexus sections">
-    {% for key, href, label in nexus_tabs %}
-    <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
-</nav>
+{% include "_nh_bottom.html" %}
 
 <script src="/static/js/nexus.js?v={{ nexusjs_ver }}"></script>
 </body>

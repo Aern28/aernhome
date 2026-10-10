@@ -134,7 +134,7 @@
   },
   {
    "path": "/nexus/tcg",
-   "title": "TCG",
+   "title": "TCG (glance)",
    "sources": [
     {
      "id": "tcg_alerts",
@@ -158,6 +158,14 @@
      "id": "daily_chain",
      "kind": "fleet_check",
      "check": "daily_chain"
+    },
+    {
+     "id": "want_prices",
+     "kind": "json_field",
+     "file": "/tcg/want_prices_last.json",
+     "field": "at",
+     "stale_after_h": 26,
+     "note": "Buy lane want-board line"
     }
    ]
   },

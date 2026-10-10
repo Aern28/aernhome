@@ -503,8 +503,8 @@ def _tcg_alerts_compute() -> dict:
           "inventory_value": float,   # sum(on-hand qty * latest market price)
           "sales_today":     int,     # distinct orders that hit a fulfillment stage today
           "reprice_due":     int,     # One Piece cards in inventory that moved >5% in 24h
-          "grail_hits":      list,    # [{name, target, last_price}, ...] watchlist targets hit
-          "events":          list,    # short human note strings (price staleness, grail count)
+          "grail_hits":      list,    # always [] since 10/10 (Grail watch removed, see below)
+          "events":          list,    # short human note strings (price staleness)
         }
     """
     out = {
@@ -627,40 +627,10 @@ def _tcg_alerts_compute() -> dict:
                 except sqlite3.Error:
                     pass
 
-    # --- dream-cards watchlist: grail hits --------------------------------
-    # Alert fires only when floor <= last_price <= target. The floor guards
-    # against one stale/outlier sold-comp poisoning a thin grail's price stat
-    # (e.g. the $1,650 Magikarp false positive sits below its $2,100 floor).
-    wl_path = Path(
-        os.environ.get("DREAM_CARDS_WATCHLIST", r"C:/projects/dream-cards/watchlist.json")
-    )
-    if wl_path.exists():
-        try:
-            data = json.loads(wl_path.read_text(encoding="utf-8"))
-            for card in data.get("cards", []):
-                try:
-                    last = card.get("last_price")
-                    target = card.get("target")
-                    floor = card.get("floor")
-                    if last is None or target is None:
-                        continue
-                    last = float(last)
-                    target = float(target)
-                    if last <= target and (floor is None or last >= float(floor)):
-                        out["grail_hits"].append(
-                            {
-                                "name": card.get("name", "?"),
-                                "target": target,
-                                "last_price": last,
-                            }
-                        )
-                except (TypeError, ValueError):
-                    continue
-        except (OSError, ValueError, json.JSONDecodeError):
-            pass
+    # Grail watch (dream-cards watchlist.json) removed 10/10: Dream Cards died 7/14, the file
+    # no longer exists on Ashaman and the container could never see its Windows path, so it
+    # only ever reported "no hits". grail_hits stays an empty list for older readers.
 
-    if out["grail_hits"]:
-        out["events"].append(f"{len(out['grail_hits'])} grail target(s) hit")
 
     return out
 

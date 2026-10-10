@@ -342,6 +342,76 @@ def gal_today(schedule):
         return f"Gal: {e.get('summary')}"
 
 
+# ── TCG tab (glance; Aern 10/10: glance not workbench, Direct = one line, Grail watch cut) ──
+TRACKED_SEALED = ("hololive", "onepiece", "gundam")
+
+
+WANTS_FILE = "/tcg/want_prices_last.json"  # want_prices.py, 07:40 daily on Ashaman
+
+
+def want_summary(today, path=WANTS_FILE):
+    """want_prices_last.json when it is today's and ok, else None (the note stays static)."""
+    import json
+    with open(path, encoding="utf-8") as f:
+        w = json.load(f)
+    return w if w.get("ok") and str(w.get("at", ""))[:10] == today.isoformat() else None
+
+
+def held_orders(orders):
+    """[{order_id, value, age_hours}] -> rows for the amber block, oldest first."""
+    rows = []
+    for o in orders or []:
+        h = o.get("age_hours")
+        age = "" if h is None else (f"{int(h)}h" if h < 48 else f"{int(h // 24)} days")
+        rows.append({"id": o.get("order_id"), "value": o.get("value"), "age": age, "hours": h or 0})
+    return sorted(rows, key=lambda r: -r["hours"])
+
+
+def held_movers(movers, cap=5):
+    """Signal movers limited to cards in stock (HELD): drops first, then gainers."""
+    if not movers:
+        return []
+    def held(rows):
+        return [m for m in rows or [] if "HELD" in (m.get("flags") or [])]
+    out = [{"card": m.get("card"), "set": m.get("set"), "pct": m.get("pct"), "cur": m.get("cur"), "down": True}
+           for m in held(movers.get("drops"))]
+    out += [{"card": m.get("card"), "set": m.get("set"), "pct": m.get("pct"), "cur": m.get("cur"), "down": False}
+            for m in held(movers.get("gainers"))]
+    return out[:cap]
+
+
+def sealed_buys(sealed, cap=5):
+    """Boxes in the tracked games that pass the sealed gate's market side: at or above
+    125% of MSRP and flat-or-up over 30 and 90 days. Max landed = market / buy_ratio
+    (the most you can pay and still clear the gate). Sorted by box/day velocity."""
+    if not sealed:
+        return []
+    ratio = sealed.get("buy_ratio") or 1.25
+    out = []
+    for g in sealed.get("games") or []:
+        if g.get("game") not in TRACKED_SEALED:
+            continue
+        for b in g.get("rows") or []:
+            pct, s30, s90, mkt = b.get("pct_msrp"), b.get("slope30"), b.get("slope90"), b.get("market")
+            if None in (pct, s30, s90, mkt) or pct < 125 or s30 < 0 or s90 < 0:
+                continue
+            out.append({"name": b.get("name"), "url": b.get("url"), "game": g.get("category") or g.get("game"),
+                        "market": mkt, "max_landed": mkt / ratio, "velocity": b.get("velocity") or 0})
+    out.sort(key=lambda r: -r["velocity"])
+    return out[:cap]
+
+
+def direct_line(d):
+    """TCGplayer Direct progress as one sentence (Aern 10/10: no longer weekly-relevant)."""
+    if not d:
+        return None
+    try:
+        return (f"TCGplayer Direct: {d['elig_skus']:,} of {d['sku_target']:,} eligible SKUs, "
+                f"{d['mo_orders']} of {d['sales_target']} sales a month, ${d['wk_avg']:.0f} of ${d['rev_target']:.0f} a week.")
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 # ── Fleet ────────────────────────────────────────────────────────────────────
 def fleet_line(status):
     """status = nexus_panels.status_line(checks) -> (level, text). Only when not ok."""

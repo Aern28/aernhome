@@ -1,0 +1,17 @@
+{#- Nexus top nav (desktop tabs + capture; phone: brand + capture button). Shared by Today and TCG. -#}
+<nav class="nh-nav" aria-label="Nexus sections">
+    <span class="nh-brand">Nexus</span>
+    <div class="nh-tabs">
+    {% for key, href, label in nexus_tabs %}
+        <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+    </div>
+    <button type="button" class="nh-cap-toggle" aria-label="Capture a thought or task" aria-controls="nh-cap" aria-expanded="false"
+            onclick="var f=document.getElementById('nh-cap');var o=f.classList.toggle('open');this.setAttribute('aria-expanded',o);if(o)f.querySelector('input').focus();">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <form id="nh-cap" class="nh-cap" data-nx-capture>
+        <label for="nx-capture" class="nh-sr">Capture a thought or task</label>
+        <input id="nx-capture" type="text" autocomplete="off" placeholder="Capture a thought or task">
+    </form>
+</nav>

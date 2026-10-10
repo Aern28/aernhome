@@ -204,6 +204,46 @@ class WorkShifts(unittest.TestCase):
         self.assertNotIn("SECRET", " ".join(errs))
 
 
+class TcgTab(unittest.TestCase):
+    def test_held_orders_oldest_first_with_plain_ages(self):
+        rows = nh.held_orders([{"order_id": "A", "value": 40.0, "age_hours": 5},
+                               {"order_id": "B", "value": 60.0, "age_hours": 75}])
+        self.assertEqual([(r["id"], r["age"]) for r in rows], [("B", "3 days"), ("A", "5h")])
+
+    def test_held_movers_only_cards_in_stock(self):
+        mv = nh.held_movers({"drops": [{"card": "X", "pct": "-12%", "flags": ["HELD"]}, {"card": "Y", "pct": "-30%"}],
+                             "gainers": [{"card": "Z", "pct": "+9%", "flags": ["HELD", "PLAY"]},
+                                         {"card": "Promo", "pct": "+3726%", "flags": ["PLAY"]}]})
+        self.assertEqual([(m["card"], m["down"]) for m in mv], [("X", True), ("Z", False)])
+
+    def test_sealed_buys_apply_the_market_gate(self):
+        sealed = {"buy_ratio": 1.25, "games": [
+            {"game": "onepiece", "category": "One Piece", "rows": [
+                {"name": "OP-11", "market": 125.0, "pct_msrp": 140, "slope30": 2, "slope90": 5, "velocity": 3.0},
+                {"name": "OP-09", "market": 200.0, "pct_msrp": 160, "slope30": -4, "slope90": 10, "velocity": 9.0},
+                {"name": "OP-01", "market": 90.0, "pct_msrp": 110, "slope30": 1, "slope90": 1, "velocity": 9.0}]},
+            {"game": "digimon", "category": "Digimon", "rows": [
+                {"name": "BT-20", "market": 150.0, "pct_msrp": 200, "slope30": 5, "slope90": 5, "velocity": 9.0}]}]}
+        out = nh.sealed_buys(sealed)
+        self.assertEqual([(s["name"], s["max_landed"]) for s in out], [("OP-11", 100.0)])
+
+    def test_direct_one_line(self):
+        d = {"elig_skus": 1200, "sku_target": 5000, "mo_orders": 40, "sales_target": 100, "wk_avg": 312.4, "rev_target": 500}
+        self.assertEqual(nh.direct_line(d), "TCGplayer Direct: 1,200 of 5,000 eligible SKUs, 40 of 100 sales a month, $312 of $500 a week.")
+        self.assertIsNone(nh.direct_line({}))
+
+    def test_want_summary_only_today(self):
+        import json
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump({"ok": True, "at": "2026-10-10T07:40:02", "hits": 2}, f)
+        try:
+            self.assertEqual(nh.want_summary(TODAY, f.name)["hits"], 2)
+            self.assertIsNone(nh.want_summary(TODAY + dt.timedelta(days=1), f.name))
+        finally:
+            os.unlink(f.name)
+
+
 class Fleet(unittest.TestCase):
     def test_quiet_when_ok(self):
         self.assertIsNone(nh.fleet_line(("ok", "Fleet: all 30 checks up")))

@@ -1,0 +1,6 @@
+{#- Nexus bottom tab bar (phone only, hidden from 768px by nexus-home.css). -#}
+<nav class="nh-bottom" aria-label="Nexus sections">
+    {% for key, href, label in nexus_tabs %}
+    <a href="{{ href }}"{% if key == nexus_tab %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+</nav>

@@ -1216,9 +1216,7 @@ def nexus_home():
         return int(m.group(1)) if m else 0
 
     def _wants():
-        with open("/tcg/want_prices_last.json", encoding="utf-8") as f:
-            w = json.load(f)
-        return w if w.get("ok") and str(w.get("at", ""))[:10] == today.isoformat() else None
+        return nh.want_summary(today)
 
     def _signals():
         import nexus_signals as sig
@@ -1301,10 +1299,56 @@ def nexus_house():
 def nexus_tcg():
     if not _is_nexus_allowed():
         abort(404)
+    # TCG tab as a glance page (Aern 10/10): what needs you in the shop, then Sell / Buy /
+    # Stock, same design as Today (nexus-home.css). Work happens in TCG.bat or the linked
+    # pages; Grail watch is gone (its dream-cards source has been dead since 7/14).
+    import nexus_home as nh
     import nexus_sources as ns
+    now = datetime.now(nh.CT)
+
+    def safe(fn, default=None):
+        try:
+            return fn()
+        except Exception as e:
+            print(f"[nexus tcg] {getattr(fn, '__name__', 'part')} failed: {e}")
+            return default
+
+    def _held():
+        con = fleet._tcg_ops_connect()
+        try:
+            return fleet._tcg_ops_orders(con, datetime.now(timezone.utc))["held"]["orders"] or []
+        finally:
+            con.close()
+
+    def _signals():
+        import nexus_signals as sig
+        return sig.load()
+
+    def _verdict():
+        with open(fleet.FINANCE_VERDICT_PATH, encoding="utf-8") as f:
+            v = json.load(f)
+        return v if v.get("headline") else None
+
+    tcg = safe(ns.tcg_alerts, {}) or {}
+    biz = safe(ns.tcg_business, {}) or {}
+    signals = safe(_signals, {}) or {}
+    auto = safe(fleet._tcg_ops_autoprocess)
+    data = {
+        "held": nh.held_orders(safe(_held, [])),
+        "verdict": safe(_verdict),
+        "tcg": tcg, "biz": biz,
+        "positions": biz.get("pos") or [],
+        "radar": (biz.get("mvu") or []) + ([biz["mvd"]] if biz.get("mvd") else []),
+        "wants": safe(lambda: nh.want_summary(now.date())),
+        "movers": nh.held_movers(signals.get("movers")),
+        "movers_date": (signals.get("movers") or {}).get("date"),
+        "sealed": nh.sealed_buys(signals.get("sealed")),
+        "sealed_ratio": (signals.get("sealed") or {}).get("buy_ratio") or 1.25,
+        "direct": nh.direct_line(safe(ns.direct_progress)),
+        "autoprocess": auto if auto and auto.get("status") not in (None, "up") else None,
+    }
     return render_template("nexus_tcg.html", sections=NEXUS_SECTIONS, active="/nexus/tcg",
-                           tcg=ns.tcg_alerts(), biz=ns.tcg_business(),
-                           direct=ns.direct_progress())
+                           data=data, nh_title="Nexus TCG")
 
 
 @app.route("/nexus/signals")
