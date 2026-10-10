@@ -62,6 +62,11 @@ class Needs(unittest.TestCase):
         self.assertEqual(acts["Overdue thing"]["kind"], "todoist-close")
         self.assertEqual(acts["Nexus Pages"], {"kind": "link", "href": "/nexus/fleet", "label": "Open"})
 
+    def test_queue_ask_with_options_has_no_plain_resolve(self):
+        v = npl.needs_view([{"source_kind": "queue", "id": "q9", "title": "Keep the target?",
+                             "options": ["keep", "sell"], "priority": 2}])
+        self.assertEqual(v["items"][0]["action"], {"kind": "queue-choose", "id": "q9", "options": ["keep", "sell"]})
+
     def test_cap_and_more(self):
         many = [{"source_kind": "queue", "id": str(n), "title": str(n), "priority": 2} for n in range(8)]
         v = npl.needs_view(many)

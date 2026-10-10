@@ -109,9 +109,38 @@
 .nx-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .nx-opt { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--nx-card); border: 1px solid var(--nx-line); color: var(--nx-fg); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
 .nx-opt-rec { border-color: var(--nx-need); color: var(--nx-need); font-weight: 600; }
+.nx-need .nx-opts-row { grid-column: 1 / -1; margin-top: 6px; }
 .nx-opt:disabled { opacity: .5; cursor: progress; }
 .nx-opt:focus-visible { outline: 2px solid var(--nx-fg); outline-offset: 2px; }
 .nx-tag { display: inline-block; text-transform: none; letter-spacing: 0; padding: 0 6px; border-radius: 6px; border: 1px solid var(--nx-line); color: var(--nx-fg); }
 .nx-tag-warn { border-style: dashed; color: var(--nx-muted); }
+
+/* Section wrappers: on a phone they stack exactly like the bare stream they replaced. */
+.nx-sec, .nx-shelves { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* ── Desktop (Aern 10/10: "the desktop nexus looks like phone nexus") ──
+   From 768px the bottom tab bar becomes a sticky top bar, and the pages use the width.
+   Under 768px nothing here applies: the phone layout is unchanged. */
+@media (min-width: 768px) {
+  .nx-page { padding-bottom: 24px; }
+  .nx-tabs { position: sticky; top: 0; left: auto; right: auto; bottom: auto; display: flex; gap: 4px;
+    padding: 6px; border-top: 0; border: 1px solid var(--nx-line); border-radius: 12px; }
+  .nx-tabs a { flex-direction: row; gap: 8px; padding: 7px 14px; border-radius: 8px; font-size: 14px; }
+  .nx-tabs a svg { width: 18px; height: 18px; }
+  .nx-tabs a:hover { color: var(--nx-fg); }
+  .nx-tabs a.on { background: var(--nx-card); }
+  .nx-narrow { max-width: 1200px; }
+  .nx-home { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px 28px; align-items: start; }
+  .nx-home > :not(.nx-sec) { grid-column: 1 / -1; }
+  .nx-home > .nx-cap { max-width: 640px; }
+  .nx-shelves { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  /* /nexus/aern: two cards per row (Tailwind's space-y margins would misalign a grid) */
+  #aern-list [data-aern-group] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  #aern-list [data-aern-group] > * { margin-top: 0 !important; }
+}
+@media (min-width: 768px) and (max-width: 1099px) {
+  .nx-home { grid-template-columns: minmax(0, 1fr); }
+  #aern-list [data-aern-group] { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (prefers-reduced-motion: no-preference) { .nx-need, .nx-chip { transition: opacity .2s; } }

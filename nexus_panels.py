@@ -88,6 +88,10 @@ def _action(item):
     if kind == "todoist" and item.get("todoist_id"):
         return {"kind": "todoist-close", "id": item["todoist_id"], "label": "Done"}
     if kind == "queue" and item.get("id"):
+        # Queue asks (10/10): an item with options has NO plain Resolve - a tap on
+        # an option is the resolve, so the choice is always recorded.
+        if item.get("options"):
+            return {"kind": "queue-choose", "id": item["id"], "options": list(item["options"])}
         return {"kind": "queue-resolve", "id": item["id"], "label": "Resolve"}
     ref = item.get("ref") or ""
     if ref.startswith("/nexus"):

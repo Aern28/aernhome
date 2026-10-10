@@ -68,6 +68,16 @@ document.addEventListener("DOMContentLoaded", () => {
       else t.disabled = false;
     }
 
+    else if (action === "queue-choose") {
+      // Queue ask: the option tap IS the resolve; the server records "Aern MM/DD: <choice>".
+      const group = t.closest(".nx-opts");
+      group.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      const res = await nexusPost("/api/queue/resolve", { id: t.dataset.id, choice: t.dataset.choice });
+      const row = t.closest("li");
+      if (res.ok && row) { row.style.opacity = "0.4"; t.textContent = "✓ " + t.dataset.choice; }
+      else { group.querySelectorAll("button").forEach((b) => { b.disabled = false; }); alert(res.error || "Could not record that choice."); }
+    }
+
     else if (action === "maint-done") {
       t.disabled = true;
       const res = await nexusPost(`/api/nexus/maintenance/${t.dataset.id}/done`, {});

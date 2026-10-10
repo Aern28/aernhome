@@ -13,10 +13,7 @@
     <button class="nx-refresh" title="Hard refresh" aria-label="Hard refresh"
             onclick="if(navigator.serviceWorker){navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update();});} location.reload();">↻</button>
 </header>
-
-{% block nexus_content %}{% endblock %}
-</div>
-
+{# Tabs: fixed to the bottom on a phone, a sticky top bar from 768px (nexus-panels.css). #}
 <nav class="nx-tabs" aria-label="Nexus sections">
     {% for key, href, label in nexus_tabs %}
     <a href="{{ href }}" class="{% if key == nexus_tab %}on{% endif %}" {% if key == nexus_tab %}aria-current="page"{% endif %}>
@@ -29,6 +26,10 @@
     </a>
     {% endfor %}
 </nav>
+
+{% block nexus_content %}{% endblock %}
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}

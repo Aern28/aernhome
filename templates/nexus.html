@@ -6,7 +6,7 @@
 {%- endmacro %}
 
 {% block nexus_content %}
-<div class="nx-narrow">
+<div class="nx-narrow nx-home">
 
 {% set st = data.status %}
 <a class="nx-status" href="/nexus/fleet"><span class="nx-dot {{ st[0] if st[0] != 'ok' else '' }}"></span>{{ st[1] }}</a>
@@ -28,7 +28,8 @@
     </ul>
 </details>
 
-{# ── Needs you ── #}
+{# ── Needs you (left column on desktop) ── #}
+<section class="nx-sec nx-sec-needs">
 {% set nd = data.needs %}
 <h2 class="nx-h">Needs you <a href="/nexus/aern">Aern tab →</a></h2>
 {% if nd.error %}
@@ -41,7 +42,8 @@
         {% if it.detail %}<div class="d">{{ it.detail }}</div>{% endif %}
         <div class="m"><span class="nx-pri">P{{ it.priority }}</span>{{ it.source_kind|replace('_', ' ') }}</div>
         {% set a = it.action %}
-        {% if a and a.kind == 'link' %}<a class="nx-act link" href="{{ a.href }}">{{ a.label }}</a>
+        {% if a and a.kind == 'queue-choose' %}<div class="nx-opts nx-opts-row">{% for o in a.options %}<button class="nx-opt{{ ' nx-opt-rec' if loop.first }}" data-nx-action="queue-choose" data-id="{{ a.id }}" data-choice="{{ o }}">{{ '★ ' if loop.first }}{{ o }}</button>{% endfor %}</div>
+        {% elif a and a.kind == 'link' %}<a class="nx-act link" href="{{ a.href }}">{{ a.label }}</a>
         {% elif a %}<button class="nx-act" data-nx-action="{{ a.kind }}" data-id="{{ a.id }}">{{ a.label }}</button>{% endif %}
     </li>
     {% endfor %}
@@ -54,7 +56,10 @@
 <a class="nx-sessions" href="/nexus/aern"><b>{{ nd.sessions|length }}</b> project{{ 's' if nd.sessions|length != 1 }} waiting on a session with you: {{ nd.sessions|map(attribute='title')|join(' · ')|truncate(90) }} →</a>
 {% endif %}
 
-{# ── Your day ── #}
+</section>
+
+{# ── Your day + At a glance (right column on desktop) ── #}
+<section class="nx-sec nx-sec-day">
 <h2 class="nx-h">Your day</h2>
 {% set f = data.fresh.schedule_today %}
 <div class="nx-card {{ 'down' if f.state == 'down' }}">
@@ -109,6 +114,7 @@
     {% set g = data.env.goals_summary.data or [] %}
     <a class="nx-chip" href="/nexus/goals">🎯 Goals <span class="n">{{ g|length }} active</span></a>
 </div>
+</section>
 
 </div>
 {% endblock %}

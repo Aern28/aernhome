@@ -23,9 +23,11 @@
 {% block nexus_content %}
 <div class="nx-narrow">
     <h2 class="nx-h">In progress</h2>
-    {{ shelf("📖 Reading", "/nexus/books", data.books, "book") }}
-    {{ shelf("📺 Watching", "/nexus/tv", data.watching, "tv") }}
-    {{ shelf("🎮 Playing", "/nexus/games", data.playing, "game") }}
+    <div class="nx-shelves">
+        {{ shelf("📖 Reading", "/nexus/books", data.books, "book") }}
+        {{ shelf("📺 Watching", "/nexus/tv", data.watching, "tv") }}
+        {{ shelf("🎮 Playing", "/nexus/games", data.playing, "game") }}
+    </div>
     <div class="nx-grid">
         <a class="nx-tile" href="/nexus/books">📚 Books<small>shelf · add a book</small></a>
         <a class="nx-tile" href="/nexus/tv">📺 TV<small>watching · watched</small></a>

@@ -147,9 +147,14 @@ function sbRenderQueueItem(item, resolvable) {
     const li = document.createElement('li');
     li.className = 'bg-dark-card border border-dark-border rounded-lg p-3';
     li.dataset.queueId = item.id;
+    // Queue asks (10/10): the ask leads; an item with options resolves only through
+    // an option tap, so the plain Resolve button is dropped for it.
+    const opts = Array.isArray(item.options) ? item.options : [];
+    const choose = resolvable && opts.length;
     li.innerHTML = `
         <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
+                ${item.ask ? `<div class="text-sm font-semibold text-white break-words mb-1">${sbEscapeHtml(item.ask)}</div>` : ''}
                 <div class="text-sm text-gray-200 break-words">${sbEscapeHtml(item.text)}</div>
                 <div class="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-gray-400">
                     <span class="${pColor} font-semibold">P${sbEscapeHtml(item.priority)}</span>
@@ -158,8 +163,9 @@ function sbRenderQueueItem(item, resolvable) {
                 </div>
                 ${item.source ? `<div class="mt-1">${sbRenderSource(item.source)}</div>` : ''}
                 ${item.resolution_note ? `<div class="mt-2 pl-2 border-l-2 border-dark-border text-[11px] text-gray-400 whitespace-pre-wrap break-words">${sbEscapeHtml(item.resolution_note)}</div>` : ''}
+                ${choose ? `<div class="nx-opts mt-2">${opts.map((o, i) => `<button data-sb-action="queue-choose" data-id="${sbEscapeHtml(item.id)}" data-choice="${sbEscapeHtml(o)}" class="nx-opt${i === 0 ? ' nx-opt-rec' : ''}">${i === 0 ? '★ ' : ''}${sbEscapeHtml(o)}</button>`).join('')}</div>` : ''}
             </div>
-            ${resolvable ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="shrink-0 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">Resolve</button>` : ''}
+            ${resolvable && !choose ? `<button data-sb-action="queue-resolve" data-id="${sbEscapeHtml(item.id)}" class="shrink-0 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs">Resolve</button>` : ''}
         </div>
     `;
     return li;
@@ -302,7 +308,7 @@ function sbRenderAernItem(item) {
     // reserved right-hand space and squeezed the text into a hard-wrapping column);
     // side-by-side again at sm+.
     div.innerHTML = `
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div class="flex flex-col gap-2 ${opts.length ? '' : 'sm:flex-row sm:items-start sm:justify-between sm:gap-3'}">
             <div class="min-w-0">
                 <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">${icon} ${sbEscapeHtml(item.source_kind || '')} · P${sbEscapeHtml(item.priority)}${item.id ? ` · <span class="font-mono normal-case text-gray-400">#${sbEscapeHtml(item.id)}</span>` : ''}${item.repeat_count > 1 ? ` <span class="nx-tag">×${sbEscapeHtml(item.repeat_count)}</span>` : ''}${item.ask_missing ? ` <span class="nx-tag nx-tag-warn">no ask · ${sbEscapeHtml(item.created_by || 'unknown')}</span>` : ''}</div>
                 <div class="text-base font-semibold text-white break-words">${sbEscapeHtml(item.title)}</div>
