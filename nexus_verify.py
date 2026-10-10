@@ -120,6 +120,9 @@ def probe(src, fleet_checks):
                 return "DEAD", f"missing {db}"
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
             try:
+                # Read the header first: a query like SELECT 1 never touches the file, so
+                # whether a non-database file raised depended on the SQLite build (Phoenix 10/10).
+                con.execute("PRAGMA schema_version").fetchone()
                 row = con.execute(src["sql"]).fetchone()
             finally:
                 con.close()
