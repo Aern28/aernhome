@@ -508,6 +508,7 @@
   "/nexus/ledger/<ym>": "per-item page (parent mapped)",
   "/nexus/vault/<path:relpath>": "per-item page (parent mapped)",
   "/nexus/fleetdocs/<path:relpath>": "per-item page (parent mapped)",
-  "/nexus/vault": "302 to /nexus/fleetdocs since the vault mount retired 2026-08-06 (vault.py)"
+  "/nexus/vault": "302 to /nexus/fleetdocs since the vault mount retired 2026-08-06 (vault.py)",
+  "/api/nexus-verify": "the verifier's own result endpoint; GETting it from inside verify() would recurse (CF guard checked by hand 10/09)"
  }
 }

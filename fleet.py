@@ -1359,6 +1359,19 @@ def api_fleet():
     })
 
 
+@fleet_bp.route("/api/nexus-verify")
+def api_nexus_verify():
+    """Latest nexus_verify result (the same 15-min cache the nexus_pages board
+    check uses; ?fresh=1 recomputes). Read by Trainer's nexus_shots.py for the
+    page list + verdicts, and by panels later. Tailscale-only."""
+    if not _is_nexus_allowed():
+        abort(404)
+    if request.args.get("fresh") == "1":
+        _nexus_verify_cache["result"] = None
+    check_nexus_pages()
+    return jsonify(_nexus_verify_cache["result"])
+
+
 @fleet_bp.route("/api/tcg-ops")
 def api_tcg_ops():
     """TCG business-ops strip: order lifecycle (30d status counts), held
