@@ -1116,6 +1116,7 @@ _start_podcast_feed_writer()
 # Trainer C:\projects\x-feed\project.md.
 import xfeed
 import feed_health
+import notebook_page
 
 
 @app.route("/feed.xml")
@@ -1761,6 +1762,16 @@ def nexus_feed():
                            f"(expected within {feed_health.fmt_age(h['max_h'])})") if h["stale"] else ""
     return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
                            cards=cards, retired=retired)
+
+
+@app.route("/nexus/feed/aernbot")
+def nexus_feed_aernbot():
+    # 10/12 (Aern, from the bot's mock): the Notebook gets its own page, read live from
+    # fleet-docs. The generic view below showed the dead push store as topic folders.
+    if not _is_nexus_allowed():
+        abort(404)
+    return render_template("nexus_notebook.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
+                           nb=notebook_page.view())
 
 
 @app.route("/nexus/feed/<source>")

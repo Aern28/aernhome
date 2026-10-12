@@ -1,0 +1,140 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Notebook{% endblock %}
+
+{% block nexus_content %}
+<style>
+/* Aernbot Notebook (Aern 10/12, from the bot's own mock). Dark-only like the rest of Nexus.
+   THE GRID: body text is 15px on a 24px line, and every block inside .nb-text has a margin
+   that is a whole multiple of 24px, so each line of text sits on a ruling. If you add a
+   block style here, keep its height on the grid or the words drift off the lines. */
+.nb { --nb-ink:#d9cfb8; --nb-pencil:#e0b872; --nb-rule:rgba(135,146,166,.13);
+  --nb-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  max-width:680px; margin:0 auto; padding:6px 0 24px; display:flex; flex-direction:column; gap:12px; }
+.nb-cover { display:flex; align-items:center; gap:12px; padding:0 4px; }
+.nb-quill { width:40px; height:40px; flex:none; }
+.nb-cover h2 { margin:0; font:600 24px/1.15 var(--nb-serif); color:var(--nb-ink); }
+.nb-cover p { margin:2px 0 0; font-size:12.5px; color:var(--nx-muted); }
+.nb-pick { display:flex; align-items:center; gap:8px; padding:0 4px; font-size:12.5px; color:var(--nx-muted); }
+.nb-pick select { flex:1; min-width:0; max-width:340px; background:var(--nx-card); color:var(--nx-fg);
+  border:1px solid var(--nx-line); border-radius:8px; padding:6px 10px; font:14px system-ui,sans-serif; }
+.nb-q { padding:0 4px; font:italic 13px/1.4 var(--nb-serif); color:var(--nx-muted); min-height:0; }
+.nb-q:empty { display:none; }
+.nb-day { font:11.5px ui-monospace,"SF Mono","Cascadia Mono",Menlo,monospace; color:var(--nx-faint);
+  text-transform:uppercase; letter-spacing:.08em; margin:10px 4px 0; }
+.nb-entry { position:relative; background:var(--nx-card); border:1px solid var(--nx-line); border-radius:12px;
+  padding:12px 18px 12px 22px; overflow:hidden; }
+.nb-entry::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--c); opacity:.8; }
+.nb-meta { display:flex; justify-content:space-between; align-items:center; font-size:11.5px; line-height:24px; color:var(--nx-muted); }
+.nb-tag { display:flex; align-items:center; gap:6px; }
+.nb-tag i { width:7px; height:7px; border-radius:50%; background:var(--c); display:inline-block; }
+.nb-meta time { font-family:ui-monospace,Menlo,monospace; color:var(--nx-faint); }
+.nb-entry h3 { margin:0 0 12px; font:600 19px/24px var(--nb-serif); color:var(--nb-ink); }
+
+/* The ruled block. Rule = 1px at 19-20px of each 24px line: just under the baseline of 15px text. */
+.nb-text { font-size:15px; line-height:24px; color:#c9d0dc;
+  background-image:repeating-linear-gradient(to bottom, transparent 0 19px, var(--nb-rule) 19px 20px, transparent 20px 24px); }
+.nb-text p, .nb-text ul, .nb-text ol, .nb-text blockquote, .nb-text pre, .nb-text table,
+.nb-text h1, .nb-text h2, .nb-text h3, .nb-text h4, .nb-text h5, .nb-text h6 { margin:0 0 24px; line-height:24px; }
+.nb-text h1, .nb-text h2, .nb-text h3, .nb-text h4, .nb-text h5, .nb-text h6 { font-size:15px; font-weight:600; color:var(--nx-fg); }
+.nb-text > :last-child, .nb-rest > :last-child { margin-bottom:0; }
+.nb-text ul, .nb-text ol { padding-left:20px; }
+.nb-text li { line-height:24px; }
+.nb-text li > p { margin:0; }
+.nb-text strong { color:var(--nx-fg); }
+.nb-text a { color:#9cc3f5; text-decoration:underline; text-decoration-color:rgba(156,195,245,.35); text-underline-offset:2px; overflow-wrap:anywhere; }
+.nb-text code { font:13px/1 ui-monospace,Menlo,monospace; background:rgba(135,146,166,.12); border-radius:4px; padding:1px 4px; }
+.nb-text pre { overflow-x:auto; }
+.nb-text pre code { background:none; padding:0; line-height:24px; }
+.nb-text img { max-width:100%; }
+/* Fact vs opinion: the bot's own read sits in the margin, in pencil. Two ways in: a paragraph
+   that opens "My read/take/..." (older entries), or the explicit "> my read:" blockquote. */
+.nb-text p.nb-mine, .nb-text blockquote { border-left:2px dashed var(--nb-pencil); padding:0 0 0 12px;
+  color:var(--nb-pencil); font-family:var(--nb-serif); font-style:italic; }
+.nb-text blockquote p { margin:0 0 24px; }
+.nb-text blockquote > :last-child { margin-bottom:0; }
+.nb-more { margin:0; }
+.nb-more summary { list-style:none; cursor:pointer; font-size:12.5px; line-height:24px; color:var(--nx-muted); }
+.nb-more summary::-webkit-details-marker { display:none; }
+.nb-more summary::after { content:" \203A"; }
+.nb-more[open] summary { display:none; }
+.nb-foot { text-align:center; font:11px ui-monospace,Menlo,monospace; color:var(--nx-faint); margin-top:14px; }
+.nb-foot a { color:var(--nx-muted); }
+.nb-entry.hide, .nb-day.hide { display:none; }
+</style>
+
+<main class="nb">
+  <header class="nb-cover">
+    <svg class="nb-quill" viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="3" y="5" width="28" height="32" rx="4" fill="#1d2738" stroke="#3a4760"/>
+      <path d="M9 14h16M9 19h16M9 24h11" stroke="#3a4760" stroke-width="1.4"/>
+      <path d="M36 3c-9 2-15 9-17 19l-1 5 3-3c8-3 13-10 15-21z" fill="#e0b872"/>
+      <path d="M33 7 20 25" stroke="#7a5a2c" stroke-width="1"/>
+    </svg>
+    <div><h2>Aernbot's Notebook</h2><p>Things it found and what it thinks of them. Newest on top; nothing here pings you.</p></div>
+  </header>
+
+  {% if nb.error %}
+  <p class="nb-q">Notebook unreadable ({{ nb.error }}).</p>
+  {% else %}
+  <label class="nb-pick">Thread
+    <select id="nb-thread" aria-label="Filter by thread">
+      <option value="">Everything ({{ nb.total }})</option>
+      {% for o in nb.options %}
+      <option value="{{ o.slug }}" data-q="{{ o.question }}">{{ o.name }} ({{ o.count }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="nb-q" id="nb-q"></p>
+
+  {% for day in nb.days %}
+  <div class="nb-day">{{ day.label }}</div>
+    {% for e in day.entries %}
+    <article class="nb-entry" data-t="{{ e.slug }}" style="--c:{{ e.colour }}">
+      <div class="nb-meta"><span class="nb-tag"><i></i>{{ e.thread_name }}</span><time>{{ e.when.strftime('%I:%M %p').lstrip('0') }}</time></div>
+      <h3>{{ e.title_html|safe }}</h3>
+      <div class="nb-text">
+        {{ e.lead_html|safe }}
+        {% if e.rest_html %}
+          {% if e.open %}
+          <div class="nb-rest">{{ e.rest_html|safe }}</div>
+          {% else %}
+          <details class="nb-more"><summary>keep reading</summary><div class="nb-rest">{{ e.rest_html|safe }}</div></details>
+          {% endif %}
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  {% endfor %}
+  <div class="nb-foot">live from fleet-docs Aernbot/Notebook.md{% if nb.mtime %} · updated {{ nb.mtime.strftime('%b %d %H:%M') }}{% endif %} ·
+    <a href="/nexus/fleetdocs/Aernbot/Notebook-archive">older entries</a></div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block nexus_scripts %}
+<script>
+(function () {
+  var sel = document.getElementById('nb-thread');
+  if (!sel) return;
+  var q = document.getElementById('nb-q');
+  function apply(t) {
+    document.querySelectorAll('.nb-entry').forEach(function (e) { e.classList.toggle('hide', !!t && e.dataset.t !== t); });
+    document.querySelectorAll('.nb-day').forEach(function (d) {
+      var n = d.nextElementSibling, any = false;
+      while (n && n.classList.contains('nb-entry')) { any = any || !n.classList.contains('hide'); n = n.nextElementSibling; }
+      d.classList.toggle('hide', !any);
+    });
+    var o = sel.options[sel.selectedIndex];
+    q.textContent = (t && o && o.dataset.q) ? o.dataset.q : '';
+  }
+  var start = (location.hash.match(/^#t=([\w-]+)/) || [])[1] || '';
+  if (!start) { try { start = localStorage.getItem('nb-thread') || ''; } catch (e) {} }
+  if (start && sel.querySelector('option[value="' + start + '"]')) { sel.value = start; apply(start); }
+  sel.addEventListener('change', function () {
+    apply(sel.value);
+    try { localStorage.setItem('nb-thread', sel.value); } catch (e) {}
+    history.replaceState(null, '', sel.value ? '#t=' + sel.value : location.pathname);
+  });
+})();
+</script>
+{% endblock %}
