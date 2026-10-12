@@ -57,9 +57,15 @@ class Parse(unittest.TestCase):
         self.assertEqual(self.entries[1]["slug"], "gulf-garden")
         self.assertEqual(self.entries[0]["slug"], "night-sky")   # "Saturn" -> night-sky hint
 
-    def test_unknown_topic_is_wandering(self):
+    def test_untagged_unknown_topic_is_before_threads(self):
         e = nb.parse("## 2026-10-01 09:00 · Soken · Music\n\nBody.\n", THREADS)[0]
+        self.assertEqual(e["slug"], "before")
+
+    def test_only_thread_wander_is_wandering(self):
+        e = nb.parse("## 2026-10-01 09:00 · Soken · Music\n\nBody.\n\nThread: wander\n", THREADS)[0]
         self.assertEqual(e["slug"], "wander")
+        e = nb.parse("## 2026-10-01 09:00 · Soken · Music\n\nBody.\n\nThread: none\n", THREADS)[0]
+        self.assertEqual(e["slug"], "before")
 
     def test_lead_rest_split_and_thread_line_removed(self):
         older = self.entries[1]
@@ -82,6 +88,32 @@ class Parse(unittest.TestCase):
 
     def test_find_suffix_dropped(self):
         self.assertEqual(self.entries[0]["title_html"], "Newer one")
+
+
+class View(unittest.TestCase):
+    def test_bins_named_and_next_line_carried(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "Aernbot", "threads"))
+            with open(os.path.join(d, "Aernbot", "threads", "night-sky.md"), "w", encoding="utf-8") as fh:
+                fh.write("question: What is up there?\nstatus: open\nnext: Orionids <b>peak</b>\n")
+            nbp = os.path.join(d, "Aernbot", "Notebook.md")
+            with open(nbp, "w", encoding="utf-8") as fh:
+                fh.write("## 2026-10-02 09:00 · Misc · A\n\nx\n\nThread: wander\n\n---\n\n"
+                         "## 2026-10-01 09:00 · Misc · B\n\ny\n\n---\n\n"
+                         "## 2026-10-03 09:00 · Saturn · C\n\nz\n")
+            old = nb.NB_DIR
+            nb.NB_DIR = os.path.join(d, "Aernbot")
+            try:
+                v = nb.view(nbp)
+            finally:
+                nb.NB_DIR = old
+        opts = {o["slug"]: o for o in v["options"]}
+        self.assertEqual(opts["night-sky"]["next"], "Orionids <b>peak</b>")   # escaped by Jinja
+        self.assertEqual(opts["night-sky"]["count"], 1)                      # "Saturn" topic hint
+        self.assertEqual(opts["wander"]["name"], "Wandering")
+        self.assertEqual(opts["before"]["name"], "Before threads")
+        self.assertEqual([o["slug"] for o in v["options"]][-2:], ["wander", "before"])
 
 
 if __name__ == "__main__":

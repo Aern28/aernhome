@@ -33,7 +33,9 @@ THREAD_COLOURS = {
     "institutional-mortality": "#a8a0b8",
 }
 SPARE_COLOURS = ["#c48fb3", "#8fb3c4", "#b3a46f", "#a3b38f"]
-WANDER = ("wander", "Wandering", "#8792a6")
+WANDER = ("wander", "Wandering", "#8792a6")   # only an explicit "Thread: wander"
+BEFORE = ("before", "Before threads", "#6b7385")   # untagged entries no topic hint places
+BINS = {WANDER[0]: WANDER, BEFORE[0]: BEFORE}
 # Older entries predate "Thread:" lines; map their freeform topic onto a thread.
 TOPIC_HINTS = [
     (r"evidence|archaeolog|paleo|fossil|ice patch|navigation", "evidence-problem"),
@@ -70,7 +72,7 @@ def _threads():
         colour = THREAD_COLOURS.get(slug) or next(spare, WANDER[2])
         out[slug] = {"slug": slug, "name": slug.replace("-", " ").capitalize(),
                      "question": head.get("question", ""), "status": head.get("status", ""),
-                     "colour": colour}
+                     "next": head.get("next", ""), "colour": colour}
     return out
 
 
@@ -78,10 +80,12 @@ def _thread_for(topic, body, threads):
     m = re.search(r"^Thread:\s*([\w-]+)", body, re.M)
     if m and m.group(1) in threads:
         return m.group(1)
+    if m and m.group(1) == WANDER[0]:
+        return WANDER[0]
     for pat, slug in TOPIC_HINTS:
         if slug in threads and re.search(pat, topic, re.I):
             return slug
-    return WANDER[0]
+    return BEFORE[0]
 
 
 def _render(md):
@@ -133,8 +137,9 @@ def view(path=None):
     counts = {}
     for e in entries:
         t = threads.get(e["slug"])
-        e["thread_name"] = t["name"] if t else WANDER[1]
-        e["colour"] = t["colour"] if t else WANDER[2]
+        b = BINS.get(e["slug"], BEFORE)
+        e["thread_name"] = t["name"] if t else b[1]
+        e["colour"] = t["colour"] if t else b[2]
         counts[e["slug"]] = counts.get(e["slug"], 0) + 1
     for i, e in enumerate(entries):
         e["open"] = i == 0   # the newest entry reads in full; the rest collapse to their lead
@@ -145,13 +150,15 @@ def view(path=None):
             days.append({"label": e["when"].strftime("%a %b ") + str(d.day), "entries": []})
             cur = d
         days[-1]["entries"].append(e)
-    # Dropdown: every thread that has an entry on the page, plus open threads, then Wandering.
-    options = [{"slug": s, "name": t["name"], "question": t["question"], "colour": t["colour"],
-                "count": counts.get(s, 0)}
+    # Tabs: every thread that has an entry on the page, plus open threads, then the two bins.
+    options = [{"slug": s, "name": t["name"], "question": t["question"], "next": t["next"],
+                "colour": t["colour"], "count": counts.get(s, 0)}
                for s, t in threads.items() if counts.get(s) or t["status"] == "open"]
     options.sort(key=lambda o: (-o["count"], o["name"]))
-    if counts.get(WANDER[0]):
-        options.append({"slug": WANDER[0], "name": WANDER[1], "question": "Entries outside a thread",
-                        "colour": WANDER[2], "count": counts[WANDER[0]]})
+    for (slug, name, colour), q in ((WANDER, "Tagged Thread: wander, outside any thread"),
+                                    (BEFORE, "Written before threads existed")):
+        if counts.get(slug):
+            options.append({"slug": slug, "name": name, "question": q, "next": "",
+                            "colour": colour, "count": counts[slug]})
     return {"days": days, "options": options, "total": len(entries),
             "mtime": mtime, "error": error}

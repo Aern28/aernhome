@@ -33,6 +33,9 @@
 .nb-tabs button:disabled { opacity:.45; cursor:default; }
 .nb-q { margin:0; padding:0 4px; font:italic 15px/1.45 var(--nb-serif); color:var(--nx-muted); }
 .nb-q:empty { display:none; }
+.nb-n { margin:6px 0 0; padding:0 4px; font:13px/1.45 var(--nb-serif); color:var(--nx-faint); }
+.nb-n:empty { display:none; }
+.nb-n::before { content:"next: "; font:500 11.5px ui-monospace,Menlo,monospace; color:var(--nx-muted); }
 .nb-side .nb-foot { padding:0 4px; font:12px/1.5 ui-monospace,Menlo,monospace; color:var(--nx-faint); }
 .nb-foot a { color:var(--nx-muted); }
 
@@ -109,10 +112,11 @@
     <nav class="nb-tabs" id="nb-tabs" aria-label="Threads">
       <button type="button" class="on" data-t="" data-q="" style="--c:#8792a6" aria-pressed="true"><i></i><span>Everything</span><b>{{ nb.total }}</b></button>
       {% for o in nb.options %}
-      <button type="button" data-t="{{ o.slug }}" data-q="{{ o.question }}" style="--c:{{ o.colour }}" aria-pressed="false" {% if not o.count %}disabled{% endif %}><i></i><span>{{ o.name }}</span><b>{{ o.count }}</b></button>
+      <button type="button" data-t="{{ o.slug }}" data-q="{{ o.question }}" data-n="{{ o.next }}" style="--c:{{ o.colour }}" aria-pressed="false" {% if not o.count %}disabled{% endif %}><i></i><span>{{ o.name }}</span><b>{{ o.count }}</b></button>
       {% endfor %}
     </nav>
     <p class="nb-q" id="nb-q"></p>
+    <p class="nb-n" id="nb-n"></p>
     <div class="nb-foot">live from fleet-docs Notebook.md{% if nb.mtime %}<br>updated {{ nb.mtime.strftime('%b %d %H:%M') }}{% endif %}<br>
       <a href="/nexus/fleetdocs/Aernbot/Notebook-archive">older entries</a></div>
     {% endif %}
@@ -151,7 +155,7 @@
 (function () {
   var tabs = document.getElementById('nb-tabs');
   if (!tabs) return;
-  var q = document.getElementById('nb-q');
+  var q = document.getElementById('nb-q'), nx = document.getElementById('nb-n');
   function tab(t) { return tabs.querySelector('button[data-t="' + t + '"]'); }
   function apply(t) {
     tabs.querySelectorAll('button').forEach(function (b) {
@@ -165,6 +169,7 @@
     });
     var b = tab(t);
     q.textContent = (t && b && b.dataset.q) ? b.dataset.q : '';
+    nx.textContent = (t && b && b.dataset.n) ? b.dataset.n : '';
   }
   var start = (location.hash.match(/^#t=([\w-]+)/) || [])[1] || '';
   if (!start) { try { start = localStorage.getItem('nb-thread') || ''; } catch (e) {} }
