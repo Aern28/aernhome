@@ -18,9 +18,19 @@
 .nb-quill { width:44px; height:44px; flex:none; }
 .nb-cover h2 { margin:0; font:600 26px/1.15 var(--nb-serif); color:var(--nb-ink); }
 .nb-cover p { margin:3px 0 0; font-size:14px; line-height:1.45; color:var(--nx-muted); }
-.nb-pick { display:flex; flex-direction:column; gap:6px; padding:0 4px; font-size:13px; color:var(--nx-muted); }
-.nb-pick select { width:100%; max-width:420px; background:var(--nx-card); color:var(--nx-fg);
-  border:1px solid var(--nx-line); border-radius:8px; padding:9px 12px; font:16px system-ui,sans-serif; }
+/* Thread tabs (Aern 10/12: tabs to click, not a dropdown). Phone: one scrolling row.
+   From 900px: a vertical list in the sidebar. */
+.nb-tabs { display:flex; gap:6px; overflow-x:auto; padding:2px 4px 4px; scrollbar-width:none; }
+.nb-tabs::-webkit-scrollbar { display:none; }
+.nb-tabs button { flex:none; display:flex; align-items:center; gap:8px; cursor:pointer;
+  background:var(--nx-card); border:1px solid var(--nx-line); border-radius:999px; padding:7px 13px;
+  font:15px system-ui,sans-serif; color:var(--nx-muted); text-align:left; }
+.nb-tabs button i { width:9px; height:9px; border-radius:50%; background:var(--c); flex:none; }
+.nb-tabs button b { font:500 12.5px ui-monospace,Menlo,monospace; color:var(--nx-faint); }
+.nb-tabs button:hover:not(:disabled) { color:var(--nx-fg); }
+.nb-tabs button.on { color:var(--nx-fg); border-color:var(--c); background:#1c2638; }
+.nb-tabs button.on b { color:var(--nx-muted); }
+.nb-tabs button:disabled { opacity:.45; cursor:default; }
 .nb-q { margin:0; padding:0 4px; font:italic 15px/1.45 var(--nb-serif); color:var(--nx-muted); }
 .nb-q:empty { display:none; }
 .nb-side .nb-foot { padding:0 4px; font:12px/1.5 ui-monospace,Menlo,monospace; color:var(--nx-faint); }
@@ -73,7 +83,10 @@
   .nb { display:grid; grid-template-columns:270px minmax(0, 860px); gap:32px; align-items:start; }
   .nb-cover h2 { font-size:24px; }
   .nb-side { position:sticky; top:72px; }
-  .nb-pick select { max-width:none; }
+  .nb-tabs { flex-direction:column; gap:2px; overflow:visible; padding:0; }
+  .nb-tabs button { width:100%; border-radius:8px; border-color:transparent; background:none; padding:9px 12px; }
+  .nb-tabs button span { flex:1; }
+  .nb-tabs button.on { background:var(--nx-card); border-color:var(--nx-line); box-shadow:inset 3px 0 0 var(--c); }
 }
 @media (max-width: 520px) {
   .nb-entry { padding:14px 16px 16px 20px; }
@@ -93,14 +106,12 @@
       <div><h2>Aernbot's Notebook</h2><p>What it found and what it thinks. Newest on top; nothing here pings you.</p></div>
     </header>
     {% if not nb.error %}
-    <label class="nb-pick">Thread
-      <select id="nb-thread" aria-label="Filter by thread">
-        <option value="">Everything ({{ nb.total }})</option>
-        {% for o in nb.options %}
-        <option value="{{ o.slug }}" data-q="{{ o.question }}">{{ o.name }} ({{ o.count }})</option>
-        {% endfor %}
-      </select>
-    </label>
+    <nav class="nb-tabs" id="nb-tabs" aria-label="Threads">
+      <button type="button" class="on" data-t="" data-q="" style="--c:#8792a6" aria-pressed="true"><i></i><span>Everything</span><b>{{ nb.total }}</b></button>
+      {% for o in nb.options %}
+      <button type="button" data-t="{{ o.slug }}" data-q="{{ o.question }}" style="--c:{{ o.colour }}" aria-pressed="false" {% if not o.count %}disabled{% endif %}><i></i><span>{{ o.name }}</span><b>{{ o.count }}</b></button>
+      {% endfor %}
+    </nav>
     <p class="nb-q" id="nb-q"></p>
     <div class="nb-foot">live from fleet-docs Notebook.md{% if nb.mtime %}<br>updated {{ nb.mtime.strftime('%b %d %H:%M') }}{% endif %}<br>
       <a href="/nexus/fleetdocs/Aernbot/Notebook-archive">older entries</a></div>
@@ -138,26 +149,34 @@
 {% block nexus_scripts %}
 <script>
 (function () {
-  var sel = document.getElementById('nb-thread');
-  if (!sel) return;
+  var tabs = document.getElementById('nb-tabs');
+  if (!tabs) return;
   var q = document.getElementById('nb-q');
+  function tab(t) { return tabs.querySelector('button[data-t="' + t + '"]'); }
   function apply(t) {
+    tabs.querySelectorAll('button').forEach(function (b) {
+      var on = b.dataset.t === t; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+    });
     document.querySelectorAll('.nb-entry').forEach(function (e) { e.classList.toggle('hide', !!t && e.dataset.t !== t); });
     document.querySelectorAll('.nb-day').forEach(function (d) {
       var n = d.nextElementSibling, any = false;
       while (n && n.classList.contains('nb-entry')) { any = any || !n.classList.contains('hide'); n = n.nextElementSibling; }
       d.classList.toggle('hide', !any);
     });
-    var o = sel.options[sel.selectedIndex];
-    q.textContent = (t && o && o.dataset.q) ? o.dataset.q : '';
+    var b = tab(t);
+    q.textContent = (t && b && b.dataset.q) ? b.dataset.q : '';
   }
   var start = (location.hash.match(/^#t=([\w-]+)/) || [])[1] || '';
   if (!start) { try { start = localStorage.getItem('nb-thread') || ''; } catch (e) {} }
-  if (start && sel.querySelector('option[value="' + start + '"]')) { sel.value = start; apply(start); }
-  sel.addEventListener('change', function () {
-    apply(sel.value);
-    try { localStorage.setItem('nb-thread', sel.value); } catch (e) {}
-    history.replaceState(null, '', sel.value ? '#t=' + sel.value : location.pathname);
+  if (start && tab(start) && !tab(start).disabled) apply(start);
+  tabs.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button');
+    if (!b || b.disabled) return;
+    var t = b.dataset.t;
+    apply(t);
+    try { localStorage.setItem('nb-thread', t); } catch (e) {}
+    history.replaceState(null, '', t ? '#t=' + t : location.pathname);
+    if (window.matchMedia('(max-width: 899px)').matches) b.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   });
 })();
 </script>
