@@ -45,28 +45,59 @@ def _held_numbers(con):
         return set()
 
 
-def _product_link(con, number, card, set_name):
+def _product_index(con):
+    """ONE pass over products -> in-memory lookups for _product_link.
+
+    10/12: the per-row lookups below ran up to 6 queries per mover row on UNINDEXED
+    columns (name, number) of a 45k-row table in a 500 MB DB over the Docker Desktop
+    bind mount: ~0.34 s per full scan, 13 s per /nexus render. Canon is read-only here
+    (and index changes belong in setup_db.py), so build the lookups in one scan instead.
+    First row per key wins, the same row SQLite's LIMIT 1 returned in rowid order."""
+    idx = {}
+    try:
+        rows = con.execute("SELECT name, set_name, number, tcgplayer_id, image_url FROM products")
+        for name, set_name, number, tid, img in rows:
+            hit = (tid, img)
+            for key in (("ns", name, set_name), ("n", name), ("us", number, set_name), ("u", number)):
+                if key[1] is not None:
+                    idx.setdefault(key, hit)
+    except sqlite3.Error:
+        pass
+    return idx
+
+
+def _product_link(con, number, card, set_name, idx=None):
     """(tcgplayer_url, image_url) for a mover row, best-effort. The report's card
     text is '<number> <products.name> [*Foil*]', so stripping the number token and
     the *Foil* marker usually recovers the exact products.name; fall back through
-    looser matches rather than showing nothing."""
+    looser matches rather than showing nothing. Pass idx (from _product_index) to
+    look up in memory instead of querying per row."""
     clean = card
     if number and clean.startswith(number):
         clean = clean[len(number):].strip()
     clean = re.sub(r"\s*\*Foil\*\s*$", "", clean).strip()
-    tries = []
+    tries, keys = [], []
     if clean:
         tries.append(("name = ? AND set_name = ?", (clean, set_name)))
         tries.append(("name = ?", (clean,)))
+        keys += [("ns", clean, set_name), ("n", clean)]
     # MTG-style bare collector numbers ('26 Elven Chorus') aren't caught by _NUM;
     # retry with a leading integer token stripped.
     bare = re.sub(r"^\d+[a-z]?\s+", "", clean)
     if bare != clean:
         tries.append(("name = ? AND set_name = ?", (bare, set_name)))
         tries.append(("name = ?", (bare,)))
+        keys += [("ns", bare, set_name), ("n", bare)]
     if number:
         tries.append(("number = ? AND set_name = ?", (number, set_name)))
         tries.append(("number = ?", (number,)))
+        keys += [("us", number, set_name), ("u", number)]
+    if idx is not None:
+        for key in keys:
+            row = idx.get(key)
+            if row and row[0]:
+                return f"https://www.tcgplayer.com/product/{row[0]}", (row[1] or None)
+        return None, None
     try:
         for where, params in tries:
             row = con.execute(
@@ -91,6 +122,7 @@ def _parse_movers(path, held, con):
     if m:
         out["date"] = m.group(1).strip()
     bucket = None
+    idx = _product_index(con) if con else None
     for line in text.splitlines():
         if line.startswith("## "):
             low = line.lower()
@@ -107,7 +139,7 @@ def _parse_movers(path, held, con):
         row_flags = [f for f in flags.split() if f]
         if number and number in held:
             row_flags.insert(0, "HELD")
-        url, img = _product_link(con, number, card, set_name) if con else (None, None)
+        url, img = _product_link(con, number, card, set_name, idx) if con else (None, None)
         out[bucket].append({
             "pct": pct, "pct_val": float(pct.replace("%", "").replace(",", "")),
             "card": card, "set": set_name, "cur": cur, "ago": ago,
