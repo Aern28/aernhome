@@ -56,7 +56,13 @@ TCG_DB_PATH = os.environ.get("TCG_DB_PATH", "/tcg/inventory.db")
 VALID_PROJECT_STATUS = {"active", "blocked", "parked", "done"}
 # to_review (info-streams plan, Aern 10/09): bot/task output that needs Aern's
 # thought, walked with him in /goodmorning. Deliberately NOT mirrored to Todoist.
-VALID_QUEUE_DIR = {"to_aern", "to_fleet", "to_review"}
+# to_bot (Aern 10/12, seat seat-to-bot): a seat or Aern writing to a relay bot. The text
+# opens with the target ("AERNBOT: ...", "QM: ..."); the relay's Claude-free tick delivers
+# it into that bot's inbox (wrapped as untrusted data) and resolves the item as delivered.
+# One-way and on the record; bots answer through the channels they already have.
+VALID_QUEUE_DIR = {"to_aern", "to_fleet", "to_review", "to_bot"}
+BOT_TARGETS = ("AERNBOT", "QM", "QUARTERMASTER", "SCOUT", "CURATOR", "WARDEN")
+BOT_TARGET_RE = re.compile(r"^\s*(%s)\s*:" % "|".join(BOT_TARGETS), re.I)
 VALID_QUEUE_STATUS = {"open", "done"}
 VALID_AGENDA_WHICH = {"daily", "weekly"}
 VALID_PRIORITY = {1, 2, 3}
@@ -70,7 +76,7 @@ VALID_PRIORITY = {1, 2, 3}
 PROJECT_ID_MAX = 80
 QUEUE_TTL_MAX_H = 24 * 90
 # Real to-dos (to_aern, to_fleet) never expire by default; review surfaces do.
-QUEUE_DEFAULT_TTL_H = {"to_review": 24 * 7}
+QUEUE_DEFAULT_TTL_H = {"to_review": 24 * 7, "to_bot": 24 * 7}
 # Queue asks (Aern 10/10, seat queue-asks): a to_aern item is a DECISION for Aern, so it
 # carries `ask` (one line: what he decides) + `options` (2-4 short answers, recommended
 # first). Replay of 481 to_aern items (9/10-10/10): ~10% carried a question; the rest was
@@ -590,6 +596,9 @@ def api_queue_post():
     direction = body.get("dir")
     if direction not in VALID_QUEUE_DIR:
         return jsonify({"ok": False, "error": f"dir must be one of {sorted(VALID_QUEUE_DIR)}"}), 400
+    if direction == "to_bot" and not BOT_TARGET_RE.match(text):
+        return jsonify({"ok": False, "error": "to_bot text must open with the target bot: "
+                        + ", ".join(t + ":" for t in BOT_TARGETS)}), 400
 
     try:
         priority = int(body.get("priority", 2))
