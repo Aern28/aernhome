@@ -525,6 +525,7 @@
   "/nexus/media_cover/<int:mid>": "asset",
   "/nexus/docs/<slug>": "per-item page (parent mapped)",
   "/nexus/feed/<source>": "per-item page (parent mapped)",
+  "/nexus/feed/aernbot": "per-item page (parent mapped): Aernbot Notebook, live from fleet-docs (10/12)",
   "/nexus/ledger/<ym>": "per-item page (parent mapped)",
   "/nexus/vault/<path:relpath>": "per-item page (parent mapped)",
   "/nexus/fleetdocs/<path:relpath>": "per-item page (parent mapped)",

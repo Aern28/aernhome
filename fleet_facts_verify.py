@@ -34,6 +34,14 @@ def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+class _KeepRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **kw):
+        return None   # surface the 3xx as an HTTPError carrying its code
+
+
+_NO_REDIRECT = urllib.request.build_opener(_KeepRedirect)
+
+
 def check_http(p):
     url = p.get("url", "")
     if not url.startswith(("http://127.0.0.1", "http://100.", "http://localhost")):
@@ -41,7 +49,9 @@ def check_http(p):
     expect = p.get("expect", [200])
     try:
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=8) as r:
+        # Never follow redirects: a 302 is itself the answer when `expect` lists it. Following
+        # it made service.nexus time out (10/11-12) because / -> /nexus took 17s to render.
+        with _NO_REDIRECT.open(req, timeout=8) as r:
             return r.status in expect, "http %s" % r.status
     except urllib.error.HTTPError as e:
         return e.code in expect, "http %s" % e.code
