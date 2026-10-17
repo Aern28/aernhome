@@ -22,7 +22,14 @@ biz_mail_seen.json so a reply is filed once, not every run.
 Credential: a Google App Password for goobuegaming (NOT the account password) in
 data/goobue_app_password.txt - same unattended-credential pattern as keep_token.txt.
 Requires 2-Step Verification on that account to create one.
+
+UNiTY inbox (2026-10-16, project unity-screen): every mail from a UNITY_SENDERS domain is
+also saved WHOLE (raw .eml, attachments included) to data/unity_inbox/, because the 3000-char
+excerpt cut the 10/16 TCG lines off and the availability lists arrive as xlsx attachments.
+tcg-inventory-tool/unity_screen.py reads that folder; it never logs into the mailbox itself.
+Mail already in the 14-day window is backfilled once (a missing file = fetch it).
 """
+import hashlib
 import email
 import imaplib
 import json
@@ -37,6 +44,8 @@ DATA = os.path.join(HERE, "data")
 PW_FILE = os.path.join(DATA, "goobue_app_password.txt")
 STATE = os.path.join(DATA, "biz_mail_seen.json")
 STAMP = os.path.join(DATA, "biz_mail_last.json")
+UNITY_INBOX = os.path.join(DATA, "unity_inbox")
+UNITY_SENDERS = ("unityb2b.com", "unitytradingllc.com")
 ACCOUNT = os.getenv("BIZ_MAIL_ACCOUNT", "goobuegaming@gmail.com")
 # Tailscale IP, NOT the LAN one: Nexus deliberately does not publish :5555 on the
 # LAN (only :5556, for the TRMNL device). The LAN address here was refused on
@@ -118,6 +127,34 @@ def _excerpt(msg):
     return t[:EXCERPT_CHARS] + (" ..." if len(t) > EXCERPT_CHARS else "")
 
 
+def _unity_path(gid, date_hdr):
+    """data/unity_inbox/<YYYYMMDD>_<hash>.eml - date from the Date header, hash of the Message-ID."""
+    try:
+        from email.utils import parsedate_to_datetime
+        stamp = parsedate_to_datetime(date_hdr).strftime("%Y%m%d")
+    except Exception:
+        stamp = "00000000"
+    return os.path.join(UNITY_INBOX, f"{stamp}_{hashlib.sha1(gid.encode()).hexdigest()[:10]}.eml")
+
+
+def _save_unity(M, mid, gid, date_hdr, raw_bytes=None):
+    """Write the whole message once. Returns True when a new file was written."""
+    path = _unity_path(gid, date_hdr)
+    if os.path.exists(path):
+        return False
+    if raw_bytes is None:
+        typ, raw = M.fetch(mid, "(BODY.PEEK[])")   # PEEK: still never marks read
+        if typ != "OK" or not raw or not isinstance(raw[0], tuple):
+            return False
+        raw_bytes = raw[0][1]
+    os.makedirs(UNITY_INBOX, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(raw_bytes)
+    os.replace(tmp, path)   # the screen never sees a half-written file
+    return True
+
+
 def _queue(text, source, direction="to_fleet"):
     body = json.dumps({"dir": direction, "text": text, "source": source,
                        "created_by": "aernbot-bizmail", "effort": "read",
@@ -145,7 +182,7 @@ def main():
     skips = " ".join("-from:" + d for d in SKIP)
     query = f"newer_than:14d -from:{ACCOUNT} {skips}".strip()
 
-    filed, matched = 0, 0
+    filed, matched, unity_saved = 0, 0, 0
     try:
         M = imaplib.IMAP4_SSL("imap.gmail.com", 993)
         M.login(ACCOUNT, pw)
@@ -169,11 +206,17 @@ def main():
             msg = email.message_from_bytes(raw[0][1])
             gid = _hdr(msg, "Message-ID") or mid.decode()
             matched += 1
-            if gid in seen:
-                continue
             sender = _hdr(msg, "From")
-            subject = _hdr(msg, "Subject") or "(no subject)"
             date = _hdr(msg, "Date")
+            is_unity = any(d in sender.lower() for d in UNITY_SENDERS)
+            if gid in seen:
+                if is_unity:   # backfill: a UNiTY mail filed before 10/16 has no saved copy yet
+                    try:
+                        unity_saved += _save_unity(M, mid, gid, date)
+                    except Exception as e:
+                        print(f"unity save failed for {gid}: {e}")
+                continue
+            subject = _hdr(msg, "Subject") or "(no subject)"
             who = next((label for d, label in WATCH if d in sender.lower()), "unlisted sender")
             # Body excerpt for NEW mail only (one extra PEEK fetch; still never marks read).
             excerpt = ""
@@ -181,6 +224,8 @@ def main():
                 typ2, raw2 = M.fetch(mid, "(BODY.PEEK[])")
                 if typ2 == "OK" and raw2 and isinstance(raw2[0], tuple):
                     excerpt = _excerpt(email.message_from_bytes(raw2[0][1]))
+                    if is_unity:
+                        unity_saved += _save_unity(M, mid, gid, date, raw2[0][1])
             except Exception as e:
                 excerpt = f"(body fetch failed: {e})"
             text = (f"BUSINESS MAILBOX ({ACCOUNT}) - {who}. "
@@ -202,8 +247,10 @@ def main():
             pass
 
     _save(STATE, {"ids": sorted(seen)[-500:]})
-    _save(STAMP, {"ok": True, "matched": matched, "filed": filed, "watching": len(WATCH)})
-    print(f"OK: {matched} matching message(s), {filed} newly filed to the Aern queue")
+    _save(STAMP, {"ok": True, "matched": matched, "filed": filed, "watching": len(WATCH),
+                  "unity_saved": unity_saved})
+    print(f"OK: {matched} matching message(s), {filed} newly filed to the Aern queue, "
+          f"{unity_saved} UNiTY mail(s) saved to {UNITY_INBOX}")
     return 0
 
 
