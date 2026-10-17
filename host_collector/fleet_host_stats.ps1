@@ -542,6 +542,35 @@ function Test-Tailscale {
 }
 
 # ---------------------------------------------------------------------------
+# Check: lan_profile - the Ethernet network profile must be Private
+# ---------------------------------------------------------------------------
+# A reboot can re-identify the LAN as a NEW network (10/10: "ATTDgswj4T 2")
+# that Windows files as Public. The "Jellyfin LAN" firewall rule is
+# Private-only, so Jellyfin/ABS/n8n drop for every LAN client while every
+# Tailscale probe stays green (security pass 2026-10 row 16, item 7).
+
+function Test-LanProfile {
+    $id = "lan_profile"
+    $label = "LAN Network Profile (Ethernet)"
+    try {
+        $profiles = @(Get-NetConnectionProfile -ErrorAction Stop |
+            Where-Object { $_.InterfaceAlias -notmatch '(?i)tailscale' })
+        if ($profiles.Count -eq 0) {
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail "No LAN connection profile (Ethernet unplugged or down)"
+        }
+        $parts = @($profiles | ForEach-Object { "$($_.InterfaceAlias)='$($_.Name)' $($_.NetworkCategory)" })
+        $public = @($profiles | Where-Object { "$($_.NetworkCategory)" -ne "Private" -and "$($_.NetworkCategory)" -ne "DomainAuthenticated" })
+        if ($public.Count -gt 0) {
+            return New-CheckResult -Id $id -Label $label -Status "down" -Detail ("NOT Private: " + ($parts -join "; ") + " - LAN clients lose Jellyfin/ABS/n8n. Fix (Aern, admin): Set-NetConnectionProfile -InterfaceAlias $($public[0].InterfaceAlias) -NetworkCategory Private")
+        }
+        return New-CheckResult -Id $id -Label $label -Status "up" -Detail ($parts -join "; ")
+    }
+    catch {
+        return New-CheckResult -Id $id -Label $label -Status "unknown" -Detail "Error: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Check 7: matt_session - quser shows an active session for matt/Matt
 # ---------------------------------------------------------------------------
 
@@ -603,6 +632,7 @@ $checks += Invoke-CheckSafely -Block { Test-ChromeCdp } -Id "chrome_cdp" -Label 
 $checks += Invoke-CheckSafely -Block { Test-DiskC } -Id "disk_c" -Label "Disk Space (C:)"
 $checks += Invoke-CheckSafely -Block { Test-GitUnpushed } -Id "git_unpushed" -Label "Git Drift (all seats)"
 $checks += Invoke-CheckSafely -Block { Test-Tailscale } -Id "tailscale" -Label "Tailscale"
+$checks += Invoke-CheckSafely -Block { Test-LanProfile } -Id "lan_profile" -Label "LAN Network Profile (Ethernet)"
 $checks += Invoke-CheckSafely -Block { Test-MattSession } -Id "matt_session" -Label "Matt Interactive Session"
 
 $output = New-Object System.Collections.Specialized.OrderedDictionary

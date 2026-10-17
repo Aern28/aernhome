@@ -65,6 +65,13 @@ matching the host's local time zone.
 7. **matt_session** - `quser` output for an active session belonging to
    `matt`/`Matt` (this account drives label printing in the TCG pipeline).
    `up` if Active, `warn` if Disconnected, `down` if no session is found.
+8. **lan_profile** - `Get-NetConnectionProfile`, Tailscale excluded. `down` if
+   any LAN profile is not Private, or there is no LAN profile at all. A reboot
+   can re-identify the LAN as a new network that Windows files as Public, and
+   the Private-only "Jellyfin LAN" firewall rule then drops Jellyfin/ABS/n8n
+   for LAN clients while Tailscale probes stay green (10/10; security pass
+   2026-10 item 7). The fix is Aern's (admin): `Set-NetConnectionProfile
+   -InterfaceAlias Ethernet -NetworkCategory Private`.
 
 ## Reliability
 
