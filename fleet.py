@@ -66,7 +66,7 @@ DIGEST_HOUR = 7  # 07:00 America/Chicago daily status line
 # outages that need action plus ONE daily status line. Every other transition is
 # board-only (recent_alerts, /nexus/fleet). A push-list check pushes once per
 # episode, after it has been not-up for PUSH_SUSTAIN_S; no RECOVERED pushes.
-PUSH_CHECKS = {"relay_alive", "tcg_autoprocess", "chrome_cdp", "containers", "tailscale"}
+PUSH_CHECKS = {"relay_alive", "tcg_autoprocess", "chrome_cdp", "containers", "tailscale", "lan_profile"}
 PUSH_SUSTAIN_S = 30 * 60
 QUEUE_PATH = os.path.join(DATA_DIR, "queue.json")
 CENTRAL_TZ = ZoneInfo("America/Chicago")
