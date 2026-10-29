@@ -20,11 +20,13 @@ import re
 import sys
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 SECRETS = os.environ.get("RELAY_SECRETS_DIR", "C:/Users/Matt/.relay-secrets")
 SA = os.path.join(SECRETS, "claudendar-service-account.json")
 MEALIE_TOKEN = os.path.join(SECRETS, "mealie-token")
+# Aern's published Outlook calendar ICS URL (holds a token; Aern places it, one line).
+WORK_ICS_URL_FILE = os.path.join(SECRETS, "work-calendar-ics-url")
 CAL_MATT = "mcarroll203@gmail.com"
 CAL_GAL = "b672e5962b42a874240c3440c400888d0275a64f6d471ebcd5067b8325592db7@group.calendar.google.com"
 TRMNL_URL = "https://trmnl.com/api/custom_plugins/7cc25d15-44e3-4a65-8ff0-37e588c23013"
@@ -92,6 +94,59 @@ def fetch_events(cal, calendar_id, dates):
     except Exception as e:
         print(f"calendar {calendar_id[:18]} fetch failed: {str(e)[:80]}", file=sys.stderr)
         return []
+
+
+def _ics_when(prop, value):
+    """One DTSTART/DTEND line -> Google-API-shaped {"date"} or {"dateTime"}."""
+    if "VALUE=DATE" in prop and "T" not in value:
+        return {"date": f"{value[:4]}-{value[4:6]}-{value[6:8]}"}
+    dt = datetime.strptime(value[:15], "%Y%m%dT%H%M%S")
+    if value.endswith("Z") or re.search(r"TZID=[^:;]*(UTC|Greenwich)", prop):
+        dt = dt.replace(tzinfo=timezone.utc)
+    # Any other TZID is Outlook's "Central Standard Time" = Ashaman local, so naive is right.
+    return {"dateTime": dt.astimezone().isoformat()}
+
+
+def fetch_work_shifts(dates):
+    """Matt's QGenda shifts from his published Outlook ICS. The Claudendar service account
+    gets 404 on the Google @import copy of it (verified 10/29), so read the feed itself.
+    GEN-prefixed events ONLY: everything else in it is work meetings, and classify_matt
+    turns non-GEN events into NOTES on a family display. No URL file = [] (board as before)."""
+    try:
+        with open(WORK_ICS_URL_FILE, encoding="utf-8") as f:
+            url = f.read().strip()
+    except OSError:
+        return []
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
+            text = r.read().decode("utf-8", "replace")
+    except Exception as e:
+        print(f"work ICS fetch failed: {type(e).__name__}", file=sys.stderr)  # never the URL: it is a token
+        return []
+    lines = re.sub(r"\r?\n[ \t]", "", text).splitlines()  # unfold continuation lines
+    first, last = dates[0].isoformat(), dates[6].isoformat()
+    out, ev = [], None
+    for line in lines:
+        if line == "BEGIN:VEVENT":
+            ev = {}
+        elif line == "END:VEVENT" and ev is not None:
+            summary = ev.get("SUMMARY", ("", ""))[1].replace("\\,", ",").replace("\\;", ";").strip()
+            if (summary.lower().startswith("gen") and "DTSTART" in ev and "RRULE" not in ev
+                    and ev.get("STATUS", ("", ""))[1] != "CANCELLED"):
+                try:
+                    item = {"summary": summary, "start": _ics_when(*ev["DTSTART"])}
+                    if "DTEND" in ev:
+                        item["end"] = _ics_when(*ev["DTEND"])
+                    w = ev_local(item)
+                    if w and first <= w["date"] <= last:
+                        out.append(item)
+                except ValueError:
+                    pass
+            ev = None
+        elif ev is not None and ":" in line:
+            prop, value = line.split(":", 1)
+            ev[prop.split(";", 1)[0]] = (prop, value)
+    return out
 
 
 def ev_local(ev):
@@ -291,7 +346,8 @@ def main():
     cal = calendar_client()
     gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates))
     matt_events = fetch_events(cal, CAL_MATT, dates)
-    matt_by, matt_notes = classify_matt(matt_events)
+    # Shifts come from the Work ICS; the primary has had none since the one-time 6/8 AutoSync.
+    matt_by, matt_notes = classify_matt(matt_events + fetch_work_shifts(dates))
     lunch, dinner, jaina, buy = school_lunch(dates), mealie_dinner(dates), jaina_overrides(), restock()
     # The Jaina row is a fixed weekly template, so it showed "Matt/Matt" on the 10/09
     # HISD PD day. An all-day "No school" event on Matt's calendar wins over it.
