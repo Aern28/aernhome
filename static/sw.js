@@ -9,7 +9,7 @@
  *   - /api/*  and non-GET     → untouched (always live; never cache writes/state)
  *
  * Bump VERSION to force-evict old caches on next activate. */
-const VERSION = 'nexus-v8';
+const VERSION = 'nexus-v9';
 const STATIC_CACHE = `static-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 const IMG_CACHE = `img-${VERSION}`;
@@ -93,6 +93,24 @@ function networkFirst(req, cacheName) {
   return caches.open(cacheName).then((c) =>
     fetch(req)
       .then((res) => { if (res.ok) c.put(req, res.clone()); return res; })
-      .catch(() => c.match(req).then((hit) => hit || c.match('/nexus')))
+      .catch(() => c.match(req).then((hit) => hit || c.match('/nexus')).then(markOffline))
   );
+}
+
+// A page served from cache must SAY so (10/30: a phone off the tailnet showed a
+// 2-week-old /nexus/house as if live; a refresh changed nothing). Banner carries the
+// saved time from the cached response's Date header.
+function markOffline(hit) {
+  if (!hit) return hit;
+  const saved = hit.headers.get('date');
+  const when = saved ? new Date(saved).toLocaleString([], {month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : 'an earlier visit';
+  const banner = '<div style="position:sticky;top:0;z-index:9999;background:#b45309;color:#fff;' +
+    'padding:8px 12px;font:600 14px system-ui,sans-serif;text-align:center">' +
+    '⚠️ Offline copy from ' + when + ' — Nexus unreachable (Tailscale connected?)</div>';
+  return hit.text().then((html) => {
+    const body = html.replace(/<body[^>]*>/i, (m) => m + banner);
+    const headers = new Headers(hit.headers);
+    headers.delete('content-length');
+    return new Response(body === html ? banner + html : body, {status: 200, headers});
+  });
 }
