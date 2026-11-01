@@ -1759,6 +1759,8 @@ def nexus_feed():
     for s in sources:
         if s == "aernbot":
             continue  # live card above
+        if s.startswith("brief-"):
+            continue  # edited entries live on /nexus/brief (11/01)
         entries = by_source.get(s, [])
         newest = entries[0].get("created_at", "") if entries else ""
         label = _feed_meta(s)["label"]
