@@ -571,7 +571,7 @@ def check_feed_fresh():
     st = feed_health.all_status()
     stale = [f"{s} {feed_health.fmt_age(h['age_h'])}" for s, h in st.items() if h["stale"]]
     if stale:
-        return ("warn", "stale: " + ", ".join(stale) + " (see /nexus/feed)")
+        return ("warn", "stale: " + ", ".join(stale) + " (see /nexus/brief?beat=sources)")
     return ("up", f"{len(st)} sources fresh")
 
 

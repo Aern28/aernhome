@@ -43,6 +43,7 @@
 .br-act input { flex:1 1 180px; min-width:0; background:transparent; border:1px solid var(--nx-line); border-radius:8px;
   padding:5px 8px; font:13px system-ui,sans-serif; color:var(--nx-fg); }
 .br-act .st { font-size:12px; color:var(--nx-faint); }
+.br-note { margin:0; padding:0 4px; font-size:13px; color:var(--nx-muted); }
 .br-empty { padding:18px; color:var(--nx-muted); background:var(--nx-card); border:1px dashed var(--nx-line); border-radius:12px; }
 </style>
 
@@ -56,9 +57,13 @@
     {% for slug, m in beats.items() %}
     <a href="/nexus/brief?beat={{ slug }}" class="{{ 'on' if beat == slug }}">{{ m[0] }} {{ m[1] }}</a>
     {% endfor %}
+    <a href="/nexus/brief?beat=sources" class="{{ 'on' if beat == 'sources' }}">📡 Sources</a>
   </nav>
 
-  {% if not items %}
+  {% if beat == 'sources' %}
+  <p class="br-note">The raw digests the editors read from. Nothing here is filtered; the beats above are.</p>
+  {% include "_feed_cards.html" %}
+  {% elif not items %}
   <div class="br-empty">No entries yet. The market editor posts after the 7 AM price chain, and only when something clears its bar. A quiet day means nothing is here.</div>
   {% endif %}
 

@@ -58,6 +58,17 @@ class BriefTest(unittest.TestCase):
         bad = self.c.post("/api/nexus/brief/mark", json={"id": fid, "verdict": "love"})
         self.assertEqual(bad.status_code, 400)
 
+    def test_sources_tab_replaces_feed(self):
+        self.post_entry(source="optcg", title="Raw digest line", body="x")
+        self.post_entry(title="Edited line")
+        r = self.c.get("/nexus/feed")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r.headers["Location"].endswith("/nexus/brief?beat=sources"))
+        html = self.c.get("/nexus/brief?beat=sources").get_data(as_text=True)
+        self.assertIn("Raw digest line", html)
+        self.assertNotIn("Edited line", html)  # brief entries stay on the beat tabs
+        self.assertNotIn('href="/nexus/feed"', html)  # nav no longer has a separate Feed page
+
     def test_public_tunnel_refused(self):
         r = self.c.get("/nexus/brief", headers={"CF-Connecting-IP": "1.2.3.4"})
         self.assertEqual(r.status_code, 404)

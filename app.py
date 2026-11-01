@@ -1156,8 +1156,7 @@ def projects():
 # ── Personal Nexus (Tailscale-only) ───────────────────────────────────────────
 NEXUS_SECTIONS = [
     ("/nexus",            "Home",        "🏡", "Today at a glance"),
-    ("/nexus/brief",      "Brief",       "🗞️", "Market · meta · health, edited"),
-    ("/nexus/feed",       "Feed",        "📡", "Digests & Aernbot notebook"),
+    ("/nexus/brief",      "Brief",       "🗞️", "Edited beats + raw digests"),
     ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
     ("/nexus/tv",         "TV",          "📺", "Watching & watched"),
@@ -1738,8 +1737,15 @@ def _feed_meta(slug):
 
 @app.route("/nexus/feed")
 def nexus_feed():
+    # 11/01 (Aern: "rectify this with the digest page"): one reading page. The raw
+    # digests are the Brief's Sources tab now; old links and bookmarks land there.
     if not _is_nexus_allowed():
         abort(404)
+    return redirect("/nexus/brief?beat=sources")
+
+
+def _feed_cards():
+    """(cards, retired) for the raw-digest cards on the Brief's Sources tab."""
     by_source = ns_writes.feed_sources(per_source=5)
     counts = ns_writes.feed_source_counts()
     order = list(FEED_SOURCE_META.keys())
@@ -1776,8 +1782,7 @@ def nexus_feed():
         c["stale"] = h["stale"]
         c["stale_note"] = (f"stale: last item {feed_health.fmt_age(h['age_h'])} ago "
                            f"(expected within {feed_health.fmt_age(h['max_h'])})") if h["stale"] else ""
-    return render_template("nexus_feed.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
-                           cards=cards, retired=retired)
+    return cards, retired
 
 
 @app.route("/nexus/feed/aernbot")
@@ -1786,7 +1791,7 @@ def nexus_feed_aernbot():
     # fleet-docs. The generic view below showed the dead push store as topic folders.
     if not _is_nexus_allowed():
         abort(404)
-    return render_template("nexus_notebook.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
+    return render_template("nexus_notebook.html", sections=NEXUS_SECTIONS, active="/nexus/brief",
                            nb=notebook_page.view())
 
 
@@ -1805,7 +1810,7 @@ def nexus_feed_source(source):
             groups.append({"tag": tag, "entries": []})
         groups[idx[tag]]["entries"].append(it)
     has_tags = any(it.get("tag") for it in items)
-    return render_template("nexus_feed_source.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
+    return render_template("nexus_feed_source.html", sections=NEXUS_SECTIONS, active="/nexus/brief",
                            meta=_feed_meta(source), items=items, groups=groups, has_tags=has_tags)
 
 
@@ -1822,6 +1827,12 @@ def nexus_brief():
     if not _is_nexus_allowed():
         abort(404)
     beat = (request.args.get("beat") or "").lower()
+    if beat == "sources":
+        cards, retired = _feed_cards()
+        unread = sum(1 for it in ns_writes.list_brief(unread=True, limit=300))
+        return render_template("nexus_brief.html", sections=NEXUS_SECTIONS, active="/nexus/brief",
+                               items=[], beat=beat, beats=BRIEF_BEAT_META, unread=unread,
+                               cards=cards, retired=retired)
     if beat not in BRIEF_BEAT_META:
         beat = ""
     items = ns_writes.list_brief(beat=beat or None, limit=60)

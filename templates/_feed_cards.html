@@ -1,8 +1,5 @@
-{% extends "nexus_base.html" %}
-{% block nexus_title %}Feed{% endblock %}
-
-{% block nexus_content %}
-{# Per-source accent — literal classes so Tailwind's scanner keeps them. #}
+{# Raw digest cards (the old /nexus/feed page), included by nexus_brief.html's
+   Sources tab since 11/01. Per-source accent: literal classes so Tailwind's scanner keeps them. #}
 {% set accents = {
     'aernbot':     'border-violet-500',
     'optcg':       'border-amber-500',
@@ -51,4 +48,3 @@
     <p class="text-xs text-gray-500 px-1">Retired (silent &gt;30d): {{ retired | join(' · ') }}</p>
     {% endif %}
 </div>
-{% endblock %}

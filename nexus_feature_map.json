@@ -237,8 +237,8 @@
    ]
   },
   {
-   "path": "/nexus/feed",
-   "title": "Feed",
+   "path": "/nexus/brief",
+   "title": "Brief (edited beats + Sources tab of raw digests, 11/01)",
    "sources": [
     {
      "id": "feeds",
@@ -524,6 +524,8 @@
   "/nexus/cover/<int:book_id>": "asset",
   "/nexus/media_cover/<int:mid>": "asset",
   "/nexus/docs/<slug>": "per-item page (parent mapped)",
+  "/nexus/feed": "302 to /nexus/brief?beat=sources since 11/01 (Feed folded into the Brief)",
+  "/api/nexus/brief": "Brief JSON for /goodmorning (parent /nexus/brief mapped)",
   "/nexus/feed/<source>": "per-item page (parent mapped)",
   "/nexus/feed/aernbot": "per-item page (parent mapped): Aernbot Notebook, live from fleet-docs (10/12)",
   "/nexus/ledger/<ym>": "per-item page (parent mapped)",
@@ -544,6 +546,7 @@
   "/api/nexus/book",
   "/api/nexus/goal",
   "/api/nexus/link",
-  "/api/nexus/feed"
+  "/api/nexus/feed",
+  "/api/nexus/brief/mark"
  ]
 }
