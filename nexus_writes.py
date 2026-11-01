@@ -838,6 +838,50 @@ def feed_sources(per_source=5):
         return {}
 
 
+BRIEF_BEATS = ("market", "meta", "health")
+BRIEF_VERDICTS = ("useful", "skip", "")
+
+
+def list_brief(beat=None, unread=False, limit=60):
+    """Brief entries (feed_items source 'brief-<beat>') newest first, with Aern's marks."""
+    q = ("SELECT f.id, f.source, substr(f.source, 7) AS beat, f.title, f.body, f.url, f.tag, "
+         "f.created_at, m.read_at, m.verdict, m.note FROM feed_items f "
+         "LEFT JOIN brief_marks m ON m.item_id = f.id WHERE f.source LIKE 'brief-%'")
+    params = []
+    if beat:
+        q += " AND f.source = ?"; params.append("brief-" + beat.lower())
+    if unread:
+        q += " AND m.read_at IS NULL"
+    q += " ORDER BY f.created_at DESC, f.id DESC LIMIT ?"
+    params.append(int(limit))
+    try:
+        with closing(_conn()) as conn, conn:
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+    except sqlite3.Error:
+        return []
+
+
+def mark_brief(item_id, read=None, verdict=None, note=None):
+    """Set read / verdict / note on one brief entry. Only the fields passed change."""
+    item_id = int(item_id)
+    if verdict is not None and verdict not in BRIEF_VERDICTS:
+        raise ValueError("verdict must be useful, skip or empty")
+    with closing(_conn()) as conn, conn:
+        row = conn.execute("SELECT source FROM feed_items WHERE id = ?", (item_id,)).fetchone()
+        if not row or not str(row[0]).startswith("brief-"):
+            raise ValueError("no such brief entry")
+        conn.execute("INSERT OR IGNORE INTO brief_marks (item_id) VALUES (?)", (item_id,))
+        if read is not None:
+            conn.execute("UPDATE brief_marks SET read_at = CASE WHEN ? THEN COALESCE(read_at, CURRENT_TIMESTAMP) "
+                         "ELSE NULL END WHERE item_id = ?", (1 if read else 0, item_id))
+        if verdict is not None:
+            conn.execute("UPDATE brief_marks SET verdict = ? WHERE item_id = ?", (verdict or None, item_id))
+        if note is not None:
+            conn.execute("UPDATE brief_marks SET note = ? WHERE item_id = ?", ((note or "").strip()[:500] or None, item_id))
+        conn.execute("UPDATE brief_marks SET updated_at = CURRENT_TIMESTAMP WHERE item_id = ?", (item_id,))
+    return True
+
+
 def feed_source_counts():
     """{source: total item count} — so a card can show 'all N ->'."""
     try:

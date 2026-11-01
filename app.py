@@ -596,6 +596,19 @@ def init_nexus_db():
     except sqlite3.OperationalError:
         pass  # column already present
 
+    # Brief (11/01, seat digest-synthesis): per-beat editor entries are feed_items with
+    # source 'brief-<beat>'. Aern's marks live here: read_at = he has seen it (goodmorning
+    # walks unread ones), verdict useful|skip + note = how the editor tunes its bar.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS brief_marks (
+            item_id INTEGER PRIMARY KEY,     -- feed_items.id
+            read_at TIMESTAMP,
+            verdict TEXT,                    -- useful | skip | NULL
+            note TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Docs — long-form reference content authored in markdown, rendered natively in
     # Nexus. The home for rich formats (tables, headings, playbooks) that outgrow a
     # sticky Note but shouldn't be exiled to Obsidian. body_md is the source of truth;
@@ -1143,6 +1156,7 @@ def projects():
 # ── Personal Nexus (Tailscale-only) ───────────────────────────────────────────
 NEXUS_SECTIONS = [
     ("/nexus",            "Home",        "🏡", "Today at a glance"),
+    ("/nexus/brief",      "Brief",       "🗞️", "Market · meta · health, edited"),
     ("/nexus/feed",       "Feed",        "📡", "Digests & Aernbot notebook"),
     ("/nexus/goals",      "Goals",       "🎯", "Personal · work · house · TCG"),
     ("/nexus/books",      "Books",       "📚", "Reading & read"),
@@ -1791,6 +1805,51 @@ def nexus_feed_source(source):
     has_tags = any(it.get("tag") for it in items)
     return render_template("nexus_feed_source.html", sections=NEXUS_SECTIONS, active="/nexus/feed",
                            meta=_feed_meta(source), items=items, groups=groups, has_tags=has_tags)
+
+
+# ── Brief (11/01, seat digest-synthesis) ──────────────────────────────────────
+# One reading surface for the per-beat editors (market first). Producers keep writing
+# raw to the queue/Signals; an editor reads them, applies the bar and posts ONE entry
+# here (POST /api/nexus/feed, source 'brief-<beat>'). Aern reads PRN; /goodmorning
+# walks the unread ones; his useful/skip marks feed the editor's next run.
+BRIEF_BEAT_META = {"market": ("📈", "Market"), "meta": ("🧭", "Meta"), "health": ("🤧", "Health")}
+
+
+@app.route("/nexus/brief")
+def nexus_brief():
+    if not _is_nexus_allowed():
+        abort(404)
+    beat = (request.args.get("beat") or "").lower()
+    if beat not in BRIEF_BEAT_META:
+        beat = ""
+    items = ns_writes.list_brief(beat=beat or None, limit=60)
+    for it in items:
+        it["html"] = nexus_md.render_markdown(it.get("body") or "")
+        it["icon"], it["label"] = BRIEF_BEAT_META.get(it.get("beat"), ("📰", it.get("beat") or "brief"))
+    unread = sum(1 for it in items if not it.get("read_at"))
+    return render_template("nexus_brief.html", sections=NEXUS_SECTIONS, active="/nexus/brief",
+                           items=items, beat=beat, beats=BRIEF_BEAT_META, unread=unread)
+
+
+@app.route("/api/nexus/brief")
+def api_nexus_brief():
+    if not _is_nexus_allowed():
+        abort(404)
+    beat = (request.args.get("beat") or "").lower() or None
+    unread = request.args.get("unread") in ("1", "true", "yes")
+    limit = min(int(request.args.get("limit") or 60), 300)
+    return jsonify({"items": ns_writes.list_brief(beat=beat, unread=unread, limit=limit)})
+
+
+@app.route("/api/nexus/brief/mark", methods=["POST"])
+def api_nexus_brief_mark():
+    body = _nexus_json()
+    try:
+        ns_writes.mark_brief(body.get("id"), read=body.get("read"),
+                             verdict=body.get("verdict"), note=body.get("note"))
+    except (ValueError, TypeError) as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True})
 
 
 # ── Nexus write APIs (Tailscale-only; JSON in, JSON out) ──────────────────────

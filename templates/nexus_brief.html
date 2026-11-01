@@ -1,0 +1,117 @@
+{% extends "nexus_base.html" %}
+{% block nexus_title %}Brief{% endblock %}
+
+{% block nexus_content %}
+<style>
+/* Brief (11/01, seat digest-synthesis). One column of edited entries, newest first.
+   Each beat has its own colour stripe (--c). Entries carry three marks: read, useful,
+   skip-this-kind (+ an optional note). The marks are how the editor tunes its bar, so
+   the controls sit right under the text, not in a menu. Dark-only like the rest of Nexus;
+   page-local CSS on the --nx-* tokens, because Tailwind here is precompiled. */
+.br { display:flex; flex-direction:column; gap:14px; padding:4px 0 24px; max-width:760px; }
+.br-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:0 4px; }
+.br-head h2 { margin:0; font:600 24px/1.2 system-ui,sans-serif; color:var(--nx-fg); }
+.br-head p { margin:0; font-size:13px; color:var(--nx-muted); }
+.br-tabs { display:flex; gap:6px; overflow-x:auto; padding:2px 4px; scrollbar-width:none; }
+.br-tabs a { flex:none; text-decoration:none; background:var(--nx-card); border:1px solid var(--nx-line);
+  border-radius:999px; padding:6px 12px; font:14px system-ui,sans-serif; color:var(--nx-muted); }
+.br-tabs a.on { color:var(--nx-fg); border-color:#5b7fb8; background:#1c2638; }
+.br-entry { position:relative; background:var(--nx-card); border:1px solid var(--nx-line); border-radius:12px;
+  padding:14px 18px 12px 22px; overflow:hidden; }
+.br-entry::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--c); }
+.br-entry.read { opacity:.62; }
+.br-entry.read:hover { opacity:1; }
+.br-meta { display:flex; justify-content:space-between; gap:8px; font-size:12.5px; color:var(--nx-muted); }
+.br-meta time { font-family:ui-monospace,Menlo,monospace; color:var(--nx-faint); }
+.br-entry h3 { margin:4px 0 8px; font:600 19px/1.3 system-ui,sans-serif; color:var(--nx-fg); text-wrap:balance; }
+.br-text { font-size:15.5px; line-height:1.55; color:#d3d9e3; overflow-wrap:anywhere; }
+.br-text p, .br-text ul, .br-text ol, .br-text table { margin:0 0 10px; }
+.br-text ul, .br-text ol { padding-left:20px; }
+.br-text li { margin:3px 0; }
+.br-text strong { color:var(--nx-fg); }
+.br-text a { color:#8fb3ef; }
+.br-text table { border-collapse:collapse; font-size:14px; display:block; overflow-x:auto; }
+.br-text th, .br-text td { border-bottom:1px solid var(--nx-line); padding:4px 8px; text-align:left; font-variant-numeric:tabular-nums; }
+.br-act { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; padding-top:10px; border-top:1px solid var(--nx-line); }
+.br-act button { cursor:pointer; background:transparent; border:1px solid var(--nx-line); border-radius:8px;
+  padding:5px 10px; font:13px system-ui,sans-serif; color:var(--nx-muted); }
+.br-act button:hover { color:var(--nx-fg); }
+.br-act button:focus-visible { outline:2px solid #8fb3ef; outline-offset:2px; }
+.br-act button.on-useful { color:#7fd3a0; border-color:#3f7d58; }
+.br-act button.on-skip { color:#f0a080; border-color:#8a4f3a; }
+.br-act button.on-read { color:var(--nx-fg); }
+.br-act input { flex:1 1 180px; min-width:0; background:transparent; border:1px solid var(--nx-line); border-radius:8px;
+  padding:5px 8px; font:13px system-ui,sans-serif; color:var(--nx-fg); }
+.br-act .st { font-size:12px; color:var(--nx-faint); }
+.br-empty { padding:18px; color:var(--nx-muted); background:var(--nx-card); border:1px dashed var(--nx-line); border-radius:12px; }
+</style>
+
+<div class="br">
+  <div class="br-head">
+    <h2>🗞️ Brief</h2>
+    <p>{{ unread }} unread · edited from the watchers; urgent things still go to Signal</p>
+  </div>
+  <nav class="br-tabs" aria-label="Beats">
+    <a href="/nexus/brief" class="{{ 'on' if not beat }}">All</a>
+    {% for slug, m in beats.items() %}
+    <a href="/nexus/brief?beat={{ slug }}" class="{{ 'on' if beat == slug }}">{{ m[0] }} {{ m[1] }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if not items %}
+  <div class="br-empty">No entries yet. The market editor posts after the 7 AM price chain, and only when something clears its bar. A quiet day means nothing is here.</div>
+  {% endif %}
+
+  {% for it in items %}
+  {% set colour = {'market':'#e6bf7a','meta':'#8fb3ef','health':'#7fd3a0'}.get(it.beat, '#9aa3b2') %}
+  <article class="br-entry {{ 'read' if it.read_at }}" style="--c:{{ colour }}" data-id="{{ it.id }}">
+    <div class="br-meta"><span>{{ it.icon }} {{ it.label }}</span><time>{{ it.created_at[:16] }}</time></div>
+    {% if it.title %}<h3>{{ it.title }}</h3>{% endif %}
+    <div class="br-text">{{ it.html|safe }}</div>
+    <div class="br-act">
+      <button type="button" data-mark="read" class="{{ 'on-read' if it.read_at }}">{{ '✓ Read' if it.read_at else 'Mark read' }}</button>
+      <button type="button" data-mark="useful" class="{{ 'on-useful' if it.verdict == 'useful' }}">👍 Useful</button>
+      <button type="button" data-mark="skip" class="{{ 'on-skip' if it.verdict == 'skip' }}">👎 Skip this kind</button>
+      <input type="text" id="note-{{ it.id }}" placeholder="Note for the editor (optional)" value="{{ it.note or '' }}" maxlength="500">
+      <span class="st" aria-live="polite"></span>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+<script>
+// Marks go straight to /api/nexus/brief/mark. Useful/skip toggle; a note saves on blur.
+(function () {
+  function post(id, data, st) {
+    st.textContent = 'saving…';
+    return fetch('/api/nexus/brief/mark', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ id: id }, data)) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { st.textContent = j.ok ? 'saved' : ('not saved: ' + (j.error || 'error')); return j.ok; })
+      .catch(function () { st.textContent = 'not saved: Nexus unreachable'; return false; });
+  }
+  document.querySelectorAll('.br-entry').forEach(function (art) {
+    var id = Number(art.dataset.id), st = art.querySelector('.st');
+    art.querySelectorAll('button[data-mark]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var m = b.dataset.mark;
+        if (m === 'read') {
+          var on = !art.classList.contains('read');
+          post(id, { read: on }, st).then(function (ok) { if (!ok) return;
+            art.classList.toggle('read', on); b.classList.toggle('on-read', on); b.textContent = on ? '✓ Read' : 'Mark read'; });
+          return;
+        }
+        var cls = 'on-' + m, turnOn = !b.classList.contains(cls);
+        post(id, { verdict: turnOn ? m : '', read: true }, st).then(function (ok) { if (!ok) return;
+          art.querySelectorAll('button[data-mark=useful],button[data-mark=skip]').forEach(function (x) { x.classList.remove('on-useful', 'on-skip'); });
+          if (turnOn) b.classList.add(cls);
+          art.classList.add('read'); var rb = art.querySelector('button[data-mark=read]'); rb.classList.add('on-read'); rb.textContent = '✓ Read'; });
+      });
+    });
+    var note = art.querySelector('input');
+    var last = note.value;
+    note.addEventListener('blur', function () { if (note.value !== last) { last = note.value; post(id, { note: note.value }, st); } });
+  });
+})();
+</script>
+{% endblock %}
