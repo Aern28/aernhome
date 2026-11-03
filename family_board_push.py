@@ -27,8 +27,6 @@ SA = os.path.join(SECRETS, "claudendar-service-account.json")
 MEALIE_TOKEN = os.path.join(SECRETS, "mealie-token")
 # Aern's published Outlook calendar ICS URL (holds a token; Aern places it, one line).
 WORK_ICS_URL_FILE = os.path.join(SECRETS, "work-calendar-ics-url")
-# Gal's QGenda calendar link (holds a token; Aern places it, one line). 11/03.
-GAL_ICS_URL_FILE = os.path.join(SECRETS, "gal-calendar-ics-url")
 CAL_MATT = "mcarroll203@gmail.com"
 CAL_GAL = "b672e5962b42a874240c3440c400888d0275a64f6d471ebcd5067b8325592db7@group.calendar.google.com"
 TRMNL_URL = "https://trmnl.com/api/custom_plugins/7cc25d15-44e3-4a65-8ff0-37e588c23013"
@@ -160,12 +158,6 @@ def fetch_work_shifts(dates):
     everything else in it is work meetings, and classify_matt turns non-GEN events
     into NOTES on a family display."""
     return fetch_ics(WORK_ICS_URL_FILE, "work", dates, lambda s: s.lower().startswith("gen"))
-
-
-def fetch_gal_shifts(dates):
-    """Gal's shifts from her QGenda feed. Every event is timed, so classify_gal never
-    turns its titles (which name colleagues) into notes."""
-    return fetch_ics(GAL_ICS_URL_FILE, "gal", dates)
 
 
 def ev_local(ev):
@@ -377,8 +369,8 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")  # calendar titles carry emoji; cp1252 consoles choke
     dates = week_dates()
     cal = calendar_client()
-    # Shifts come from her QGenda feed; the Gal calendar still holds hand-entered notes and days off.
-    gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates) + fetch_gal_shifts(dates))
+    # gal_qgenda_sync.py keeps her QGenda shifts on this calendar, alongside hand-entered notes and days off.
+    gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates))
     matt_events = fetch_events(cal, CAL_MATT, dates)
     # Shifts come from the Work ICS; the primary has had none since the one-time 6/8 AutoSync.
     matt_by, matt_notes = classify_matt(matt_events + fetch_work_shifts(dates))
