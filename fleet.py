@@ -82,7 +82,6 @@ CHECK_META = {
     "scan_runner": ("Aernbot scan-runner", "aernbot"),
     "containers": ("Containers", "infra"),
     "qbittorrent": ("qBittorrent (NAS)", "infra"),
-    "trainer_ollama": ("Trainer Ollama (5080)", "infra"),
     "mirror_fresh": ("TCG Mirror", "tcg"),
     "price_fresh": ("TCG Prices", "tcg"),
     "daily_chain": ("TCG Daily Chain (07:00)", "tcg"),
@@ -364,27 +363,6 @@ def check_scan_runner():
         return ("unknown", f"{type(e).__name__}")
 
 
-def check_trainer_ollama():
-    """Trainer's RTX 5080 Ollama endpoint (tailscale serve, tailnet-only) —
-    the fleet's inference node; Aernbot's cheap-thought chores prefer it over
-    Ashaman's 2070S. Aern intentionally pauses it for gaming via /game-mode,
-    so unreachable is a warn with that explanation, never a red alert."""
-    base = "http://100.99.191.118:11434"
-    try:
-        r = requests.get(base + "/api/version", timeout=5)
-        if r.status_code != 200:
-            return ("warn", f"HTTP {r.status_code}")
-        ver = r.json().get("version", "?")
-        try:
-            models = requests.get(base + "/api/ps", timeout=5).json().get("models", [])
-            resident = ", ".join(m.get("name", "?") for m in models) if models else "idle"
-        except requests.RequestException:
-            resident = "residency unknown"
-        return ("up", f"v{ver} · {resident} · 5080")
-    except requests.RequestException as e:
-        return ("warn", f"unreachable ({type(e).__name__}) — game-mode or Trainer down; Aernbot on 2070S fallback")
-
-
 def check_signup_webhook():
     """aern-signup booking-notification webhook, probed end-to-end via the SAME
     route the booking app uses (host.docker.internal -> published :5678 -> n8n),
@@ -603,7 +581,6 @@ SIMPLE_CHECKS = {
     "signal_cli": check_signal_cli,
     "scan_runner": check_scan_runner,
     "qbittorrent": check_qbittorrent,
-    "trainer_ollama": check_trainer_ollama,
     "mirror_fresh": check_mirror_fresh,
     "price_fresh": check_price_fresh,
     "daily_chain": check_daily_chain,
