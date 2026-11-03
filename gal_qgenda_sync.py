@@ -19,8 +19,10 @@ Safety, in code:
 An event's identity is (title, start, end), so a changed shift is a delete plus a create.
 
 Usage: python gal_qgenda_sync.py [--dry-run]
-Exit: 0 ok, 1 feed unusable, 2 too many deletes, 3 no write permission on the calendar.
+Exit: 0 ok, 1 feed unusable, 2 too many deletes, 3 no write permission on the calendar, 4 anything else.
+Every real run stamps data/gal_qgenda_sync_last.json for the Nexus board check gal_sync.
 """
+import json
 import os
 import re
 import sys
@@ -31,11 +33,14 @@ SECRETS = os.environ.get("RELAY_SECRETS_DIR", "C:/Users/Matt/.relay-secrets")
 SA = os.path.join(SECRETS, "claudendar-service-account.json")
 URL_FILE = os.path.join(SECRETS, "gal-calendar-ics-url")
 CAL_GAL = "b672e5962b42a874240c3440c400888d0275a64f6d471ebcd5067b8325592db7@group.calendar.google.com"
-LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gal_qgenda_sync_last.log")
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOG = os.path.join(HERE, "gal_qgenda_sync_last.log")
+STAMP = os.path.join(HERE, "data", "gal_qgenda_sync_last.json")  # /data in the container; fleet.py reads it
 TAG = "gal-qgenda-sync"
 MAX_DELETES = 15
 SHIFT_RE = re.compile(r"^(mc|bu|wc)\b", re.I)
 _lines = []
+_stats = {}
 
 
 def log(msg):
@@ -47,6 +52,10 @@ def log(msg):
 def finish(code):
     with open(LOG, "w", encoding="utf-8") as f:
         f.write(f"{datetime.now().isoformat(timespec='seconds')} exit={code}\n" + "\n".join(_lines) + "\n")
+    if "--dry-run" not in sys.argv:  # the stamp is the Nexus board's dead-man's switch; log lines never hold the URL
+        with open(STAMP, "w", encoding="utf-8") as f:
+            json.dump({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "ok": code == 0,
+                       "error": None if code == 0 else _lines[-1], **_stats}, f)
     sys.exit(code)
 
 
@@ -138,6 +147,7 @@ def main():
     if not wanted:
         log("feed has no usable events; nothing written")
         finish(1)
+    _stats["through"] = max(k[1] for k in wanted).astimezone().date().isoformat()
 
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -185,9 +195,14 @@ def main():
             log(f"no write permission on the Gal calendar (HTTP {e.resp.status}); share it with the service account")
             finish(3)
         raise
+    _stats.update(created=len(creates), deleted=len(deletes))
     log(f"done: created {len(creates)}, deleted {len(deletes)}")
     finish(0)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:  # anything unplanned still stamps, so the board goes red
+        log(f"sync failed: {type(e).__name__}")  # never str(e): may carry the URL
+        finish(4)

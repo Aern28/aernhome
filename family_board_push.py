@@ -48,7 +48,7 @@ SHIFT_MAP = {
     "mc we eve": ("pm", "Evening shift"), "mc night": ("pm", "Night Shift"),
     "mc we call": ("both", "Service"), "bu 1": ("both", "Home"),
     "bu night": ("pm", "Backup Evening"), "wc 2": ("both", "Service"),
-    # Seen in her QGenda feed 11/03, same 7a day-service shape as Yellow/Red (inferred, not Aern-confirmed).
+    # Seen in her QGenda feed 11/03, same 7a day-service shape as Yellow/Red (Aern confirmed 11/03).
     "mc silver": ("both", "Service"), "mc bronze": ("both", "Service"),
     "mc day 2": ("both", "Service"), "mc wd call": ("both", "Service"),
 }

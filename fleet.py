@@ -89,6 +89,7 @@ CHECK_META = {
     "signup_webhook": ("aern-signup Notifications", "infra"),
     "home_assistant": ("Home Assistant (Pi)", "infra"),
     "keep_sync": ("Keep ⇄ Restock sync", "infra"),
+    "gal_sync": ("Gal QGenda sync", "infra"),
     "byos_device": ("TRMNL (BYOS)", "infra"),
     "byos_deps": ("BYOS/Keep deps", "infra"),
     "canon_guard": ("Canon Guard (single-writer)", "tcg"),
@@ -457,6 +458,37 @@ def check_keep_sync():
                   f"{sum(c.values())} change(s) last run")
 
 
+GAL_SYNC_STAMP = os.path.join(DATA_DIR, "gal_qgenda_sync_last.json")
+GAL_SYNC_STALE_H = 9       # Ashaman task "Gal QGenda Sync" runs every 4h; two missed runs
+GAL_SYNC_HORIZON_D = 14    # fewer days of published shifts than this = next schedule hasn't posted
+
+
+def check_gal_sync():
+    """Dead-man's switch for gal_qgenda_sync.py (Aern 11/03). A dead link, a lost calendar
+    permission or a dead task goes red; her calendar went quietly stale after 9/27 once already.
+    A shrinking horizon warns: the feed can be healthy with nothing published past a date."""
+    try:
+        age_h = (time.time() - os.path.getmtime(GAL_SYNC_STAMP)) / 3600
+        with open(GAL_SYNC_STAMP, "r", encoding="utf-8") as f:
+            st = json.load(f)
+    except OSError:
+        return ("unknown", "no stamp yet - gal_qgenda_sync.py has not run")
+    except json.JSONDecodeError as e:
+        return ("unknown", f"stamp unreadable: {e}"[:200])
+    if age_h > GAL_SYNC_STALE_H:
+        return ("down", f"last run {age_h:.1f}h ago (host task 'Gal QGenda Sync' stale)")
+    if not st.get("ok"):
+        return ("down", f"last run failed: {st.get('error')}"[:200])
+    line = f"shifts through {st.get('through')} · synced {_to_central_str(st.get('at'))}"
+    try:
+        days_left = (dt.date.fromisoformat(st.get("through")) - dt.datetime.now(CENTRAL_TZ).date()).days
+    except (TypeError, ValueError):
+        return ("warn", line)
+    if days_left < GAL_SYNC_HORIZON_D:
+        return ("warn", f"only {days_left}d of shifts published · " + line)
+    return ("up", line)
+
+
 CANON_GUARD_STAMP = os.path.join(os.path.dirname(TCG_DB_PATH), "canon_guard.json")
 CANON_GUARD_STALE_H = 2.5   # Ashaman task "Canon Guard" runs hourly
 
@@ -588,6 +620,7 @@ SIMPLE_CHECKS = {
     "signup_webhook": check_signup_webhook,
     "home_assistant": check_home_assistant,
     "keep_sync": check_keep_sync,
+    "gal_sync": check_gal_sync,
     "canon_guard": check_canon_guard,
     "byos_device": check_byos_device,
     "byos_deps": check_byos_deps,
