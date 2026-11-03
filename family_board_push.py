@@ -27,6 +27,8 @@ SA = os.path.join(SECRETS, "claudendar-service-account.json")
 MEALIE_TOKEN = os.path.join(SECRETS, "mealie-token")
 # Aern's published Outlook calendar ICS URL (holds a token; Aern places it, one line).
 WORK_ICS_URL_FILE = os.path.join(SECRETS, "work-calendar-ics-url")
+# Gal's QGenda calendar link (holds a token; Aern places it, one line). 11/03.
+GAL_ICS_URL_FILE = os.path.join(SECRETS, "gal-calendar-ics-url")
 CAL_MATT = "mcarroll203@gmail.com"
 CAL_GAL = "b672e5962b42a874240c3440c400888d0275a64f6d471ebcd5067b8325592db7@group.calendar.google.com"
 TRMNL_URL = "https://trmnl.com/api/custom_plugins/7cc25d15-44e3-4a65-8ff0-37e588c23013"
@@ -48,7 +50,12 @@ SHIFT_MAP = {
     "mc we eve": ("pm", "Evening shift"), "mc night": ("pm", "Night Shift"),
     "mc we call": ("both", "Service"), "bu 1": ("both", "Home"),
     "bu night": ("pm", "Backup Evening"), "wc 2": ("both", "Service"),
+    # Seen in her QGenda feed 11/03, same 7a day-service shape as Yellow/Red (inferred, not Aern-confirmed).
+    "mc silver": ("both", "Service"), "mc bronze": ("both", "Service"),
+    "mc day 2": ("both", "Service"), "mc wd call": ("both", "Service"),
 }
+# QGenda titles read "MC Yellow 7a-3p [Name]* comment"; the code is what precedes the hours.
+SHIFT_HOURS_RE = re.compile(r"^(.+?)\s+\d{1,2}(?::\d{2})?[ap]-\d{1,2}(?::\d{2})?[ap]\b")
 MATT_CODE_MAP = [
     ("gyn bu", "GYN Backup"), ("l&d night", "Labor"), ("l&d", "Labor"),
     ("post call", "Postcall"), ("clinic", "Clinic"), ("education", "Education"),
@@ -107,13 +114,12 @@ def _ics_when(prop, value):
     return {"dateTime": dt.astimezone().isoformat()}
 
 
-def fetch_work_shifts(dates):
-    """Matt's QGenda shifts from his published Outlook ICS. The Claudendar service account
-    gets 404 on the Google @import copy of it (verified 10/29), so read the feed itself.
-    GEN-prefixed events ONLY: everything else in it is work meetings, and classify_matt
-    turns non-GEN events into NOTES on a family display. No URL file = [] (board as before)."""
+def fetch_ics(url_file, label, dates, keep=lambda summary: True):
+    """Events from an ICS feed whose URL sits in url_file. The Claudendar service account
+    gets 404 on Google @import copies (verified 10/29), so read the feed itself.
+    No URL file = [] (board as before)."""
     try:
-        with open(WORK_ICS_URL_FILE, encoding="utf-8") as f:
+        with open(url_file, encoding="utf-8") as f:
             url = f.read().strip()
     except OSError:
         return []
@@ -121,7 +127,7 @@ def fetch_work_shifts(dates):
         with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
             text = r.read().decode("utf-8", "replace")
     except Exception as e:
-        print(f"work ICS fetch failed: {type(e).__name__}", file=sys.stderr)  # never the URL: it is a token
+        print(f"{label} ICS fetch failed: {type(e).__name__}", file=sys.stderr)  # never the URL: it is a token
         return []
     lines = re.sub(r"\r?\n[ \t]", "", text).splitlines()  # unfold continuation lines
     first, last = dates[0].isoformat(), dates[6].isoformat()
@@ -131,7 +137,7 @@ def fetch_work_shifts(dates):
             ev = {}
         elif line == "END:VEVENT" and ev is not None:
             summary = ev.get("SUMMARY", ("", ""))[1].replace("\\,", ",").replace("\\;", ";").strip()
-            if (summary.lower().startswith("gen") and "DTSTART" in ev and "RRULE" not in ev
+            if (keep(summary) and "DTSTART" in ev and "RRULE" not in ev
                     and ev.get("STATUS", ("", ""))[1] != "CANCELLED"):
                 try:
                     item = {"summary": summary, "start": _ics_when(*ev["DTSTART"])}
@@ -149,6 +155,19 @@ def fetch_work_shifts(dates):
     return out
 
 
+def fetch_work_shifts(dates):
+    """Matt's QGenda shifts from his published Outlook ICS. GEN-prefixed events ONLY:
+    everything else in it is work meetings, and classify_matt turns non-GEN events
+    into NOTES on a family display."""
+    return fetch_ics(WORK_ICS_URL_FILE, "work", dates, lambda s: s.lower().startswith("gen"))
+
+
+def fetch_gal_shifts(dates):
+    """Gal's shifts from her QGenda feed. Every event is timed, so classify_gal never
+    turns its titles (which name colleagues) into notes."""
+    return fetch_ics(GAL_ICS_URL_FILE, "gal", dates)
+
+
 def ev_local(ev):
     s = ev.get("start") or {}
     if s.get("date") and not s.get("dateTime"):
@@ -161,6 +180,19 @@ def ev_local(ev):
     if e.get("dateTime"):
         end_h = datetime.fromisoformat(e["dateTime"].replace("Z", "+00:00")).astimezone().hour
     return {"all_day": False, "date": dt.date().isoformat(), "hour": dt.hour, "min": dt.minute, "end_h": end_h}
+
+
+def gal_shift(key, hour):
+    """(slots, category) for a lowercased title, or None if it is not a shift."""
+    if "called to mc" in key:          # "BU 1 7a-7p [Name]* called to MC": backup got called in
+        return ("both", "Service")
+    m = SHIFT_HOURS_RE.match(key)
+    code = m.group(1).strip() if m else key
+    if code in SHIFT_MAP:
+        return SHIFT_MAP[code]
+    if m and code.startswith("mc "):   # a new MC code must not read as "Meetings"
+        return ("both", "Service") if hour < 12 else ("pm", "Evening shift")
+    return None
 
 
 def classify_gal(events):
@@ -187,16 +219,17 @@ def classify_gal(events):
             continue
         timed.append((w, key))
     for w, key in timed:                      # pass 1: shift codes win
-        if key not in SHIFT_MAP:
+        shift = gal_shift(key, w["hour"])
+        if not shift:
             continue
-        slots, cat = SHIFT_MAP[key]
+        slots, cat = shift
         D = day(w["date"])
         if slots in ("am", "both"):
             D["am"] = cat; D["amS"] = True
         if slots in ("pm", "both"):
             D["pm"] = cat; D["pmS"] = True
     for w, key in timed:                      # pass 2: meetings fallback
-        if key in SHIFT_MAP:
+        if gal_shift(key, w["hour"]):
             continue
         slot = "am" if w["hour"] < 12 else "pm"
         D = day(w["date"])
@@ -344,7 +377,8 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")  # calendar titles carry emoji; cp1252 consoles choke
     dates = week_dates()
     cal = calendar_client()
-    gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates))
+    # Shifts come from her QGenda feed; the Gal calendar still holds hand-entered notes and days off.
+    gal_by, gal_notes = classify_gal(fetch_events(cal, CAL_GAL, dates) + fetch_gal_shifts(dates))
     matt_events = fetch_events(cal, CAL_MATT, dates)
     # Shifts come from the Work ICS; the primary has had none since the one-time 6/8 AutoSync.
     matt_by, matt_notes = classify_matt(matt_events + fetch_work_shifts(dates))
