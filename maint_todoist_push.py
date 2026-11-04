@@ -41,8 +41,12 @@ def sync_back(H):
         r.raise_for_status()
         items = r.json().get("items", [])
     except Exception as e:
-        print("  sync-back: could not fetch completed tasks:", e)
-        return 0
+        # Never fall through to push: without the completed list, every task finished
+        # in Todoist still looks overdue and gets re-created (11/04, a 503 brought back
+        # 3 done tasks). Exit nonzero so run-maint-push.cmd retries after 60s; if that
+        # fails too, no push today is the safe outcome and tomorrow's run catches up.
+        print("  sync-back: could not fetch completed tasks, skipping push:", e)
+        sys.exit(1)
     completed_names = {
         c["content"][len(PREFIX):]
         for c in items
