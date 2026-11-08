@@ -430,8 +430,8 @@ APPS = (
     ("Komga", "Comics", f"{TS}:25600/"),
     ("qBittorrent", "Seedbox", f"{TS}:8444/"),
     ("n8n", "Workflows", f"{TS}:5678/"),
+    # AdGuard is an HA add-on: open it from HA's sidebar (Aern 11/08 dropped the :3000 tile).
     ("Home Assistant", "Home Wi-Fi only", "http://192.168.1.70:8123/"),
-    ("AdGuard", "Home Wi-Fi only", "http://192.168.1.70:3000/"),
 )
 
 
