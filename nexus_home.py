@@ -425,7 +425,7 @@ def fleet_line(status):
 TS = "https://ashaman.tail125d67.ts.net"
 APPS = (
     ("Mealie", "Recipes", f"{TS}:9443/"),
-    ("Jellyfin", "Shows + movies", "http://ashaman.tail125d67.ts.net:8096/web/"),
+    ("Jellyfin", "Shows + movies", f"{TS}:8443/web/"),  # tailscale serve -> :8096 (11/08; 8920 is taken)
     ("Audiobookshelf", "Books", f"{TS}:13378/audiobookshelf/"),
     ("Komga", "Comics", f"{TS}:25600/"),
     ("qBittorrent", "Seedbox", f"{TS}:8444/"),
