@@ -1261,6 +1261,7 @@ def nexus_home():
         "pockets": nh.pockets(pocket_in),
         "fleet": nh.fleet_line(npl.status_line(checks)),
         "captures": ns_writes.list_capture(limit=8),
+        "apps": nh.apps(),
     }
     return render_template("nexus.html", sections=NEXUS_SECTIONS, active="/nexus", data=data)
 

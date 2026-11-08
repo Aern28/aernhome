@@ -121,6 +121,18 @@
 
 </div>
 
+<section class="nh-sec" aria-labelledby="apps-h">
+    <h2 id="apps-h">Apps</h2>
+    <div class="nh-apps">
+        {% for a in data.apps %}
+        <a class="nh-app" href="{{ a.href }}" target="_blank" rel="noopener">
+            <span class="nh-pname">{{ a.name }}</span>
+            <span class="nh-anote">{{ a.note }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
 <footer class="nh-foot">
     {% if data.fleet %}<p class="nh-fleet"><a href="/nexus/fleet">{{ data.fleet }}</a></p>{% endif %}
     <p><a href="/nexus/more">Every Nexus page</a></p>

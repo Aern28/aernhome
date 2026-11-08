@@ -417,3 +417,23 @@ def fleet_line(status):
     """status = nexus_panels.status_line(checks) -> (level, text). Only when not ok."""
     level, text = status or ("ok", "")
     return None if level == "ok" else text
+
+
+# ── Apps (one-tap launchers, Aern 11/08: "bookmarks on phone and laptop") ────
+# Every link here was probed 200 from Trainer on 11/08. Tailscale ones are https so
+# phone browsers that force-upgrade to https still load them; LAN ones say so.
+TS = "https://ashaman.tail125d67.ts.net"
+APPS = (
+    ("Mealie", "Recipes", f"{TS}:9443/"),
+    ("Jellyfin", "Shows + movies", "http://ashaman.tail125d67.ts.net:8096/web/"),
+    ("Audiobookshelf", "Books", f"{TS}:13378/audiobookshelf/"),
+    ("Komga", "Comics", f"{TS}:25600/"),
+    ("qBittorrent", "Seedbox", f"{TS}:8444/"),
+    ("n8n", "Workflows", f"{TS}:5678/"),
+    ("Home Assistant", "Home Wi-Fi only", "http://192.168.1.70:8123/"),
+    ("AdGuard", "Home Wi-Fi only", "http://192.168.1.70:3000/"),
+)
+
+
+def apps():
+    return [{"name": n, "note": note, "href": url} for n, note, url in APPS]

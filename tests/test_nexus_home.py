@@ -250,5 +250,15 @@ class Fleet(unittest.TestCase):
         self.assertEqual(nh.fleet_line(("warn", "Fleet: 1 warning(s) (x)")), "Fleet: 1 warning(s) (x)")
 
 
+class Apps(unittest.TestCase):
+    def test_tailscale_apps_are_https_and_lan_apps_say_so(self):
+        for a in nh.apps():
+            self.assertTrue(a["name"] and a["href"])
+            if "192.168." in a["href"]:
+                self.assertIn("Wi-Fi", a["note"])
+        mealie = [a for a in nh.apps() if a["name"] == "Mealie"][0]
+        self.assertTrue(mealie["href"].startswith("https://"))
+
+
 if __name__ == "__main__":
     unittest.main()
