@@ -24,6 +24,12 @@ Rules (per item, decided by which SIDE changed since the last run — no clocks)
     linked, Nexus side changed      -> push to Keep  (row cleared -> tick; reopened -> untick)
     linked, Keep side changed       -> push to Nexus (ticked -> done; unticked -> reopen)
     linked, Keep item deleted       -> Nexus done ("removed in Keep"), link dropped
+    linked, open line retyped       -> Nexus follows Keep's wording (2026-11-09)
+One Nexus row <-> at most ONE Keep line (2026-11-09). A new line that re-adds a bought
+item takes the row over and the old ticked line is retired, staying ticked; before
+this the row reopened under BOTH lines, which unticked the old one (visible duplicate)
+and later ticked lines nobody had bought. A second UNTICKED line for an item already
+open is left alone, unlinked, and takes over only when the first one is ticked.
 Links + last-seen flags live in /data/keep_sync_state.json; a dead-man stamp goes
 to /data/keep_sync_last.json for fleet.check_keep_sync(). ONLY the pinned list id
 is ever read or written — Keep's other lists are off limits by design.
@@ -236,6 +242,33 @@ def _read_token():
 
 
 # --- reconcile --------------------------------------------------------------
+def enforce_one_line_per_row(links, k_items, log):
+    """Repair any Nexus row linked from several Keep lines by keeping the best link:
+    a live unticked line first, then one whose text is still the text we linked (not
+    retyped into another item). Losers lose only the link, never the Keep line."""
+    by_row = {}
+    for keep_id, link in links.items():
+        if link.get("nexus_id") is not None:
+            by_row.setdefault(link["nexus_id"], []).append(keep_id)
+    retired = 0
+    for nid, keep_ids in by_row.items():
+        if len(keep_ids) < 2:
+            continue
+
+        def rank(keep_id):
+            k = k_items.get(keep_id)
+            untouched = bool(k) and _norm(k["text"]) == _norm(links[keep_id].get("text") or "")
+            return (bool(k) and not k["checked"], untouched, keep_id)
+
+        winner = max(keep_ids, key=rank)
+        for keep_id in keep_ids:
+            if keep_id != winner:
+                log(f"retired duplicate link to Nexus #{nid}: {links[keep_id].get('text')!r}")
+                del links[keep_id]
+                retired += 1
+    return retired
+
+
 def reconcile(nexus, keep, state, log):
     """Pure-ish: reads both sides, applies the rules through the adapters, mutates state.
     `state["links"]` = {keep_id: {"nexus_id", "nexus_open", "keep_checked", "text"}}.
@@ -244,11 +277,13 @@ def reconcile(nexus, keep, state, log):
     n_open = nexus.open_items()                       # id -> row
     k_items = keep.items()                            # keep_id -> item
     counts = {"keep_to_nexus": 0, "nexus_to_keep": 0, "cleared_nexus": 0, "ticked_keep": 0,
-              "reopened": 0, "matched": 0, "renamed": 0, "descoped": 0}
+              "reopened": 0, "matched": 0, "renamed": 0, "descoped": 0, "relabeled": 0, "retired": 0}
+    counts["retired"] += enforce_one_line_per_row(links, k_items, log)
     by_nexus = {v["nexus_id"]: k for k, v in links.items() if v.get("nexus_id") is not None}
     n_open_by_name = {}
     for row in n_open.values():
         n_open_by_name.setdefault(_norm(row["item"]), row)
+    closed_now = set()   # rows step 1 closes - the n_open snapshot no longer holds for them
 
     # 1) linked items: whichever side moved since last run wins
     for keep_id in list(links.keys()):
@@ -262,6 +297,7 @@ def reconcile(nexus, keep, state, log):
             if n_is_open and not link.get("keep_checked"):
                 log(f"cleared in Nexus (removed in Keep): {link.get('text')!r}")
                 nexus.done(nid)
+                closed_now.add(nid)
                 counts["cleared_nexus"] += 1
             del links[keep_id]
             continue
@@ -287,6 +323,7 @@ def reconcile(nexus, keep, state, log):
             if k["checked"] and n_is_open:
                 log(f"cleared in Nexus (ticked in Keep): {k['text']!r}")
                 nexus.done(nid)
+                closed_now.add(nid)
                 counts["cleared_nexus"] += 1
                 n_is_open = False
             elif not k["checked"] and not n_is_open:
@@ -298,6 +335,26 @@ def reconcile(nexus, keep, state, log):
                     n_is_open = True
                 counts["reopened"] += 1
             link["keep_checked"] = k["checked"]
+        # an open line retyped in Keep: Nexus and the TRMNL follow the new wording.
+        # Add first, then close the old row, so a failure between the two can never
+        # leave the line pointing at a closed row (which would tick it next run).
+        if n_is_open and nid in n_open and not k["checked"] and _norm(k["text"]) != _norm(link.get("text") or ""):
+            new_text, tag_cat = categorize(k["text"])
+            if _norm(new_text) and _norm(new_text) != _norm(n_open[nid]["item"]):
+                cat = tag_cat if _norm(new_text) != _norm(k["text"]) else n_open[nid]["category"]
+                log(f"relabeled in Nexus (retyped in Keep): {n_open[nid]['item']!r} -> {new_text!r}")
+                new_id = nexus.add(new_text, cat)
+                if new_id is not None:
+                    if new_id != nid:
+                        nexus.done(nid)
+                        closed_now.add(nid)
+                        by_nexus.pop(nid, None)
+                        by_nexus[new_id] = keep_id
+                        link["nexus_id"] = new_id
+                    link["text"] = k["text"]
+                counts["relabeled"] += 1
+                link["nexus_open"] = True
+                continue
         # keep the Keep line labelled the way Nexus knows it — but only if he hasn't
         # edited the text himself since we last saw it
         if (n_is_open and nid in n_open and not k["checked"]
@@ -319,7 +376,7 @@ def reconcile(nexus, keep, state, log):
             continue
         text, cat = categorize(k["text"])
         row = n_open_by_name.get(_norm(text))
-        if row and row["id"] not in by_nexus:
+        if row and row["id"] not in by_nexus and row["id"] not in closed_now:
             log(f"linked by name: {text!r} = Nexus #{row['id']}")
             nid = row["id"]
             cat = row["category"]
@@ -341,6 +398,18 @@ def reconcile(nexus, keep, state, log):
             keep.set_text(keep_id, want)
             k["text"] = want
             counts["renamed"] += 1
+        previous = by_nexus.get(nid)
+        if previous in links and previous != keep_id and previous in k_items and not k_items[previous]["checked"]:
+            # the item is already open on another unticked line: leave this one alone
+            # (unlinked) - it takes the row over only once that line is ticked
+            log(f"duplicate line left alone (already open on another line): {k['text']!r}")
+            continue
+        if previous in links and previous != keep_id:
+            # this line re-added an item an older line already held: the row moves here
+            # and the old line keeps its tick, out of the sync for good
+            log(f"retired old line for re-added item: {links[previous].get('text')!r}")
+            del links[previous]
+            counts["retired"] += 1
         links[keep_id] = {"nexus_id": nid, "nexus_open": True, "keep_checked": False, "text": k["text"]}
         if nid is not None:
             by_nexus[nid] = keep_id
@@ -396,7 +465,7 @@ def main(argv):
         print(f"keep_sync ok{' (dry-run)' if dry_run else ''}: {changes} change(s) "
               f"[keep->nexus {c['keep_to_nexus']}, nexus->keep {c['nexus_to_keep']}, cleared {c['cleared_nexus']}, "
               f"ticked {c['ticked_keep']}, reopened {c['reopened']}, matched {c['matched']}, renamed {c.get('renamed', 0)}, "
-              f"descoped {c.get('descoped', 0)}] · {stamp['open']} open")
+              f"descoped {c.get('descoped', 0)}, relabeled {c.get('relabeled', 0)}, retired {c.get('retired', 0)}] · {stamp['open']} open")
         return 0
     print(f"keep_sync FAILED: {stamp['error']}")
     return 1
