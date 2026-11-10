@@ -121,7 +121,8 @@ class KeepSyncTest(unittest.TestCase):
         self.keep.set_text(a, "Eggs (groceries or Costco)")
         self.run_sync(2)
         self.assertEqual([r["item"] for r in self.nexus.open_items().values()], ["Eggs (groceries or Costco)"])
-        self.assertEqual(self.keep.lines[a], {"id": a, "text": "Eggs (groceries or Costco)", "checked": False})
+        self.assertEqual(self.keep.lines, {a: {"id": a, "text": "Eggs (groceries or Costco)", "checked": False}},
+                         "relabel must not push the old row back into Keep as a new line")
         self.keep.set_checked(a, True)
         self.run_sync()
         self.assertEqual(self.nexus.open_items(), {})
@@ -135,6 +136,7 @@ class KeepSyncTest(unittest.TestCase):
         self.keep.set_checked(reused, True)
         self.run_sync(2)
         self.assertFalse(self.keep.lines[sheets]["checked"], "bedsheets ticked because milk was bought")
+        self.assertEqual(set(self.keep.lines), {sheets, reused}, "sync added a line nobody asked for")
 
     def test_existing_double_links_are_repaired(self):
         a, b = self.keep.add("grapes"), self.keep.add("grapes")

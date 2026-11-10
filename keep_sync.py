@@ -417,7 +417,7 @@ def reconcile(nexus, keep, state, log):
     # 3) open Nexus rows nobody in Keep knows about (Aernbot / Nexus adds) -> into Keep
     #    (SYNC_CATEGORIES only — business never mirrors to the phone)
     for nid, row in n_open.items():
-        if nid in by_nexus or row["category"] not in SYNC_CATEGORIES:
+        if nid in by_nexus or nid in closed_now or row["category"] not in SYNC_CATEGORIES:
             continue
         text = keep_text_for(row, n_open)
         log(f"Nexus -> Keep: {text!r}")
