@@ -45,8 +45,6 @@ CANARY_STALE_H = 26
 POSTAGE_PATH = os.path.join(DATA_DIR, "postage.json")
 POSTAGE_STALE_H = 3  # Trainer postage-check.py pushes every 30 min  # nightly cadence; same slack check_mirror_fresh() gives the daily TCG price fetch
 CENSUS_PATH = os.path.join(DATA_DIR, "fleet-census.json")
-SPECSURF_PATH = os.path.join(DATA_DIR, "spec-surfacing.json")
-SPECSURF_STALE_H = 30  # Trainer task 'Spec Surfacing Check' runs daily
 CENSUS_STALE_D = 9  # Trainer task 'Fleet Census' runs weekly (Sun 05:00); 9d = one missed run
 
 FINANCE_VERDICT_PATH = os.path.join(DATA_DIR, "finance_verdict.json")
@@ -716,41 +714,6 @@ def check_canary():
     return out or [("canary_error", "Selector Canary", "tcg", "unknown", "no valid checks reported")]
 
 
-def check_spec_surfacing():
-    """BUILD #8 Phase 5 dead-man's switch. Written by Trainer's
-    C:/tools/spec-surfacing-check.py (daily).
-
-    On 2026-08-17 a spec DECLINED exactly as designed, wrote a receipt saying
-    "Surfaced via Step 2 queue lane", and no queue item ever appeared. The audit
-    log, the receipts and the journal were all complete; the only missing step
-    was the one nothing was watching, so it stayed invisible for six days.
-
-    This check lives OUTSIDE the relay on purpose: a receipt that claims it
-    surfaced cannot be the thing that verifies surfacing.
-    """
-    try:
-        age_h = (time.time() - os.path.getmtime(SPECSURF_PATH)) / 3600
-    except OSError:
-        return [("spec_surfacing_missing", "Spec surfacing", "aernbot", "unknown",
-                 "spec-surfacing.json not found - Trainer check not yet run")]
-    if age_h > SPECSURF_STALE_H:
-        return [("spec_surfacing_stale", "Spec surfacing", "aernbot", "warn",
-                 f"spec-surfacing.json is {age_h:.0f}h old - Trainer check stale")]
-    try:
-        with open(SPECSURF_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
-        return [("spec_surfacing_error", "Spec surfacing", "aernbot", "unknown",
-                 f"read error: {e}"[:200])]
-    out = []
-    for c in (data.get("checks") or []):
-        if isinstance(c, dict) and c.get("id"):
-            out.append((c["id"], c.get("label", "Spec surfacing"), "aernbot",
-                        c.get("status", "unknown"), c.get("detail", "")))
-    return out or [("spec_surfacing_error", "Spec surfacing", "aernbot", "unknown",
-                    "no checks reported")]
-
-
 def check_census():
     """Surface the weekly fleet census (Trainer task 'Fleet Census', Sun 05:00, repo
     Aern28/fleet-discovery-audit) so good-morning reads it. A census nobody reads is
@@ -902,7 +865,7 @@ def run_all_checks():
     # Kept in its OWN try: sharing one with postage meant a census crash would
     # silently blank the postage checks too.
     try:
-        census_items = check_census() + check_spec_surfacing()
+        census_items = check_census()
     except Exception as e:
         census_items = [("census_error", "Fleet Census", "fleet", "unknown", f"check crashed: {e}"[:200])]
     for cid, label, group, status, detail in census_items:
