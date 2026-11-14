@@ -15,6 +15,7 @@ convention used throughout app.py / nexus_sources.py.
 """
 
 import os
+import re
 import json
 import time
 import sqlite3
@@ -321,6 +322,25 @@ def check_home_assistant():
         return ("down", f"unreachable: {type(e).__name__}")
 
 
+def _scan_runner_schedule_count(c):
+    """Schedules listed in scan-runner's newest startup banner, or None if no
+    banner is in the log tail. Banner shape (scan-scheduler.js):
+    '=== SCAN SCHEDULER STARTED ===' / 'Schedules:' / '  <label>: every <N>h' ...
+    / 'Check interval: 5 min'."""
+    raw = c.logs(tail=2000)
+    lines = (raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)).splitlines()
+    starts = [i for i, ln in enumerate(lines) if "=== SCAN SCHEDULER STARTED ===" in ln]
+    if not starts:
+        return None
+    count = 0
+    for ln in lines[starts[-1] + 1:]:
+        if ln.startswith("Check interval:"):
+            return count
+        if re.search(r":\s+every\s+[\d.]+h\s*$", ln):
+            count += 1
+    return None
+
+
 def check_scan_runner():
     """Aernbot scan-runner LIVENESS — is the scheduler still cycling?
 
@@ -354,6 +374,13 @@ def check_scan_runner():
         text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
         beats = [ln for ln in text.splitlines() if "[SOURCE:scheduler]" in ln]
         if not beats:
+            # IDLE (2026-11-13, Phoenix): loialPhase1, the last schedule, was dropped,
+            # so the scheduler legitimately writes no beats. Read the newest startup
+            # banner; if it lists no "every Nh" schedules, quiet is correct, not a wedge.
+            # A schedule added back shows in the banner on restart and re-arms the check.
+            n = _scan_runner_schedule_count(c)
+            if n == 0:
+                return ("up", "idle: scheduler has no schedules (loialPhase1 dropped 11/13)")
             return ("down", "no scheduler activity in 2h — wedged?")
         if len(beats) < 2:
             return ("warn", f"only {len(beats)} scheduler event in 2h")
